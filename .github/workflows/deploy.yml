@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ['main']  # or 'master' depending on your default branch
+    branches: ['main']
 
 permissions:
   contents: write
@@ -10,11 +10,6 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    # Add concurrency to prevent multiple deployments running at once
-    concurrency: 
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
-    
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -23,67 +18,15 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'  # Add caching
 
       - name: Install Dependencies
         run: npm install
 
       - name: Build
         run: npm run build
-        
-      # Add retry logic for deployment
+
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-        # Add retry logic
-        if: success()
-        continue-on-error: true
-        # Try deployment up to 3 times
-        max-attempts: 3
-        retry-wait-time: 10000  # Wait 10 seconds between retries name: Deploy to GitHub Pages
-
-on:
-  push:
-    branches: ['main']  # or master
-
-permissions:
-  contents: write
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    # Add concurrency to prevent multiple deployments running at once
-    concurrency: 
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-          cache: 'npm'  # Add caching
-
-      - name: Install dependencies
-        run: npm ci  # Use ci instead of install for cleaner installs
-
-      - name: Build
-        run: npm run build
-        
-      # Add retry logic for deployment
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-        # Add retry logic
-        if: success()
-        continue-on-error: true
-        # Try deployment up to 3 times
-        max-attempts: 3
-        retry-wait-time: 10000  # Wait 10 seconds between retries 
