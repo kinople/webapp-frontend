@@ -210,7 +210,7 @@ const AddOptionModal = ({ onClose, onSubmit, optionForm, setOptionForm }) => {
 };
 
 const Locations = () => {
-    const { id } = useParams();
+    const { user, id } = useParams();
     const [locationGroups, setLocationGroups] = useState([]);
     const [ungroupedScenes, setUngroupedScenes] = useState({
         scenes: {

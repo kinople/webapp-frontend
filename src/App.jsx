@@ -1,5 +1,6 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar'
+import ProtectedRoute from './components/ProtectedRoute'
 import Script from './pages/Script'
 import Contact from './pages/Contact'
 import ProjectDashboard from './pages/ProjectDashboard'
@@ -15,32 +16,47 @@ import CallSheet from './pages/CallSheet'
 import CallSheetHome from './pages/CallSheetHome'
 import ManageShootDays from './pages/ManageShootDays'
 import Crew from './pages/Crew'
+import Login from './pages/Login'
+import SignUp from './pages/SignUp'
+import CreateProject from './pages/CreateProject'
+
+function AppContent() {
+  const location = useLocation();
+  const isAuthPage = location.pathname === '/' || location.pathname === '/signup';
+
+  return (
+    <div>
+      {!isAuthPage && <Navbar />}
+      <Routes>
+        <Route path="/" element={<Login />} />
+        <Route path="/signup" element={<SignUp />} />
+        <Route path="/:user" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path="/:user/create-project" element={<ProtectedRoute><CreateProject /></ProtectedRoute>} />
+        <Route path="/:user/:id" element={<ProtectedRoute><ProjectDashboard /></ProtectedRoute>} />
+        <Route path="/:user/:id/script" element={<ProtectedRoute><Script /></ProtectedRoute>} />
+        <Route path="/:user/:id/script-breakdown" element={<ProtectedRoute><ScriptBreakdown /></ProtectedRoute>} />
+        <Route path="/:user/:id/cast-list" element={<ProtectedRoute><CastList /></ProtectedRoute>} />
+        <Route path="/:user/:id/cast/:castId/options" element={<ProtectedRoute><CastOptions /></ProtectedRoute>} />
+        <Route path="/:user/:id/locations" element={<ProtectedRoute><Locations /></ProtectedRoute>} />
+        <Route path="/:user/:id/scheduling" element={<ProtectedRoute><Scheduling /></ProtectedRoute>} />
+        <Route path="/:user/:id/manage-dates" element={<ProtectedRoute><ManageDates /></ProtectedRoute>} />
+        <Route path="/:user/:id/manage-schedules" element={<ProtectedRoute><ManageSchedules /></ProtectedRoute>} />
+        <Route path="/:user/:id/call-sheets" element={<ProtectedRoute><CallSheetHome /></ProtectedRoute>} />
+        <Route path="/:user/:id/manage-shoot-days" element={<ProtectedRoute><ManageShootDays /></ProtectedRoute>} />
+        <Route path="/:user/:id/dpr" element={<ProtectedRoute><Contact /></ProtectedRoute>} />
+        <Route path="/:user/:id/call-sheets/:scheduleName" element={<ProtectedRoute><CallSheet /></ProtectedRoute>} />
+        <Route path="/:user/:id/crew" element={<ProtectedRoute><Crew /></ProtectedRoute>} />
+      </Routes>
+    </div>
+  );
+}
 
 function App() {
   return (
     <Router>
-      <div>
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/:id" element={<ProjectDashboard />} />
-          <Route path="/:id/script" element={<Script />} />
-          <Route path="/:id/script-breakdown" element={<ScriptBreakdown />} />
-          <Route path="/:id/cast-list" element={<CastList />} />
-          <Route path="/:id/cast/:castId/options" element={<CastOptions />} />
-          <Route path="/:id/locations" element={<Locations />} />
-          <Route path="/:id/scheduling" element={<Scheduling />} />
-          <Route path="/:id/manage-dates" element={<ManageDates />} />
-          <Route path="/:id/manage-schedules" element={<ManageSchedules />} />
-          <Route path="/:id/call-sheets" element={<CallSheetHome />} />
-          <Route path="/:id/manage-shoot-days" element={<ManageShootDays />} />
-          <Route path="/:id/dpr" element={<Contact />} />
-          <Route path="/:id/call-sheets/:scheduleName" element={<CallSheet />} />
-          <Route path="/:id/crew" element={<Crew />} />
-        </Routes>
-      </div>
+      <AppContent />
     </Router>
-  )
+  );
 }
 
 export default App

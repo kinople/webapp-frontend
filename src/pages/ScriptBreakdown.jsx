@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import ProjectHeader from '../components/ProjectHeader';
+import { getApiUrl } from '../utils/api';
+
 const ScriptBreakdown = () => {
-    const { id } = useParams();
+    const { user, id } = useParams();
     const [scriptBreakdown, setScriptBreakdown] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -24,14 +26,14 @@ const ScriptBreakdown = () => {
         try {
             setIsLoading(true);
             setError(null);
-            const response = await fetch(`/api/${id}/fetch-breakdown`, {
+            const response = await fetch(getApiUrl(`/api/${id}/fetch-breakdown`), {
                 method: 'GET',
             });
             if (!response.ok) {
                 throw new Error('Failed to fetch breakdown');
             }
-            const tsvText = await response.text();
-            const parsedData = parseTSV(tsvText);
+            const data = await response.json();
+            const parsedData = parseTSV(data.tsv_content);
             setScriptBreakdown(parsedData);
         } catch (error) {
             console.error('Error fetching breakdown:', error);

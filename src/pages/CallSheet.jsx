@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import ProjectHeader from '../components/ProjectHeader'
+import { getApiUrl } from '../utils/api';
 
 const formatScheduleData = (scheduleText) => {
     const lines = scheduleText.split('\n').filter(line => line.trim());
@@ -27,7 +28,7 @@ const formatScheduleData = (scheduleText) => {
 };
 
 const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedData }) => {
-    const { id } = useParams();
+    const { user, id } = useParams();
     const [shootTimings, setShootTimings] = useState({
         shiftStart: '8:00 AM',
         shiftEnd: '8:00 PM',
@@ -58,7 +59,7 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
     const handleGenerateCallSheet = async () => {
         try {
             setIsGenerating(true);
-            const response = await fetch(`/api/${id}/call-sheet/${scheduleName}`, {
+            const response = await fetch(getApiUrl(`/api/${id}/call-sheet/${scheduleName}`), {
                 method: 'GET',
             });
 
@@ -412,7 +413,7 @@ const CallSheet = () => {
         const fetchScheduleData = async () => {
             try {
                 setIsLoading(true);
-                const response = await fetch(`/api/${id}/schedule/${scheduleName}.schedule.tsv`);
+                const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleName}.schedule.tsv`));
                 if (!response.ok) {
                     throw new Error('Failed to fetch schedule data');
                 }

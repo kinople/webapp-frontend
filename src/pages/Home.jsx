@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { getApiUrl } from '../utils/api';
 
 const Home = () => {
     
@@ -7,18 +9,39 @@ const Home = () => {
 
     const [currentProjects, setCurrentProjects] = useState([]);
 
+    const { user, id } = useParams();
+
+    const navigate = useNavigate();
+
     useEffect(() => {
         const fetchProjects = async () => {
-            const response = await fetch('/api/projects');
-            const data = await response.json(); 
-            setCurrentProjects(data);
+            try {
+                const response = await fetch(getApiUrl(`/api/projects/${user}`), {
+                    method: 'GET',
+                    credentials: 'include',
+                });
+                if (!response.ok) {
+                    throw new Error('Failed to fetch projects');
+                }
+                const data = await response.json(); 
+                setCurrentProjects(data);
+            } catch (error) {
+                console.error('Error fetching projects:', error);
+                setCurrentProjects([]);
+            }
         };
-        fetchProjects();
-    }, []);
+        
+        if (user) {
+            fetchProjects();
+        }
+    }, [user]);
 
     return (
         <div style={styles.container}>
-            <button style={styles.startButton}>
+            <button 
+                style={styles.startButton}
+                onClick={() => navigate(`/${user}/create-project`)}
+            >
                 Start New Project
             </button>
 
@@ -30,10 +53,10 @@ const Home = () => {
                         {currentProjects.map(project => (
                             <Link 
                                 key={project.id} 
-                                to={`/${project.id}`}
+                                to={`/${user}/${project.id}`}
                                 style={styles.projectLink}
                             >
-                                {project.id}
+                                {project.projectName}
                             </Link>
                         ))}
                     </div>

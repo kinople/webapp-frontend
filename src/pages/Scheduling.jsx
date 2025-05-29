@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 const Scheduling = () => {
     const navigate = useNavigate();
-    const { id } = useParams();
+    const { user, id } = useParams();
 
     return (
         <div style={styles.pageContainer}>
@@ -17,13 +17,13 @@ const Scheduling = () => {
                 <div style={styles.buttonContainer}>
                     <button 
                         style={styles.button}
-                        onClick={() => navigate(`/${id}/manage-dates`)}
+                        onClick={() => navigate(`/${user}/${id}/manage-dates`)}
                     >
                         Manage Dates
                     </button>
                     <button 
                         style={styles.button}
-                        onClick={() => navigate(`/${id}/manage-schedules`)}
+                        onClick={() => navigate(`/${user}/${id}/manage-schedules`)}
                     >
                         Manage Schedules
                     </button>

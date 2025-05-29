@@ -6,7 +6,7 @@ import "react-datepicker/dist/react-datepicker.css"
 
 const ManageDates = () => {
     const navigate = useNavigate();
-    const { id } = useParams();
+    const { user, id } = useParams();
     const [locationGroups, setLocationGroups] = useState([]);
     const [locationOptions, setLocationOptions] = useState({});
     const [breakdownData, setBreakdownData] = useState([]);

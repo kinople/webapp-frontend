@@ -4,7 +4,7 @@ import ProjectHeader from '../components/ProjectHeader';
 
 const ManageShootDays = () => {
     const navigate = useNavigate();
-    const { id } = useParams();
+    const { user, id } = useParams();
     const [schedules, setSchedules] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);

@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ProjectHeader from '../components/ProjectHeader';
+import { getApiUrl } from '../utils/api';
+
 const Script = () => {
-    const { id } = useParams();
+    const { user, id } = useParams();
     const navigate = useNavigate();
     const [selectedFile, setSelectedFile] = useState(null); // Keep track of the file *before* upload starts
     const [isUploading, setIsUploading] = useState(false);
@@ -22,7 +24,7 @@ const Script = () => {
   
     const fetchScripts = async () => {
         try{
-            const response = await fetch(`/api/${id}/script-list`, {
+            const response = await fetch(getApiUrl(`/api/${id}/script-list`), {
                 method: 'GET',
                 headers: {
                 'Content-Type': 'application/json',
@@ -54,7 +56,7 @@ const Script = () => {
         formData.append('fileName', fileName);
     
         try {
-            const response = await fetch(`/api/${id}/upload-script`, {
+            const response = await fetch(getApiUrl(`/api/${id}/upload-script`), {
                 method: 'POST',
                 body: formData,
             });
@@ -70,7 +72,7 @@ const Script = () => {
             await fetchScripts();
 
             // After successful upload, generate breakdown
-            const breakdownResponse = await fetch(`/api/${id}/generate-breakdown/${fileName}`, {
+            const breakdownResponse = await fetch(getApiUrl(`/api/${id}/generate-breakdown/${fileName}`), {
                 method: 'POST',
             });
 
@@ -79,7 +81,7 @@ const Script = () => {
             }
 
             // Navigate to the breakdown page
-            navigate(`/${id}/script-breakdown`);
+            navigate(`/${user}/${id}/script-breakdown`);
     
         } catch (error) {
             console.error('Upload error:', error);
@@ -118,20 +120,16 @@ const Script = () => {
 
     const handleScriptClick = async (script) => {
         try {
-            const response = await fetch(`/api/${id}/script-view/${script}`, {
+            const response = await fetch(getApiUrl(`/api/${id}/script-view/${script}`), {
                 method: 'GET',
-                headers: {
-                    'Accept': 'application/pdf',
-                },
             });
             
             if (!response.ok) {
                 throw new Error('Failed to fetch PDF');
             }
 
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            setPdfUrl(url);
+            const data = await response.json();
+            setPdfUrl(data.url);
             setSelectedScript(script);
             
         } catch (error) {

@@ -4,7 +4,7 @@ import ProjectHeader from '../components/ProjectHeader';
 
 const CallSheetHome = () => {
     const navigate = useNavigate();
-    const { id } = useParams();
+    const { user, id } = useParams();
 
     return (
         <div style={styles.pageContainer}>
@@ -14,13 +14,13 @@ const CallSheetHome = () => {
                 <div style={styles.buttonContainer}>
                     <button 
                         style={styles.button}
-                        onClick={() => navigate(`/${id}/crew`)}
+                        onClick={() => navigate(`/${user}/${id}/crew`)}
                     >
                         Crew List
                     </button>
                     <button 
                         style={styles.button}
-                        onClick={() => navigate(`/${id}/manage-shoot-days`)}
+                        onClick={() => navigate(`/${user}/${id}/manage-shoot-days`)}
                     >
                         Manage Shoot Days
                     </button>

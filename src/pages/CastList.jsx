@@ -3,7 +3,7 @@ import ProjectHeader from '../components/ProjectHeader';
 import { useParams } from 'react-router-dom';
 
 const CastList = () => {
-    const { id } = useParams();
+    const { user, id } = useParams();
     const [castList, setCastList] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);

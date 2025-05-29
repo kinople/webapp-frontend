@@ -13,16 +13,16 @@ const ProjectDashboard = () => {
     setHoveredCard(null);
   };
 
-  const { id } = useParams();
+  const { user, id } = useParams();
 
   const cardData = [
-    { to: `/${id}/script`, label: 'Script' },
-    { to: `/${id}/script-breakdown`, label: 'Script Breakdown' },
-    { to: `/${id}/cast-list`, label: 'Cast List' },
-    { to: `/${id}/locations`, label: 'Locations' },
-    { to: `/${id}/scheduling`, label: 'Scheduling' },
-    { to: `/${id}/call-sheets`, label: 'Call Sheets' },
-    { to: `/${id}/dpr`, label: 'DPR' },
+    { to: `/${user}/${id}/script`, label: 'Script' },
+    { to: `/${user}/${id}/script-breakdown`, label: 'Script Breakdown' },
+    { to: `/${user}/${id}/cast-list`, label: 'Cast List' },
+    { to: `/${user}/${id}/locations`, label: 'Locations' },
+    { to: `/${user}/${id}/scheduling`, label: 'Scheduling' },
+    { to: `/${user}/${id}/call-sheets`, label: 'Call Sheets' },
+    { to: `/${user}/${id}/dpr`, label: 'DPR' },
   ];
   
 
