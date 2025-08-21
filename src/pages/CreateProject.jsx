@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { getApiUrl } from '../utils/api';
 
 const CreateProject = () => {
@@ -11,6 +11,11 @@ const CreateProject = () => {
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
     const { user } = useParams();
+    const location = useLocation();
+
+    // Get organization info from navigation state or previous location
+    const organizationId = location.state?.organizationId || null;
+    const organizationName = location.state?.organizationName || 'Personal';
 
     const handleChange = (e) => {
         setForm({
@@ -25,13 +30,19 @@ const CreateProject = () => {
         setIsLoading(true);
 
         try {
+            // Prepare the request body with organization ID if available
+            const requestBody = {
+                ...form,
+                ...(organizationId && { organizationId })
+            };
+
             const response = await fetch(getApiUrl(`/api/create-project/${user}`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 credentials: 'include',
-                body: JSON.stringify(form),
+                body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
@@ -40,8 +51,13 @@ const CreateProject = () => {
             }
 
             const data = await response.json();
-            // Navigate to the new project's dashboard
-            navigate(`/${user}`);
+            // Navigate back to home with organization context
+            navigate(`/${user}`, {
+                state: {
+                    organizationId,
+                    organizationName
+                }
+            });
         } catch (err) {
             setError(err.message || 'Failed to create project. Please try again.');
         } finally {
@@ -96,7 +112,12 @@ const CreateProject = () => {
                 <div style={styles.buttonContainer}>
                     <button
                         type="button"
-                        onClick={() => navigate(`/${user}`)}
+                        onClick={() => navigate(`/${user}`, {
+                            state: {
+                                organizationId,
+                                organizationName
+                            }
+                        })}
                         style={styles.cancelButton}
                     >
                         Cancel

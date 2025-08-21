@@ -1,199 +1,548 @@
 import ProjectHeader from '../components/ProjectHeader'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useState, useEffect, useRef } from 'react'
-
-const formatScheduleData = (scheduleText) => {
-    const lines = scheduleText.split('\n').filter(line => line.trim());
-    const headers = lines[1].split('\t');
-    const data = lines.slice(2).map(line => {
-        const values = line.split('\t');
-        return headers.reduce((obj, header, index) => {
-            obj[header.trim()] = values[index] || '';
-            return obj;
-        }, {});
-    });
-
-    // Group scenes by date
-    const groupedByDate = data.reduce((acc, scene) => {
-        const date = scene['Date'];
-        if (!acc[date]) {
-            acc[date] = [];
-        }
-        acc[date].push(scene);
-        return acc;
-    }, {});
-
-    return groupedByDate;
-};
-
-const SceneRow = ({ scene }) => (
-    <tr style={styles.sceneRow}>
-        <td style={styles.sceneCell}>{scene['Scene Number']}</td>
-        <td style={styles.sceneCell}>{`${scene['INT/EXT']}\n${scene['Day/Night']}`}</td>
-        <td style={styles.locationCell}>
-            <div style={styles.locationTitle}>{scene['Location']}</div>
-            <div style={styles.synopsis}>{scene['Synopsis']}</div>
-        </td>
-        <td style={styles.castCell}>{scene['Cast ID']}</td>
-        <td style={styles.pagesCell}>{scene['Pages']}</td>
-        <td style={styles.notesCell}>{scene['Notes']}</td>
-    </tr>
-);
-
-const DateGroup = ({ index, date, scenes }) => (
-    <div style={styles.dateGroup}>
-        <h4 style={styles.dateHeader}>Day {index + 1}: {date}</h4>
-        <table style={styles.scenesTable}>
-            <thead>
-                <tr style={styles.tableHeader}>
-                    <th style={styles.headerCell}>Scene No.</th>
-                    <th style={styles.headerCell}>Int./Ext.<br/>Day/Night</th>
-                    <th style={styles.headerCell}>Location<br/>Synopsis</th>
-                    <th style={styles.headerCell}>Cast ID</th>
-                    <th style={styles.headerCell}>Pages</th>
-                    <th style={styles.headerCell}>Notes</th>
-                </tr>
-            </thead>
-            <tbody>
-                {scenes.map((scene, index) => (
-                    <SceneRow key={index} scene={scene} />
-                ))}
-            </tbody>
-        </table>
-    </div>
-);
+import { useState, useEffect } from 'react'
+import { getApiUrl } from '../utils/api';
 
 const ManageSchedules = () => {
     const navigate = useNavigate();
-    const { user, id } = useParams();
-    const [schedules, setSchedules] = useState([]);
+    const { user, id, scheduleId } = useParams();
+    const [selectedElement, setSelectedElement] = useState('');
+    const [maxScenes, setMaxScenes] = useState('');
+    const [scheduleData, setScheduleData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [selectedSchedule, setSelectedSchedule] = useState(null);
-    const [scheduleDetails, setScheduleDetails] = useState(null);
-    const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-    const [showModal, setShowModal] = useState(false);
-    const [scheduleName, setScheduleName] = useState('');
-    const [selectedLocation, setSelectedLocation] = useState('');
-    const [locations, setLocations] = useState([]);
-    const [numScenesPerDay, setNumScenesPerDay] = useState('');
-    const modalRef = useRef();
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [isSaving, setIsSaving] = useState(false); // Add saving state
+    const [selectedDates, setSelectedDates] = useState([]);
+    const [originalDates, setOriginalDates] = useState([]); // Track original dates for comparison
+    const [dateRangeStart, setDateRangeStart] = useState('');
+    const [dateRangeEnd, setDateRangeEnd] = useState('');
+    const [datePickerMode, setDatePickerMode] = useState('single'); // 'single' or 'range'
 
     useEffect(() => {
-        const fetchSchedules = async () => {
+        const fetchScheduleData = async () => {
             try {
                 setIsLoading(true);
-                const response = await fetch(`/api/${id}/schedules-list`);
+                const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
                 if (!response.ok) {
-                    throw new Error('Failed to fetch schedules');
+                    throw new Error('Failed to fetch schedule data');
                 }
                 const data = await response.json();
-                setSchedules(data);
+                
+                setScheduleData(data);
+                
+                // Set default selected element to first location if available
+                if (data.locations && data.locations.length > 0) {
+                    setSelectedElement(`location-${data.locations[0]}`);
+                }
             } catch (error) {
-                console.error('Error fetching schedules:', error);
+                console.error('Error fetching schedule data:', error);
                 setError(error.message);
             } finally {
                 setIsLoading(false);
             }
         };
 
-        fetchSchedules();
-    }, [id]);
+        fetchScheduleData();
+    }, [id, scheduleId]);
 
-    useEffect(() => {
-        const fetchLocations = async () => {
-            try {
-                const response = await fetch(`/api/${id}/location-list`);
-                if (!response.ok) {
-                    throw new Error('Failed to fetch locations');
-                }
-                const data = await response.json();
-                const locationLines = data.location_list.split('\n');
-                const locationHeaders = locationLines[0].split('\t').map(header => header.trim());
+    // Parse date ranges from the API response format
+    const parseDateRanges = (dateArray) => {
+        const dates = [];
+        dateArray.forEach(dateItem => {
+            if (dateItem.includes('-') && dateItem.split('-').length > 3) {
+                // This is a date range (e.g., "2025-07-05-2025-07-07")
+                const parts = dateItem.split('-');
+                const startDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
+                const endDate = `${parts[3]}-${parts[4]}-${parts[5]}`;
                 
-                const parsedLocations = locationLines.slice(1)
-                    .filter(line => line.trim() !== '')
-                    .map(line => {
-                        const values = line.split('\t');
-                        return {
-                            id: values[locationHeaders.indexOf('Location ID')],
-                            name: values[locationHeaders.indexOf('Location Group Name')],
-                        };
-                    })
-                    .filter(location => location.id && location.id.trim() !== 'None');
-
-                setLocations(parsedLocations);
-            } catch (error) {
-                console.error('Error fetching locations:', error);
+                const current = new Date(startDate);
+                const end = new Date(endDate);
+                
+                while (current <= end) {
+                    dates.push(current.toISOString().split('T')[0]);
+                    current.setDate(current.getDate() + 1);
+                }
+            } else {
+                // Single date
+                dates.push(dateItem);
             }
-        };
-
-        fetchLocations();
-    }, [id]);
-
-    const handleCreateSchedule = () => {
-        setShowModal(true);
+        });
+        return dates;
     };
 
-    const handleScheduleClick = async (name) => {
-        try {
-            setIsLoadingDetails(true);
-            setSelectedSchedule(name);
-            const response = await fetch(`/api/${id}/schedule/${name}`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch schedule details');
+    // Get existing dates for the selected element
+    const getExistingDates = () => {
+        if (!selectedElement || !scheduleData?.dates) return [];
+        
+        const [type, name] = selectedElement.split('-');
+        const elementDates = scheduleData.dates[type === 'location' ? 'locations' : 'characters'];
+        
+        if (elementDates && elementDates[name] && elementDates[name].dates) {
+            return parseDateRanges(elementDates[name].dates);
+        }
+        
+        return [];
+    };
+
+    // Check if dates have changed
+    const hasChanges = () => {
+        if (selectedDates.length !== originalDates.length) return true;
+        
+        const sortedSelected = [...selectedDates].sort();
+        const sortedOriginal = [...originalDates].sort();
+        
+        return !sortedSelected.every((date, index) => date === sortedOriginal[index]);
+    };
+
+    // Reset selected dates when element changes and load existing dates
+    const handleElementChange = (value) => {
+        setSelectedElement(value);
+        setDateRangeStart('');
+        setDateRangeEnd('');
+        
+        // Load existing dates for the selected element
+        if (value && scheduleData?.dates) {
+            const [type, name] = value.split('-');
+            const elementDates = scheduleData.dates[type === 'location' ? 'locations' : 'characters'];
+            
+            if (elementDates && elementDates[name] && elementDates[name].dates) {
+                const existingDates = parseDateRanges(elementDates[name].dates);
+                setSelectedDates(existingDates);
+                setOriginalDates(existingDates); // Set original dates for comparison
+            } else {
+                setSelectedDates([]);
+                setOriginalDates([]);
             }
-            const text = await response.text();
-            setScheduleDetails(text);
-        } catch (error) {
-            console.error('Error fetching schedule details:', error);
-            setError(error.message);
-        } finally {
-            setIsLoadingDetails(false);
+        } else {
+            setSelectedDates([]);
+            setOriginalDates([]);
         }
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!numScenesPerDay || isNaN(numScenesPerDay) || numScenesPerDay <= 0) {
-            setError('Please enter a valid number of scenes per day.');
+    // Update the useEffect to load dates when schedule data changes
+    useEffect(() => {
+        if (selectedElement && scheduleData?.dates) {
+            const existingDates = getExistingDates();
+            setSelectedDates(existingDates);
+            setOriginalDates(existingDates); // Set original dates for comparison
+        }
+    }, [scheduleData, selectedElement]);
+
+    // Reload given dates section data
+    const reloadGivenDatesData = async () => {
+        if (!selectedElement) return;
+        
+        try {
+            const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
+            if (!response.ok) {
+                throw new Error('Failed to reload schedule data');
+            }
+            const data = await response.json();
+            
+            // Update only the dates section of schedule data
+            setScheduleData(prev => ({
+                ...prev,
+                dates: data.dates
+            }));
+            
+            // Reload dates for current element
+            const [type, name] = selectedElement.split('-');
+            const elementDates = data.dates[type === 'location' ? 'locations' : 'characters'];
+            
+            if (elementDates && elementDates[name] && elementDates[name].dates) {
+                const refreshedDates = parseDateRanges(elementDates[name].dates);
+                setSelectedDates(refreshedDates);
+                setOriginalDates(refreshedDates); // Update original dates after reload
+            } else {
+                setSelectedDates([]);
+                setOriginalDates([]);
+            }
+            
+        } catch (error) {
+            console.error('Error reloading given dates data:', error);
+        }
+    };
+
+    // Create dropdown options from schedule data
+    const getElementOptions = () => {
+        if (!scheduleData) return [];
+        
+        const options = [];
+        
+        // Add locations
+        if (scheduleData.locations && Array.isArray(scheduleData.locations)) {
+            scheduleData.locations.forEach(location => {
+                options.push({
+                    value: `location-${location}`,
+                    label: `📍 ${location}`,
+                    type: 'location'
+                });
+            });
+        }
+        
+        // Add characters
+        if (scheduleData.characters && Array.isArray(scheduleData.characters)) {
+            scheduleData.characters.forEach(character => {
+                options.push({
+                    value: `character-${character}`,
+                    label: `👤 ${character}`,
+                    type: 'character'
+                });
+            });
+        }
+        
+        return options;
+    };
+
+    const getSelectedElementName = () => {
+        if (!selectedElement) return 'Select Element';
+        
+        const options = getElementOptions();
+        const selected = options.find(opt => opt.value === selectedElement);
+        return selected ? selected.label : 'Select Element';
+    };
+
+    const handleGenerateSchedule = async () => {
+        if (!maxScenes || isNaN(maxScenes) || maxScenes <= 0) {
+            alert('Please enter a valid number of scenes per day');
             return;
         }
+
         try {
-            const response = await fetch(`/api/${id}/schedule/create`, {
+            setIsGenerating(true);
+            const response = await fetch(getApiUrl(`/api/${id}/generate-schedule/${scheduleId}`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    name: scheduleName,
-                    location: selectedLocation,
-                    scenes_per_day: parseInt(numScenesPerDay),
-                }),
+                    max_scenes_per_day: parseInt(maxScenes)
+                })
             });
 
             if (!response.ok) {
-                throw new Error('Failed to create schedule');
+                throw new Error('Failed to generate schedule');
             }
 
-            setScheduleName('');
-            setSelectedLocation('');
-            setNumScenesPerDay('');
-            setShowModal(false);
-
-            const schedulesResponse = await fetch(`/api/${id}/schedules-list`);
-            const data = await schedulesResponse.json();
-            setSchedules(data);
+            const result = await response.json();
+            console.log('Schedule generated successfully:', result);
+            
+            // Refresh the schedule data to get the generated schedule
+            const refreshResponse = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
+            if (refreshResponse.ok) {
+                const refreshedData = await refreshResponse.json();
+                setScheduleData(refreshedData);
+            }
+            
+            alert('Schedule generated successfully!');
+            
         } catch (error) {
-            console.error('Error creating schedule:', error);
-            setError(error.message);
+            console.error('Error generating schedule:', error);
+            alert('Failed to generate schedule: ' + error.message);
+        } finally {
+            setIsGenerating(false);
         }
     };
 
-    const handleClickOutside = (e) => {
-        if (modalRef.current && !modalRef.current.contains(e.target)) {
-            setShowModal(false);
+    const handleSingleDateChange = (e) => {
+        const selectedDate = e.target.value;
+        if (selectedDate) {
+            setSelectedDates(prev => {
+                if (prev.includes(selectedDate)) {
+                    // Remove date if already selected
+                    return prev.filter(d => d !== selectedDate);
+                } else {
+                    // Add date if not selected
+                    return [...prev, selectedDate].sort();
+                }
+            });
         }
+    };
+
+    const handleRangeStartChange = (e) => {
+        setDateRangeStart(e.target.value);
+    };
+
+    const handleRangeEndChange = (e) => {
+        setDateRangeEnd(e.target.value);
+    };
+
+    const addDateRange = () => {
+        if (!dateRangeStart || !dateRangeEnd) {
+            alert('Please select both start and end dates for the range');
+            return;
+        }
+
+        if (dateRangeStart > dateRangeEnd) {
+            alert('Start date must be before end date');
+            return;
+        }
+
+        // Generate all dates in the range
+        const rangeDates = [];
+        const currentDate = new Date(dateRangeStart);
+        const endDate = new Date(dateRangeEnd);
+
+        while (currentDate <= endDate) {
+            rangeDates.push(currentDate.toISOString().split('T')[0]);
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        // Add range dates to selected dates (avoiding duplicates)
+        setSelectedDates(prev => {
+            const newDates = [...prev];
+            rangeDates.forEach(date => {
+                if (!newDates.includes(date)) {
+                    newDates.push(date);
+                }
+            });
+            return newDates.sort();
+        });
+
+        // Clear range inputs
+        setDateRangeStart('');
+        setDateRangeEnd('');
+    };
+
+    const removeDate = (dateToRemove) => {
+        setSelectedDates(prev => prev.filter(d => d !== dateToRemove));
+    };
+
+    const clearAllDates = () => {
+        setSelectedDates([]);
+        // Don't reset originalDates here - keep them for comparison
+        // This way, clearing dates when there were original dates will show as a change
+    };
+
+    const formatDisplayDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+        });
+    };
+
+    // Generate calendar days for display
+    const generateCalendarDays = () => {
+        if (!scheduleData?.first_date || !scheduleData?.last_date) return [];
+        
+        const startDate = new Date(scheduleData.first_date);
+        const endDate = new Date(scheduleData.last_date);
+        
+        // Get the first Sunday of the week containing the start date
+        const firstSunday = new Date(startDate);
+        firstSunday.setDate(startDate.getDate() - startDate.getDay());
+        
+        // Get the last Saturday of the week containing the end date
+        const lastSaturday = new Date(endDate);
+        lastSaturday.setDate(endDate.getDate() + (6 - endDate.getDay()));
+        
+        const days = [];
+        const currentDate = new Date(firstSunday);
+        
+        while (currentDate <= lastSaturday) {
+            days.push(new Date(currentDate));
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        return days;
+    };
+
+    // Determine if a date is part of a range
+    const isDateInRange = (date) => {
+        const dateStr = date.toISOString().split('T')[0];
+        if (!selectedDates.includes(dateStr)) return false;
+        
+        const sortedDates = [...selectedDates].sort();
+        const dateIndex = sortedDates.indexOf(dateStr);
+        
+        // Check if this date is part of a consecutive sequence
+        const hasConsecutiveBefore = dateIndex > 0 && 
+            new Date(sortedDates[dateIndex - 1]).getTime() === date.getTime() - 24 * 60 * 60 * 1000;
+        const hasConsecutiveAfter = dateIndex < sortedDates.length - 1 && 
+            new Date(sortedDates[dateIndex + 1]).getTime() === date.getTime() + 24 * 60 * 60 * 1000;
+        
+        return hasConsecutiveBefore || hasConsecutiveAfter;
+    };
+
+    // Get the month and year for calendar header
+    const getCalendarMonthYear = () => {
+        if (!scheduleData?.first_date || !scheduleData?.last_date) return '';
+        
+        const startDate = new Date(scheduleData.first_date);
+        const endDate = new Date(scheduleData.last_date);
+        
+        const startMonth = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const endMonth = endDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        
+        return startMonth === endMonth ? startMonth : `${startMonth} - ${endMonth}`;
+    };
+
+    // Handle calendar date click
+    const handleCalendarDateClick = (date) => {
+        const dateStr = date.toISOString().split('T')[0];
+        const scheduleStart = new Date(scheduleData.first_date);
+        const scheduleEnd = new Date(scheduleData.last_date);
+        
+        // Only allow selection of dates within the schedule range
+        if (date < scheduleStart || date > scheduleEnd) return;
+        
+        setSelectedDates(prev => {
+            if (prev.includes(dateStr)) {
+                return prev.filter(d => d !== dateStr);
+            } else {
+                return [...prev, dateStr].sort();
+            }
+        });
+    };
+
+    const saveDates = async () => {
+        if (!selectedElement) {
+            alert('Please select an element');
+            return;
+        }
+
+        try {
+            setIsSaving(true); // Set saving state to true
+            const [type, name] = selectedElement.split('-');
+            
+            // Get the element ID from the schedule data
+            const elementData = scheduleData.dates[type === 'location' ? 'locations' : 'characters'][name];
+            const elementId = elementData ? elementData.id : null;
+            
+            const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}/dates`), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    element_type: type,
+                    element_name: name,
+                    element_id: elementId,
+                    dates: selectedDates // Array of date strings (can be empty)
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to save dates');
+            }
+
+            const result = await response.json();
+            console.log('Dates saved successfully:', result);
+            
+            // Reload the given dates section
+            await reloadGivenDatesData();
+            
+            alert('Dates saved successfully!');
+            
+        } catch (error) {
+            console.error('Error saving dates:', error);
+            alert('Failed to save dates: ' + error.message);
+        } finally {
+            setIsSaving(false); // Reset saving state
+        }
+    };
+
+    // Get scheduled dates for the selected element
+    const getScheduledDates = () => {
+        if (!selectedElement || !scheduleData?.schedule?.actor_schedule) return [];
+        
+        const [type, name] = selectedElement.split('-');
+        
+        if (type === 'character') {
+            const actorSchedule = scheduleData.schedule.actor_schedule[name];
+            return actorSchedule ? actorSchedule.dates || [] : [];
+        } else if (type === 'location') {
+            // For locations, get all dates where this location is used
+            const scheduledDates = [];
+            const scheduleByDay = scheduleData.schedule.schedule_by_day;
+            
+            if (scheduleByDay) {
+                Object.values(scheduleByDay).forEach(daySchedule => {
+                    const hasLocation = daySchedule.scenes?.some(scene => 
+                        scene.location_name === name
+                    );
+                    if (hasLocation) {
+                        scheduledDates.push(daySchedule.date);
+                    }
+                });
+            }
+            
+            return scheduledDates;
+        }
+        
+        return [];
+    };
+
+    // Generate calendar for scheduled dates
+    const generateScheduledCalendar = () => {
+        const scheduledDates = getScheduledDates();
+        if (scheduledDates.length === 0) return null;
+        
+        return (
+            <div style={styles.scheduledCalendarContainer}>
+                <div style={styles.calendarHeader}>
+                    Scheduled Dates ({scheduledDates.length})
+                </div>
+                <div style={styles.calendarGrid}>
+                    <div style={styles.calendarDaysHeader}>
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                            <div key={day} style={styles.calendarDayHeader}>
+                                {day}
+                            </div>
+                        ))}
+                    </div>
+                    <div style={styles.calendarDaysGrid}>
+                        {generateCalendarDays().map((date, index) => {
+                            const dateStr = date.toISOString().split('T')[0];
+                            const isScheduled = scheduledDates.includes(dateStr);
+                            const isWithinSchedule = date >= new Date(scheduleData.first_date) && 
+                                                   date <= new Date(scheduleData.last_date);
+                            const isOtherMonth = date.getMonth() !== new Date(scheduleData.first_date).getMonth() && 
+                                               date.getMonth() !== new Date(scheduleData.last_date).getMonth();
+                            
+                            return (
+                                <div
+                                    key={index}
+                                    style={{
+                                        ...styles.calendarDay,
+                                        ...(isScheduled ? styles.calendarDayScheduled : {}),
+                                        ...(isOtherMonth ? styles.calendarDayOtherMonth : {}),
+                                        ...(!isWithinSchedule ? styles.calendarDayDisabled : {}),
+                                        cursor: 'default' // Remove pointer cursor for scheduled dates
+                                    }}
+                                >
+                                    {date.getDate()}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Format schedule for display
+    const formatScheduleForDisplay = (schedule) => {
+        if (typeof schedule === 'string') return schedule;
+        
+        if (schedule?.schedule_by_day) {
+            let formattedSchedule = '';
+            Object.values(schedule.schedule_by_day).forEach(day => {
+                formattedSchedule += `Date: ${day.date}\n`;
+                formattedSchedule += `Scenes:\n`;
+                day.scenes?.forEach(scene => {
+                    formattedSchedule += `  Scene ${scene.scene_number} at ${scene.location_name}\n`;
+                    formattedSchedule += `  Characters: ${scene.character_names.join(', ')}\n\n`;
+                });
+                formattedSchedule += '\n';
+            });
+            return formattedSchedule;
+        }
+        
+        return JSON.stringify(schedule, null, 2);
     };
 
     return (
@@ -203,162 +552,287 @@ const ManageSchedules = () => {
                 <div>
                     <h2 style={styles.pageTitle}>Scheduling</h2>
                 </div>
-                <button 
-                    onClick={handleCreateSchedule}
-                    style={styles.createButton}
-                >
-                    Create Schedule
-                </button>
+                <div style={styles.headerRight}>
+                    <div style={styles.dateInfo}>
+                        <div>Estd. Start Date: {scheduleData?.first_date || 'Not set'}</div>
+                        <div>Estd. End Date: {scheduleData?.last_date || 'Not set'}</div>
+                    </div>
+                </div>
             </div>
             <div style={styles.content}>
-                <div style={styles.schedulesList}>
-                    <div style={styles.sectionHeader}>SCHEDULES</div>
-                    <div style={styles.list}>
-                        {isLoading ? (
-                            <div style={styles.message}>Loading schedules...</div>
-                        ) : error ? (
-                            <div style={styles.errorMessage}>{error}</div>
-                        ) : schedules.length === 0 ? (
-                            <div style={styles.message}>No schedules created yet</div>
+                <div style={styles.leftPanel}>
+                    <div style={styles.elementSelector}>
+                        <div style={styles.selectorHeader}>
+                            <span>&lt;</span>
+                            <select 
+                                value={selectedElement}
+                                onChange={(e) => handleElementChange(e.target.value)}
+                                style={styles.elementDropdown}
+                            >
+                                <option value="">Select Element</option>
+                                {getElementOptions().map((option, index) => (
+                                    <option key={index} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <span>&gt;</span>
+                        </div>
+                    </div>
+                    
+                    <div style={styles.givenDates}>
+                        <div style={styles.sectionTitle}>Given Dates</div>
+                        {selectedElement ? (
+                            <div style={styles.datePickerContainer}>
+                                {selectedDates.length === 0 && !isSaving && (
+                                    <div style={styles.existingDatesInfo}>
+                                        <span style={styles.existingDatesLabel}>
+                                            {`No dates selected for ${getSelectedElementName()}`}
+                                        </span>
+                                    </div>
+                                )}
+                                
+                                <div style={styles.modeSelector}>
+                                    <label style={styles.modeLabel}>
+                                        <input
+                                            type="radio"
+                                            value="single"
+                                            checked={datePickerMode === 'single'}
+                                            onChange={(e) => setDatePickerMode(e.target.value)}
+                                            style={styles.radioInput}
+                                        />
+                                        Single Dates
+                                    </label>
+                                    <label style={styles.modeLabel}>
+                                        <input
+                                            type="radio"
+                                            value="range"
+                                            checked={datePickerMode === 'range'}
+                                            onChange={(e) => setDatePickerMode(e.target.value)}
+                                            style={styles.radioInput}
+                                        />
+                                        Date Range
+                                    </label>
+                                </div>
+
+                                {datePickerMode === 'single' ? (
+                                    <input
+                                        type="date"
+                                        min={scheduleData?.first_date}
+                                        max={scheduleData?.last_date}
+                                        onChange={handleSingleDateChange}
+                                        style={styles.datePicker}
+                                    />
+                                ) : (
+                                    <div style={styles.dateRangeContainer}>
+                                        <div style={styles.dateRangeInputs}>
+                                            <input
+                                                type="date"
+                                                value={dateRangeStart}
+                                                min={scheduleData?.first_date}
+                                                max={scheduleData?.last_date}
+                                                onChange={handleRangeStartChange}
+                                                style={styles.dateRangeInput}
+                                                placeholder="Start Date"
+                                            />
+                                            <span style={styles.dateRangeSeparator}>to</span>
+                                            <input
+                                                type="date"
+                                                value={dateRangeEnd}
+                                                min={dateRangeStart || scheduleData?.first_date}
+                                                max={scheduleData?.last_date}
+                                                onChange={handleRangeEndChange}
+                                                style={styles.dateRangeInput}
+                                                placeholder="End Date"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={addDateRange}
+                                            style={styles.addRangeButton}
+                                            disabled={!dateRangeStart || !dateRangeEnd}
+                                        >
+                                            Add Range
+                                        </button>
+                                    </div>
+                                )}
+
+                                {(selectedDates.length > 0 || hasChanges()) && (
+                                    <div style={styles.selectedDatesList}>
+                                        <div style={styles.selectedDatesHeader}>
+                                            <span>Selected Dates ({selectedDates.length}):</span>
+                                            <div style={styles.dateActions}>
+                                                {hasChanges() && (
+                                                    <button
+                                                        onClick={saveDates}
+                                                        style={styles.saveDatesButton}
+                                                        title="Save dates"
+                                                        disabled={isSaving}
+                                                    >
+                                                        {isSaving ? 'Saving...' : 'Save Dates'}
+                                                    </button>
+                                                )}
+                                                {selectedDates.length > 0 && (
+                                                    <button
+                                                        onClick={clearAllDates}
+                                                        style={styles.clearAllButton}
+                                                        title="Clear all dates"
+                                                    >
+                                                        Clear All
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {selectedDates.length > 0 && (
+                                            <div style={styles.calendarContainer}>
+                                                <div style={styles.calendarHeader}>
+                                                    {getCalendarMonthYear()}
+                                                </div>
+                                                <div style={styles.calendarGrid}>
+                                                    <div style={styles.calendarDaysHeader}>
+                                                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                                                            <div key={day} style={styles.calendarDayHeader}>
+                                                                {day}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <div style={styles.calendarDaysGrid}>
+                                                        {generateCalendarDays().map((date, index) => {
+                                                            const dateStr = date.toISOString().split('T')[0];
+                                                            const isSelected = selectedDates.includes(dateStr);
+                                                            const isInRange = isDateInRange(date);
+                                                            const isWithinSchedule = date >= new Date(scheduleData.first_date) && 
+                                                                                    date <= new Date(scheduleData.last_date);
+                                                            const isOtherMonth = date.getMonth() !== new Date(scheduleData.first_date).getMonth() && 
+                                                                                date.getMonth() !== new Date(scheduleData.last_date).getMonth();
+                                                            
+                                                            return (
+                                                                <div
+                                                                    key={index}
+                                                                    style={{
+                                                                        ...styles.calendarDay,
+                                                                        ...(isSelected && isInRange ? styles.calendarDayRangeSelected : {}),
+                                                                        ...(isSelected && !isInRange ? styles.calendarDaySingleSelected : {}),
+                                                                        ...(isOtherMonth ? styles.calendarDayOtherMonth : {}),
+                                                                        ...(!isWithinSchedule ? styles.calendarDayDisabled : {})
+                                                                    }}
+                                                                    onClick={() => handleCalendarDateClick(date)}
+                                                                >
+                                                                    {date.getDate()}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         ) : (
-                            schedules.map((schedule) => (
-                                <button
-                                    key={schedule.name}
-                                    style={styles.scheduleButton}
-                                    onClick={() => handleScheduleClick(schedule.name)}
-                                >
-                                    <div style={styles.scheduleName}>
-                                        {schedule.name.split('.')[0]}
-                                    </div>
-                                    <div style={styles.scheduleLocationId}>
-                                        {schedule.location}
-                                    </div>
-                                </button>
-                            ))
+                            <div style={styles.calendarPlaceholder}>
+                                Select an element to choose dates
+                            </div>
+                        )}
+                    </div>
+
+                    <div style={styles.scheduledDates}>
+                        <div style={styles.sectionTitle}>Scheduled Dates</div>
+                        {selectedElement && scheduleData?.schedule ? (
+                            generateScheduledCalendar() || (
+                                <div style={styles.datesPlaceholder}>
+                                    No scheduled dates for {getSelectedElementName()}
+                                </div>
+                            )
+                        ) : (
+                            <div style={styles.datesPlaceholder}>
+                                {selectedElement 
+                                    ? 'Generate schedule to see scheduled dates'
+                                    : 'Select an element to see scheduled dates'
+                                }
+                            </div>
                         )}
                     </div>
                 </div>
-                <div style={styles.centerSection}>
-                    {isLoadingDetails ? (
-                        <div style={styles.message}>Loading schedule details...</div>
-                    ) : !selectedSchedule ? (
-                        <p style={styles.centerText}>Select a schedule to view details</p>
-                    ) : error ? (
-                        <div style={styles.errorMessage}>{error}</div>
-                    ) : scheduleDetails ? (
-                        <div style={styles.scheduleDetails}>
-                            <h3 style={styles.detailsHeader}>
-                                {selectedSchedule.split('.')[0]}
-                            </h3>
-                            <div style={styles.detailsContent}>
-                                {Object.entries(formatScheduleData(scheduleDetails)).map(([date, scenes], index) => (
-                                    <DateGroup key={date} index={index} date={date} scenes={scenes} />
-                                ))}
+
+                <div style={styles.centerPanel}>
+                    <div style={styles.scheduleHeader}>Rough Schedule</div>
+                    <div style={styles.maxPagesSection}>
+                        <label style={styles.maxPagesLabel}>
+                            Max. number of scenes per day - 
+                        </label>
+                        <input 
+                            type="number"
+                            value={maxScenes}
+                            onChange={(e) => setMaxScenes(e.target.value)}
+                            style={styles.pageInput}
+                            placeholder="5"
+                            min="1"
+                        />
+                        <button 
+                            style={styles.generateButton}
+                            onClick={handleGenerateSchedule}
+                            disabled={isGenerating}
+                        >
+                            {isGenerating ? 'GENERATING...' : 'GENERATE'}
+                        </button>
+                    </div>
+                    {scheduleData?.schedule ? (
+                        <div style={styles.scheduleContent}>
+                            <pre style={styles.scheduleDisplay}>
+                                {formatScheduleForDisplay(scheduleData.schedule)}
+                            </pre>
+                        </div>
+                    ) : (
+                        <div style={styles.emptyScheduleSection}>
+                            <div style={styles.emptyScheduleMessage}>
+                                Generate rough schedule
                             </div>
                         </div>
-                    ) : null}
+                    )}
                 </div>
-            </div>
-            
-            {showModal && (
-                <div style={styles.modalOverlay} onClick={handleClickOutside}>
-                    <div style={styles.modal} ref={modalRef}>
-                        <h3 style={styles.modalHeader}>Create New Schedule</h3>
-                        <form onSubmit={handleSubmit} style={styles.form}>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Schedule Name:</label>
-                                <input
-                                    type="text"
-                                    value={scheduleName}
-                                    onChange={(e) => setScheduleName(e.target.value)}
-                                    style={styles.input}
-                                    required
-                                />
+
+                <div style={styles.rightPanel}>
+                    <div style={styles.scheduleHeader}>Scheduling Assistant</div>
+                    <div style={styles.chatContainer}>
+                        <div style={styles.chatMessages}>
+                            {/* Chat messages will go here */}
+                            <div style={styles.welcomeMessage}>
+                                Hello! I'm Kino, your scheduling assistant. I can help you with:
+                                <ul style={styles.assistantList}>
+                                    <li>Understanding the current schedule</li>
+                                    <li>Suggesting optimal shooting dates</li>
+                                </ul>
+                                How can I assist you today?
                             </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Location:</label>
-                                <select
-                                    value={selectedLocation}
-                                    onChange={(e) => setSelectedLocation(e.target.value)}
-                                    style={styles.select}
-                                    required
-                                >
-                                    <option value="">Select a location</option>
-                                    {locations.map((location) => (
-                                        <option key={location.id} value={location.name}>
-                                            {location.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Number of Scenes Per Day:</label>
-                                <input
-                                    type="number"
-                                    value={numScenesPerDay}
-                                    onChange={(e) => setNumScenesPerDay(e.target.value)}
-                                    style={styles.input}
-                                    min="1"
-                                    required
-                                />
-                            </div>
-                            <div style={styles.buttonGroup}>
-                                <button type="submit" style={styles.submitButton}>
-                                    Create
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    style={styles.cancelButton}
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
+                        </div>
+                        <div style={styles.chatInputContainer}>
+                            <input 
+                                type="text" 
+                                placeholder="Type your question here..."
+                                style={styles.chatInput}
+                            />
+                            <button style={styles.sendButton}>
+                                Send
+                            </button>
+                        </div>
                     </div>
                 </div>
-            )}
+            </div>
         </div>
     )
 }
-
-const tableStyles = {
-    scheduleTable: {
-        width: '100%',
-        borderCollapse: 'collapse',
-        fontFamily: 'monospace',
-        fontSize: '0.9rem',
-    },
-    headerRow: {
-        backgroundColor: '#f1f1f1',
-        fontWeight: 'bold',
-    },
-    tableRow: {
-        '&:nth-child(even)': {
-            backgroundColor: '#f8f9fa',
-        },
-        '&:hover': {
-            backgroundColor: '#f5f5f5',
-        },
-    },
-    tableCell: {
-        padding: '8px 12px',
-        borderBottom: '1px solid #dee2e6',
-        whiteSpace: 'nowrap',
-    },
-};
 
 const styles = {
     pageContainer: {
         display: 'flex',
         flexDirection: 'column',
-        minHeight: 'calc(100vh - 60px)',
+        minHeight: '100vh',
         backgroundColor: '#fff',
     },
     header: {
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         padding: '1rem 2rem',
         borderBottom: '1px solid #eee',
         backgroundColor: '#fff',
@@ -369,259 +843,472 @@ const styles = {
         margin: '0.25rem 0 0 0',
         color: '#555',
     },
-    createButton: {
-        backgroundColor: '#4CAF50',
-        color: 'white',
-        padding: '8px 16px',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
+    headerRight: {
+        textAlign: 'right',
+    },
+    dateInfo: {
         fontSize: '0.9rem',
-        fontWeight: '500',
-        '&:hover': {
-            backgroundColor: '#45a049',
-        }
+        color: '#555',
+        lineHeight: '1.4',
     },
     content: {
         display: 'flex',
         flex: 1,
-        margin: '20px',
-        gap: '20px',
+        minHeight: 'calc(100vh - 120px)',
     },
-    schedulesList: {
-        width: '250px',
-        border: '1px solid #ccc',
+    leftPanel: {
+        width: '280px',
+        borderRight: '1px solid #ccc',
         backgroundColor: '#fff',
-    },
-    sectionHeader: {
-        backgroundColor: '#ccc',
-        padding: '10px',
-        fontWeight: 'bold',
-        borderBottom: '1px solid #999',
-    },
-    list: {
         display: 'flex',
         flexDirection: 'column',
     },
-    scheduleButton: {
-        width: '100%',
-        padding: '10px',
-        backgroundColor: '#e0e0e0',
-        border: 'none',
-        borderBottom: '1px solid #fff',
-        cursor: 'pointer',
-        textAlign: 'left',
-        display: 'block',
-        '&:hover': {
-            backgroundColor: '#d0d0d0',
-        }
-    },
-    scheduleName: {
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    scheduleLocationId: {
-        fontSize: '0.8rem',
-        color: '#666',
-        marginTop: '4px',
-    },
-    scheduleDate: {
-        fontSize: '0.8rem',
-        color: '#666',
-        marginTop: '4px',
-    },
-    centerSection: {
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '20px',
-        backgroundColor: '#fff',
-        minHeight: 'calc(100vh - 180px)',
-    },
-    centerText: {
-        color: '#666',
-        fontSize: '1rem',
-    },
-    message: {
-        padding: '20px',
+    elementSelector: {
+        padding: '15px',
+        borderBottom: '1px solid #ccc',
         textAlign: 'center',
-        color: '#666',
     },
-    errorMessage: {
-        padding: '20px',
-        textAlign: 'center',
-        color: '#dc3545',
-    },
-    scheduleDetails: {
-        width: '100%',
-        height: '100%',
+    selectorHeader: {
         display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-    },
-    detailsHeader: {
-        fontSize: '1.2rem',
-        color: '#333',
-        marginBottom: '20px',
-        paddingBottom: '10px',
-        borderBottom: '1px solid #eee',
-    },
-    detailsContent: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: '20px',
-        borderRadius: '8px',
-        border: '1px solid #dee2e6',
-        overflowX: 'auto',
-        maxHeight: 'calc(100vh - 250px)',
-    },
-    ...tableStyles,
-    modalOverlay: {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 1000,
+        justifyContent: 'center',
+        gap: '10px',
+        fontSize: '0.9rem',
     },
-    modal: {
+    elementDropdown: {
+        padding: '4px 8px',
+        border: '1px solid #ccc',
+        borderRadius: '4px',
+        fontSize: '0.9rem',
         backgroundColor: '#fff',
-        borderRadius: '8px',
-        padding: '20px',
-        width: '400px',
-        maxWidth: '90%',
+        cursor: 'pointer',
+        minWidth: '140px',
+        textAlign: 'center',
     },
-    modalHeader: {
-        margin: '0 0 20px 0',
-        color: '#333',
-        fontSize: '1.2rem',
+    elementName: {
+        fontWeight: '500',
     },
-    form: {
+    givenDates: {
+        padding: '15px',
+        borderBottom: '1px solid #ccc',
+        flex: 1,
+    },
+    scheduledDates: {
+        padding: '15px',
+        flex: 1,
+    },
+    sectionTitle: {
+        fontSize: '0.9rem',
+        fontWeight: '500',
+        marginBottom: '10px',
+        textAlign: 'center',
+    },
+    dateColumns: {
+        display: 'flex',
+        marginBottom: '15px',
+    },
+    columnHeader: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: '0.9rem',
+        fontWeight: '500',
+        paddingBottom: '5px',
+        borderBottom: '1px solid #ccc',
+    },
+    datePickerContainer: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '20px',
+        gap: '10px',
     },
-    formGroup: {
+    modeSelector: {
+        display: 'flex',
+        gap: '12px',
+        marginBottom: '10px',
+    },
+    modeLabel: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        fontSize: '0.8rem',
+        color: '#333',
+        cursor: 'pointer',
+    },
+    radioInput: {
+        margin: '0',
+        cursor: 'pointer',
+    },
+    datePicker: {
+        padding: '8px',
+        border: '1px solid #ccc',
+        borderRadius: '4px',
+        fontSize: '0.9rem',
+        backgroundColor: '#fff',
+        cursor: 'pointer',
+        width: '100%',
+    },
+    dateRangeContainer: {
         display: 'flex',
         flexDirection: 'column',
         gap: '8px',
     },
-    label: {
+    dateRangeInputs: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        flexWrap: 'wrap',
+    },
+    dateRangeInput: {
+        padding: '6px',
+        border: '1px solid #ccc',
+        borderRadius: '4px',
+        fontSize: '0.75rem',
+        backgroundColor: '#fff',
+        cursor: 'pointer',
+        minWidth: '100px',
+        flex: 1,
+    },
+    dateRangeSeparator: {
+        fontSize: '0.8rem',
+        color: '#666',
+        fontWeight: '500',
+    },
+    addRangeButton: {
+        padding: '6px 12px',
+        backgroundColor: '#007bff',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        fontSize: '0.8rem',
+        cursor: 'pointer',
+        alignSelf: 'flex-start',
+        '&:disabled': {
+            backgroundColor: '#ccc',
+            cursor: 'not-allowed',
+        }
+    },
+    selectedDatesList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+    },
+    selectedDatesHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontSize: '0.8rem',
+        fontWeight: '500',
+        color: '#333',
+        marginBottom: '8px',
+    },
+    dateActions: {
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center',
+    },
+    saveDatesButton: {
+        background: '#28a745',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '0.7rem',
+        fontWeight: '500',
+        padding: '4px 8px',
+        transition: 'background-color 0.2s',
+        '&:hover': {
+            backgroundColor: '#218838',
+        },
+        '&:disabled': {
+            backgroundColor: '#ccc',
+            cursor: 'not-allowed',
+        }
+    },
+    clearAllButton: {
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '0.7rem',
+        color: '#dc3545',
+        textDecoration: 'underline',
+        padding: '2px 4px',
+    },
+    selectedDatesContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        maxHeight: '150px',
+        overflowY: 'auto',
+    },
+    selectedDateItem: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '6px 8px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '4px',
+        border: '1px solid #e9ecef',
+    },
+    selectedDateText: {
+        fontSize: '0.8rem',
+        color: '#333',
+    },
+    removeDateButton: {
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '16px',
+        fontWeight: 'bold',
+        color: '#dc3545',
+        padding: '2px 6px',
+        borderRadius: '3px',
+        transition: 'background-color 0.2s',
+        '&:hover': {
+            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+        }
+    },
+    calendarPlaceholder: {
+        fontSize: '0.8rem',
+        color: '#999',
+        textAlign: 'center',
+        padding: '20px 5px',
+        fontStyle: 'italic',
+    },
+    datesPlaceholder: {
+        fontSize: '0.8rem',
+        color: '#999',
+        textAlign: 'center',
+        padding: '20px 5px',
+        fontStyle: 'italic',
+    },
+    centerPanel: {
+        width: '50%',
+        borderRight: '1px solid #ccc',
+        backgroundColor: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    rightPanel: {
+        flex: 1,
+        backgroundColor: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    chatContainer: {
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '15px',
+    },
+    chatMessages: {
+        flex: 1,
+        overflowY: 'auto',
+        marginBottom: '15px',
+    },
+    welcomeMessage: {
+        backgroundColor: '#f8f9fa',
+        padding: '15px',
+        borderRadius: '8px',
         fontSize: '0.9rem',
+        color: '#333',
+        lineHeight: '1.4',
+    },
+    assistantList: {
+        marginTop: '10px',
+        paddingLeft: '20px',
+        fontSize: '0.85rem',
         color: '#555',
     },
-    input: {
-        padding: '8px 12px',
-        border: '1px solid #ccc',
-        borderRadius: '4px',
-        fontSize: '0.9rem',
-    },
-    select: {
-        padding: '8px 12px',
-        border: '1px solid #ccc',
-        borderRadius: '4px',
-        fontSize: '0.9rem',
-        backgroundColor: '#fff',
-    },
-    buttonGroup: {
+    chatInputContainer: {
         display: 'flex',
         gap: '10px',
-        justifyContent: 'flex-end',
-        marginTop: '10px',
-    },
-    submitButton: {
-        backgroundColor: '#4CAF50',
-        color: 'white',
-        padding: '8px 16px',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '0.9rem',
-        '&:hover': {
-            backgroundColor: '#45a049',
-        },
-    },
-    cancelButton: {
-        backgroundColor: '#6c757d',
-        color: 'white',
-        padding: '8px 16px',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '0.9rem',
-        '&:hover': {
-            backgroundColor: '#5a6268',
-        },
-    },
-    dateGroup: {
-        marginBottom: '30px',
-    },
-    dateHeader: {
-        backgroundColor: '#f8f9fa',
         padding: '10px',
-        margin: '0',
-        borderBottom: '2px solid #dee2e6',
+        borderTop: '1px solid #eee',
+    },
+    chatInput: {
+        flex: 1,
+        padding: '8px 12px',
+        border: '1px solid #ccc',
+        borderRadius: '4px',
+        fontSize: '0.9rem',
+        '&:focus': {
+            outline: 'none',
+            borderColor: '#007bff',
+        }
+    },
+    sendButton: {
+        padding: '8px 16px',
+        backgroundColor: '#007bff',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        fontSize: '0.9rem',
+        cursor: 'pointer',
+        '&:hover': {
+            backgroundColor: '#0056b3',
+        }
+    },
+    scheduleHeader: {
+        padding: '15px',
+        textAlign: 'center',
         fontSize: '1rem',
         fontWeight: '500',
+        borderBottom: '1px solid #ccc',
+        backgroundColor: '#f8f9fa',
     },
-    scenesTable: {
-        width: '100%',
-        borderCollapse: 'collapse',
-        marginTop: '5px',
+    maxPagesSection: {
+        padding: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        flexWrap: 'wrap',
     },
-    tableHeader: {
-        backgroundColor: '#f1f1f1',
-    },
-    headerCell: {
-        padding: '8px',
-        textAlign: 'left',
-        borderBottom: '1px solid #dee2e6',
+    maxPagesLabel: {
         fontSize: '0.9rem',
-        fontWeight: '500',
+        color: '#333',
     },
-    sceneRow: {
-        borderBottom: '1px solid #dee2e6',
-        '&:hover': {
-            backgroundColor: '#f8f9fa',
-        },
-    },
-    sceneCell: {
-        padding: '12px 8px',
-        verticalAlign: 'top',
+    pageInput: {
+        width: '40px',
+        padding: '4px 6px',
+        border: '1px solid #ccc',
+        borderRadius: '3px',
         fontSize: '0.9rem',
-        whiteSpace: 'pre-line',
-    },
-    locationCell: {
-        padding: '12px 8px',
-        verticalAlign: 'top',
-    },
-    locationTitle: {
-        fontWeight: '500',
-        marginBottom: '4px',
-    },
-    synopsis: {
-        fontSize: '0.9rem',
-        color: '#666',
-    },
-    castCell: {
-        padding: '12px 8px',
-        verticalAlign: 'top',
-        whiteSpace: 'nowrap',
-    },
-    pagesCell: {
-        padding: '12px 8px',
-        verticalAlign: 'top',
         textAlign: 'center',
     },
-    notesCell: {
-        padding: '12px 8px',
-        verticalAlign: 'top',
+    generateButton: {
+        padding: '6px 12px',
+        backgroundColor: '#007bff',
+        color: 'white',
+        border: 'none',
+        borderRadius: '3px',
+        fontSize: '0.8rem',
+        cursor: 'pointer',
+        fontWeight: '500',
+    },
+    emptyScheduleSection: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 1,
+        padding: '40px 20px',
+    },
+    emptyScheduleMessage: {
+        fontSize: '1.1rem',
         color: '#666',
+        marginBottom: '30px',
+        textAlign: 'center',
+    },
+    scheduleContent: {
+        flex: 1,
+        padding: '20px',
+        overflow: 'auto',
+    },
+    scheduleDisplay: {
         fontSize: '0.9rem',
+        lineHeight: '1.4',
+        margin: 0,
+        whiteSpace: 'pre-wrap',
+        wordWrap: 'break-word',
+    },
+    existingDatesInfo: {
+        marginBottom: '10px',
+        padding: '8px',
+        backgroundColor: '#e8f4f8',
+        borderRadius: '4px',
+        border: '1px solid #bee5eb',
+    },
+    existingDatesLabel: {
+        fontSize: '0.75rem',
+        color: '#0c5460',
+        fontWeight: '500',
+    },
+    calendarContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+    },
+    calendarHeader: {
+        textAlign: 'center',
+        fontSize: '0.9rem',
+        fontWeight: '500',
+        color: '#333',
+        padding: '8px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '4px',
+    },
+    calendarGrid: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+    },
+    calendarDaysHeader: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(7, 1fr)',
+        gap: '2px',
+    },
+    calendarDayHeader: {
+        textAlign: 'center',
+        fontSize: '0.7rem',
+        fontWeight: '500',
+        color: '#666',
+        padding: '4px',
+    },
+    calendarDaysGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(7, 1fr)',
+        gap: '2px',
+    },
+    calendarDay: {
+        textAlign: 'center',
+        fontSize: '0.7rem',
+        padding: '6px 4px',
+        borderRadius: '3px',
+        cursor: 'pointer',
+        border: '1px solid #e9ecef',
+        backgroundColor: '#fff',
+        transition: 'all 0.2s',
+        '&:hover': {
+            backgroundColor: '#f8f9fa',
+        }
+    },
+    calendarDaySingleSelected: {
+        backgroundColor: '#28a745',
+        color: 'white',
+        border: '1px solid #28a745',
+        '&:hover': {
+            backgroundColor: '#218838',
+        }
+    },
+    calendarDayRangeSelected: {
+        backgroundColor: '#007bff',
+        color: 'white',
+        border: '1px solid #007bff',
+        '&:hover': {
+            backgroundColor: '#0056b3',
+        }
+    },
+    calendarDayOtherMonth: {
+        color: '#ccc',
+        backgroundColor: '#f8f9fa',
+    },
+    calendarDayDisabled: {
+        backgroundColor: '#f8f9fa',
+        color: '#ccc',
+        cursor: 'not-allowed',
+        '&:hover': {
+            backgroundColor: '#f8f9fa',
+        }
+    },
+    calendarDayScheduled: {
+        backgroundColor: '#ffc107',
+        color: '#212529',
+        border: '1px solid #ffc107',
+        fontWeight: '500',
+    },
+    scheduledCalendarContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
     },
 };
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
-import { getApiUrl } from '../utils/api';
+import { getApiUrl, fetchWithAuth } from '../utils/api';
+import { getToken, isTokenValid, removeToken } from '../utils/auth';
 
 const ProtectedRoute = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -11,20 +12,34 @@ const ProtectedRoute = ({ children }) => {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const response = await fetch(getApiUrl('/api/verify-session'), {
+        // First check if token exists and is valid format
+        if (!getToken() || !isTokenValid()) {
+          console.log('No valid token found');
+          setIsAuthenticated(false);
+          setIsLoading(false);
+          return;
+        }
+
+        // Verify token with server
+        const response = await fetchWithAuth(getApiUrl('/api/verify-token'), {
           method: 'GET',
-          credentials: 'include',
         });
+
+        console.log('Token verification response status:', response.status);
 
         if (response.ok) {
           const data = await response.json();
+          console.log('Token verification data:', data);
           setSessionUser(data.user.id);
           setIsAuthenticated(true);
         } else {
+          console.log('Token verification failed');
+          removeToken(); // Remove invalid token
           setIsAuthenticated(false);
         }
       } catch (error) {
-        console.error('Session verification failed:', error);
+        console.error('Token verification failed:', error);
+        removeToken(); // Remove token on error
         setIsAuthenticated(false);
       } finally {
         setIsLoading(false);

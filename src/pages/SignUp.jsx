@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getApiUrl } from '../utils/api';
+
 function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,6 +17,8 @@ function SignUp() {
     try {
       const response = await fetch(getApiUrl('/api/signup'), {
         method: 'POST',
+        mode: 'cors',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -30,7 +33,7 @@ function SignUp() {
       if (response.ok) {
         // Signup successful
         console.log('Signup successful:', data);
-        // Redirect to login page or dashboard
+        // Redirect to login page
         navigate('/');
       } else {
         // Handle error response
@@ -45,74 +48,116 @@ function SignUp() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create your account
-          </h2>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-              {error}
-            </div>
-          )}
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="email-address" className="sr-only">
-                Email address
-              </label>
-              <input
-                id="email-address"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Creating account...' : 'Sign up'}
-            </button>
-          </div>
-        </form>
-        <div className="text-sm text-center">
-          <Link to="/" className="font-medium text-indigo-600 hover:text-indigo-500">
-            Already have an account? Sign in
-          </Link>
-        </div>
+    <div style={styles.container}>
+      <form style={styles.form} onSubmit={handleSubmit}>
+        {error && <div style={styles.error}>{error}</div>}
+        <input
+          style={styles.input}
+          type="email"
+          name="email"
+          placeholder="Email Address"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={loading}
+          required
+        />
+        <input
+          style={styles.input}
+          type="password"
+          name="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={loading}
+          required
+        />
+        <button 
+          type="submit" 
+          style={loading ? styles.buttonDisabled : styles.button}
+          disabled={loading}
+        >
+          {loading ? 'Creating Account...' : 'Sign Up'}
+        </button>
+      </form>
+      <div style={styles.loginContainer}>
+        Already have an account?{' '}
+        <Link to="/" style={styles.login}>
+          <b>Sign In</b>
+        </Link>
       </div>
     </div>
   );
 }
+
+const styles = {
+  container: {
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    background: '#fff',
+  },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: '350px',
+    gap: '24px',
+    alignItems: 'center',
+  },
+  input: {
+    width: '100%',
+    fontSize: '1.3rem',
+    border: 'none',
+    borderBottom: '2px solid #222',
+    padding: '8px 0',
+    outline: 'none',
+    background: 'transparent',
+    marginBottom: '8px',
+  },
+  button: {
+    width: '180px',
+    padding: '12px 0',
+    fontSize: '1.4rem',
+    fontWeight: 'bold',
+    background: '#ddd',
+    border: 'none',
+    borderRadius: '2px',
+    cursor: 'pointer',
+    marginTop: '8px',
+    marginBottom: '0',
+  },
+  buttonDisabled: {
+    width: '180px',
+    padding: '12px 0',
+    fontSize: '1.4rem',
+    fontWeight: 'bold',
+    background: '#f5f5f5',
+    color: '#aaa',
+    border: 'none',
+    borderRadius: '2px',
+    cursor: 'not-allowed',
+    marginTop: '8px',
+    marginBottom: '0',
+  },
+  loginContainer: {
+    marginTop: '80px',
+    fontSize: '1.4rem',
+    color: '#111',
+    textAlign: 'center',
+  },
+  login: {
+    color: '#000',
+    textDecoration: 'underline',
+    marginLeft: '4px',
+    cursor: 'pointer',
+  },
+  error: {
+    color: '#dc3545',
+    marginBottom: '16px',
+    textAlign: 'center',
+    width: '100%',
+  },
+};
 
 export default SignUp;

@@ -1,149 +1,198 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getApiUrl } from '../utils/api';
+import { setToken } from '../utils/auth'; // Add this import
+
+
 const Login = () => {
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [isLogin, setIsLogin] = useState(true); // toggle
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleToggle = () => {
+    setIsLogin(!isLogin);
+    setEmail('');
+    setPassword('');
+    setError('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     setError('');
-    
+
+    const endpoint = isLogin ? '/api/login' : '/api/signup';
+
     try {
-      const response = await fetch(getApiUrl('/api/login'), {
+      const response = await fetch(getApiUrl(endpoint), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(form),
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({ email, password }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Login failed');
+        throw new Error(data.message || 'Something went wrong.');
       }
 
-      const data = await response.json();
-      console.log('Login response data:', data); // Debug log
-      const user_id = data.user.id;
-      console.log('Navigating to:', `/${user_id}`); // Debug log
-      
-      if (user_id) {
-        navigate(`/${user_id}`);
+      if (isLogin) {
+        // Add token storage logic like in Login.jsx
+        if (data.token) {
+          setToken(data.token);
+          navigate(`/${data.user.id}`);
+        } else {
+          throw new Error('No token received from server');
+        }
       } else {
-        throw new Error('User ID not received from server');
+        navigate('/login');
       }
-      
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div style={styles.container}>
-      <form style={styles.form} onSubmit={handleSubmit}>
-        {error && <div style={styles.error}>{error}</div>}
-        <input
-          style={styles.input}
-          type="text"
-          name="email"
-          placeholder="Email/Mobile Number"
-          value={form.email}
-          onChange={handleChange}
-        />
-        <input
-          style={styles.input}
-          type="password"
-          name="password"
-          placeholder="Password"
-          value={form.password}
-          onChange={handleChange}
-        />
-        <button type="submit" style={styles.button}>
-          Sign In
-        </button>
-        <a href="#" style={styles.forgot}>
-          Forgot Password
-        </a>
-      </form>
-      <div style={styles.signupContainer}>
-        Don't have an existing account?{' '}
-        <Link to="/signup" style={styles.signup}>
-          <b>Sign Up</b>
-        </Link>
+    <div style={styles.page}>
+      <div style={styles.card}>
+        <h2 style={styles.title}>{isLogin ? 'Sign In' : 'Create Account'}</h2>
+        <form style={styles.form} onSubmit={handleSubmit}>
+          {error && <div style={styles.error}>{error}</div>}
+
+          <div style={styles.field}>
+            <label style={styles.label}>Email or Mobile</label>
+            <input
+              style={styles.input}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              required
+              disabled={loading}
+            />
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>Password</label>
+            <input
+              style={styles.input}
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              required
+              disabled={loading}
+            />
+          </div>
+
+          <button type="submit" style={styles.button} disabled={loading}>
+            {loading ? (isLogin ? 'Signing in...' : 'Signing up...') : (isLogin ? 'Sign In' : 'Sign Up')}
+          </button>
+
+          {isLogin && (
+            <Link to="/signup" style={styles.forgot}>Forgot Password?</Link>
+          )}
+        </form>
+
+        <div style={styles.signupContainer}>
+          {isLogin ? "Don't have an account?" : 'Already have an account?'}{' '}
+          <button onClick={handleToggle} style={styles.signupLink}>
+            {isLogin ? 'Sign Up' : 'Sign In'}
+          </button>
+        </div>
       </div>
     </div>
   );
 };
 
 const styles = {
-  container: {
+  page: {
     minHeight: '100vh',
     display: 'flex',
-    flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
+    background: 'linear-gradient(135deg, #f5f7fa, #c3cfe2)',
+    padding: '1rem',
+  },
+  card: {
     background: '#fff',
+    borderRadius: '8px',
+    boxShadow: '0 12px 24px rgba(0,0,0,0.1)',
+    padding: '2rem',
+    maxWidth: '400px',
+    width: '100%',
+  },
+  title: {
+    margin: 0,
+    marginBottom: '1.5rem',
+    fontSize: '1.75rem',
+    color: '#2C3440',
+    textAlign: 'center',
   },
   form: {
     display: 'flex',
     flexDirection: 'column',
-    minWidth: '350px',
-    gap: '24px',
-    alignItems: 'center',
+    gap: '1rem',
+  },
+  field: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  label: {
+    marginBottom: '0.5rem',
+    color: '#555',
+    fontSize: '0.9rem',
   },
   input: {
-    width: '100%',
-    fontSize: '1.3rem',
-    border: 'none',
-    borderBottom: '2px solid #222',
-    padding: '8px 0',
+    padding: '0.75rem 1rem',
+    fontSize: '1rem',
+    border: '1px solid #ccd0d5',
+    borderRadius: '4px',
     outline: 'none',
-    background: 'transparent',
-    marginBottom: '8px',
   },
   button: {
-    width: '180px',
-    padding: '12px 0',
-    fontSize: '1.4rem',
-    fontWeight: 'bold',
-    background: '#ddd',
+    marginTop: '1rem',
+    padding: '0.75rem',
+    fontSize: '1rem',
+    fontWeight: '500',
+    color: '#fff',
+    background: 'linear-gradient(135deg, #6c5ce7, #00b894)',
     border: 'none',
-    borderRadius: '2px',
+    borderRadius: '4px',
     cursor: 'pointer',
-    marginTop: '8px',
-    marginBottom: '0',
   },
   forgot: {
-    marginTop: '4px',
-    fontSize: '1rem',
-    color: '#000',
-    textDecoration: 'underline',
-    cursor: 'pointer',
+    marginTop: '0.5rem',
+    fontSize: '0.9rem',
+    color: '#6c5ce7',
+    textAlign: 'center',
+    textDecoration: 'none',
   },
   signupContainer: {
-    marginTop: '80px',
-    fontSize: '1.4rem',
-    color: '#111',
+    marginTop: '1.5rem',
     textAlign: 'center',
+    fontSize: '0.9rem',
+    color: '#555',
   },
-  signup: {
-    color: '#000',
+  signupLink: {
+    marginLeft: '0.25rem',
+    background: 'none',
+    border: 'none',
+    color: '#6c5ce7',
     textDecoration: 'underline',
-    marginLeft: '4px',
+    fontWeight: '500',
     cursor: 'pointer',
   },
   error: {
-    color: '#dc3545',
-    marginBottom: '16px',
+    color: '#e74c3c',
+    fontSize: '0.9rem',
     textAlign: 'center',
-    width: '100%',
   },
 };
 
