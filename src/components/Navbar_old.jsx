@@ -95,8 +95,8 @@ const Navbar = () => {
 
 	// Add state to track if we're in settings view
 	const [isInSettings, setIsInSettings] = useState(false);
-	const [isInOrgSetting, setIsInOrgSetting] = useState(false);
-	const [isInPersonalSetting, setIsInPersonalSetting] = useState(false);
+	const [isInOrgSetting, setisInOrgSetting] = useState(false);
+	const [isInPersonalSetting, setisInPersonalSetting] = useState(false);
 	const [isInProjectSetting, setIsInProjectSetting] = useState(false);
 
 	// Add state for selected settings section
@@ -105,18 +105,13 @@ const Navbar = () => {
 	// Add state for user dropdown
 	const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-	// Add useEffect to detect if we're on a settings page
+	// Add useEffect to detect if we're on an organization settings page
 	useEffect(() => {
 		const pathParts = location.pathname.split("/").filter((part) => part);
 		const isOrgSettingsPath = pathParts.length >= 3 && pathParts[1] === "organizations" && pathParts[2];
-		const isPersonalSettingsPath = pathParts.length >= 2 && pathParts[1] === "settings";
-		const isProjectPage = pathParts.length >= 2 && pathParts[0] && pathParts[1];
+		setIsInSettings(isOrgSettingsPath);
 
-		setIsInOrgSetting(isOrgSettingsPath);
-		setIsInProjectSetting(isProjectPage);
-		setIsInPersonalSetting(isPersonalSettingsPath);
-		setIsInSettings(isOrgSettingsPath || isProjectPage || isPersonalSettingsPath);
-
+		// If we're on an organization settings page, set the current org
 		if (isOrgSettingsPath && organizations.length > 0) {
 			const orgId = pathParts[2];
 			const org = organizations.find((o) => o.organization_id.toString() === orgId);
@@ -255,11 +250,19 @@ const Navbar = () => {
 	};
 
 	const handleSettingsClick = () => {
+		setIsInSettings(true);
 		if (currentOrg === "Personal") {
+			// Navigate to user settings page instead of showing modal
+
+			setisInPersonalSetting(true);
 			navigate(`/${user}/settings`);
 		} else {
+			// Navigate to specific organization settings page
 			const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+			setisInOrgSetting(true);
 			if (orgId) {
+				//setisInOrgSetting(true);
+				setIsInSettings(true);
 				navigate(`/${user}/organizations/${orgId}`);
 			}
 		}
@@ -358,12 +361,12 @@ const Navbar = () => {
 							onClick={() => {
 								const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
 								handleOrgSelect("Personal", null);
-								// navigate(`/${user}`, {
-								// 	state: {
-								// 		organizationId: orgId,
-								// 		organizationName: currentOrg,
-								// 	},
-								// });
+								navigate(`/${user}`, {
+									state: {
+										organizationId: orgId,
+										organizationName: currentOrg,
+									},
+								});
 							}}
 						>
 							<div
@@ -385,147 +388,64 @@ const Navbar = () => {
 
 				{/* Middle Section - Flexible space */}
 				<div style={styles.middleSection}>
-					{isInPersonalSetting ? (
-						<ul className="nav-list">
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "profile" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("profile");
-										navigate(`/${user}/settings`, {
-											state: { section: "profile" },
-										});
-									}}
-								>
-									Profile
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "invitations" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("invitations");
-										navigate(`/${user}/settings`, {
-											state: { section: "invitations" },
-										});
-									}}
-								>
-									Invitations
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "billing" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("billing");
-										navigate(`/${user}/settings`, {
-											state: { section: "billing" },
-										});
-									}}
-								>
-									Billing & Usage
-								</div>
-							</li>
-						</ul>
-					) : isInOrgSetting ? (
-						<ul className="nav-list">
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "general" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("general");
-										const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-										if (orgId) {
-											navigate(`/${user}/organizations/${orgId}`, {
-												state: { section: "general" },
-											});
-										}
-									}}
-								>
-									General
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "members" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("members");
-										const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-										if (orgId) {
-											navigate(`/${user}/organizations/${orgId}`, {
-												state: { section: "members" },
-											});
-										}
-									}}
-								>
-									Org Members
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "billing" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("billing");
-										const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-										if (orgId) {
-											navigate(`/${user}/organizations/${orgId}`, {
-												state: { section: "billing" },
-											});
-										}
-									}}
-								>
-									Billing & Usage
-								</div>
-							</li>
-						</ul>
-					) : isInProjectSetting ? (
-						<ul className="nav-list">
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "general" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("general");
-										const { user, id } = getRouteParams();
-										if (user && id) {
-											navigate(`/${user}/${id}`);
-										}
-									}}
-								>
-									General
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "members" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("members");
-										const { user, id } = getRouteParams();
-										if (user && id) {
-											// TODO: Add navigation to project members page when the route is defined
-											navigate(`/${user}/${id}`);
-										}
-									}}
-								>
-									Proj Members
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "billing" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("billing");
-										const { user, id } = getRouteParams();
-										if (user && id) {
-											// TODO: Add navigation to project billing page when the route is defined
-											navigate(`/${user}/${id}`);
-										}
-									}}
-								>
-									Billing & Usage
-								</div>
-							</li>
-						</ul>
-					) : currentOrg === "Personal" ? (
+					{isInSettings ? (
+						isInPersonalSetting ? (
+							<h1>IN personal</h1>
+						) : isInOrgSetting ? (
+							<h1>in org </h1>
+						) : (
+							<ul className="nav-list">
+								<li className="nav-item">
+									<div
+										className={`nav-link${selectedSettingsSection === "general" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("general");
+											const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+											if (orgId) {
+												navigate(`/${user}/organizations/${orgId}`, {
+													state: { section: "general" },
+												});
+											}
+										}}
+									>
+										General
+									</div>
+								</li>
+								<li className="nav-item">
+									<div
+										className={`nav-link${selectedSettingsSection === "members" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("members");
+											const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+											if (orgId) {
+												navigate(`/${user}/organizations/${orgId}`, {
+													state: { section: "members" },
+												});
+											}
+										}}
+									>
+										Org Members
+									</div>
+								</li>
+								<li className="nav-item">
+									<div
+										className={`nav-link${selectedSettingsSection === "billing" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("billing");
+											const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+											if (orgId) {
+												navigate(`/${user}/organizations/${orgId}`, {
+													state: { section: "billing" },
+												});
+											}
+										}}
+									>
+										Billing & Usage
+									</div>
+								</li>
+							</ul>
+						)
+					) : (
 						// Show Organizations Section when Personal is selected
 						<div style={styles.organizationsContent}>
 							<div style={styles.sectionHeader}>
@@ -565,7 +485,7 @@ const Navbar = () => {
 								)}
 							</ul>
 						</div>
-					) : null}
+					) }
 				</div>
 
 				{/* Settings Section at Bottom - Always visible */}
