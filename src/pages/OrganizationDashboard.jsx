@@ -319,7 +319,7 @@ const OrganizationDashboard = () => {
 		<div style={styles.card}>
 			<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 				<div>
-					<h3 style={styles.cardTitle}>Manage Members</h3>
+					<h3 style={styles.cardTitle}>Active Members</h3>
 					<p style={styles.cardSubtitle}>{organization.members?.length || 0} active members</p>
 				</div>
 				<button onClick={handleAddMemberClick} style={styles.button}>
@@ -333,15 +333,39 @@ const OrganizationDashboard = () => {
 						<th style={styles.tableHeaderCell}>Joined</th>
 						<th style={styles.tableHeaderCell}>Role</th>
 						<th style={styles.tableHeaderCell}>Projects</th>
+						<th style={styles.tableHeaderCell}></th>
 					</tr>
 				</thead>
 				<tbody>
+					<tr style={styles.tableRow}>
+						<td style={styles.tableCell}>Sujith Kumar</td>
+						<td style={styles.tableCell}>{"23 / 4 / 2003"}</td>
+						<td style={styles.tableCell}>{"Admin"}</td>
+						<td style={styles.tableCell}>{1}</td>
+						<td style={styles.tableCell}>
+							<button style={{ backgroundColor: "#818181ff", color: "white", padding: "5px", borderRadius: "3px" }}>
+								Leave Organisation
+							</button>
+						</td>
+					</tr>
+					<tr style={styles.tableRow}>
+						<td style={styles.tableCell}>Prathamesh</td>
+						<td style={styles.tableCell}>{"23 / 4 / 2003"}</td>
+						<td style={styles.tableCell}>{"Member"}</td>
+						<td style={styles.tableCell}>{1}</td>
+						<td style={styles.tableCell}>
+							<button style={{ backgroundColor: "#cc3939ff", color: "white", padding: "5px", borderRadius: "3px" }}>
+								Leave Organisation
+							</button>
+						</td>
+					</tr>
 					{organization.members?.map((m, idx) => (
 						<tr key={idx} style={styles.tableRow}>
 							<td style={styles.tableCell}>{m.username}</td>
 							<td style={styles.tableCell}>{new Date(m.createtime).toLocaleDateString()}</td>
 							<td style={styles.tableCell}>{m.role_name === "Owner" ? "Admin" : m.role_name}</td>
 							<td style={styles.tableCell}>{m.projects || 0}</td>
+							<td></td>
 						</tr>
 					))}
 				</tbody>

@@ -7,12 +7,14 @@ const ProjectSettingsDashboard = () => {
 	const { user, id: projectid } = useParams();
 	const location = useLocation();
 	const projectName = useSelector((state) => state.project.projectName);
-	
 
 	const [currentSection, setCurrentSection] = useState("general");
 	const [showInviteMemberModal, setShowInviteMemberModal] = useState(false);
 	const [inviteMemberLoading, setInviteMemberLoading] = useState(false);
 	const [inviteMemberFormData, setInviteMemberFormData] = useState({ username: "", role_id: 1 });
+	const [project, setProject] = useState(null);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState(null);
 
 	useEffect(() => {
 		const section = location.state?.section || "general";
@@ -261,7 +263,7 @@ const ProjectSettingsDashboard = () => {
 		<div style={styles.card}>
 			<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 				<div>
-					<h3 style={styles.cardTitle}>Manage Members</h3>
+					<h3 style={styles.cardTitle}>Active Members</h3>
 					<p style={styles.cardSubtitle}>0 active members</p>
 				</div>
 				<button onClick={handleOpenInviteModal} style={styles.button}>

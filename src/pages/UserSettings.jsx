@@ -5,16 +5,42 @@ import { getApiUrl, fetchWithAuth } from "../utils/api";
 const UserSettings = () => {
 	const { user } = useParams();
 	const location = useLocation();
-	const [userData, setUserData] = useState(null);
+	const [projects, setProjects] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [currentSection, setCurrentSection] = useState("profile");
+	const [userData, setUserData] = useState(null);
 
 	useEffect(() => {
 		if (location.state?.section) {
 			setCurrentSection(location.state.section);
 		}
 	}, [location.state]);
+
+	useEffect(() => {
+		const fetchProjects = async () => {
+			try {
+				setLoading(true);
+				const response = await fetchWithAuth(getApiUrl(`/api/projects/${user}`), { method: "GET" });
+
+				if (!response.ok) throw new Error("Failed to fetch projects");
+
+				const data = await response.json();
+
+				//console.log("data---------------------------------- ", data);
+
+				if (data) {
+					setProjects(data);
+				}
+			} catch (err) {
+				setError(err.message);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fetchProjects();
+	}, [user]);
 
 	useEffect(() => {
 		const fetchUserData = async () => {
@@ -97,7 +123,7 @@ const UserSettings = () => {
 			marginBottom: "8px",
 		},
 		input: {
-			width: "100%",
+			width: "90%",
 			padding: "10px 12px",
 			borderRadius: "8px",
 			border: "1px solid #d1d5db",
@@ -142,23 +168,49 @@ const UserSettings = () => {
 		},
 	};
 
-	if (!userData) return <div style={{ paddingLeft: "270px", paddingTop: "2rem" }}>User not found</div>;
-
-	const renderProfileContent = () => (
-		<div style={styles.card}>
-			<div style={styles.cardHeader}>
-				<h3 style={styles.cardTitle}>Profile</h3>
-				<p style={styles.cardSubtitle}>Manage your personal information.</p>
-			</div>
-			<div>
-				<div style={{ marginBottom: "16px" }}>
-					<label style={styles.label}>Email</label>
-					<input type="text" value={userData.email || ""} readOnly style={styles.input} />
+	const renderProfileContent = () => {
+		return (
+			<>
+				<div style={styles.card}>
+					<div style={styles.cardHeader}>
+						<h3 style={styles.cardTitle}>Profile</h3>
+						<p style={styles.cardSubtitle}>Manage your personal information.</p>
+					</div>
+					<div>
+						<div style={{ marginBottom: "16px" }}>
+							<label style={styles.label}>Email</label>
+							<input type="text" value={userData.email || ""} readOnly style={styles.input} />
+						</div>
+						<button style={styles.button}>Update Profile</button>
+					</div>
 				</div>
-				<button style={styles.button}>Update Profile</button>
-			</div>
-		</div>
-	);
+				<div style={styles.card}>
+					<div style={styles.cardHeader}>
+						<h3 style={styles.cardTitle}>Active Projects</h3>
+						<p style={styles.cardSubtitle}>{projects.length} active projects</p>
+					</div>
+					<table style={styles.table}>
+						<thead style={styles.tableHead}>
+							<tr>
+								<th style={styles.tableHeaderCell}>Project Name</th>
+								<th style={styles.tableHeaderCell}>Type</th>
+								<th style={styles.tableHeaderCell}>Created</th>
+							</tr>
+						</thead>
+						<tbody>
+							{projects.map((p, idx) => (
+								<tr key={idx} style={styles.tableRow}>
+									<td style={styles.tableCell}>{p.projectName}</td>
+									<td style={styles.tableCell}>{p.projectType}</td>
+									<td style={styles.tableCell}>{new Date(p.createTime).toLocaleDateString()}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</>
+		);
+	};
 
 	const renderInvitationsContent = () => (
 		<div style={styles.card}>
@@ -200,12 +252,8 @@ const UserSettings = () => {
 		</div>
 	);
 
-	if (loading) return <div style={{ paddingLeft: "270px", paddingTop: "2rem" }}>Loading user data...</div>;
+	if (loading) return <div style={{ paddingLeft: "270px", paddingTop: "2rem" }}>Loading projects...</div>;
 	if (error) return <div style={{ paddingLeft: "270px", paddingTop: "2rem", color: "red" }}>Error: {error}</div>;
-	if (!userData) {
-		// console.log("user data : ::::::::::::::::::::::::::::::::::::::::::::::::; ",userData);
-		return <div style={{ paddingLeft: "270px", paddingTop: "2rem" }}>User not found</div>;
-	}
 
 	return (
 		<div style={styles.page}>

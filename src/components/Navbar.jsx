@@ -91,7 +91,6 @@ const Navbar = () => {
 	const [currentOrg, setCurrentOrg] = useState("Personal");
 
 	// Add state for organization menu dropdown
-	const [showOrgMenu, setShowOrgMenu] = useState(false);
 
 	// Add state to track if we're in settings view
 	const [isInSettings, setIsInSettings] = useState(false);
@@ -135,7 +134,7 @@ const Navbar = () => {
 
 	// Also load organizations when component mounts
 	useEffect(() => {
-		if (user && organizations.length === 0) {
+		if (user) {
 			fetchOrganizations();
 		}
 	}, [user]);
@@ -213,12 +212,7 @@ const Navbar = () => {
 		});
 	};
 
-	const handleOrgMenuClick = () => {
-		setShowOrgMenu(!showOrgMenu);
-	};
-
 	const handleCreateOrg = () => {
-		setShowOrgMenu(false);
 		// Navigate to create organization page
 		navigate(`/${user}/create-organization`);
 	};
@@ -286,6 +280,15 @@ const Navbar = () => {
 	const handleUserDropdownClick = () => {
 		setShowUserDropdown(!showUserDropdown);
 	};
+
+	useEffect(() => {
+		const create_org = location.state?.create_org || "";
+		if (create_org === "success") {
+			fetchOrganizations();
+			// Reset the state to avoid re-fetching on subsequent re-renders
+			navigate(location.pathname, { replace: true });
+		}
+	}, [location.state]);
 
 	return (
 		<div style={styles.container}>
@@ -527,44 +530,34 @@ const Navbar = () => {
 						</ul>
 					) : currentOrg === "Personal" ? (
 						// Show Organizations Section when Personal is selected
-						<div style={styles.organizationsContent}>
-							<div style={styles.sectionHeader}>
-								<span>Organizations</span>
-								<div style={styles.orgMenuContainer}>
-									<div style={styles.threeDots} onClick={handleOrgMenuClick} title="Organization options">
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-											<circle cx="5" cy="12" r="2" />
-											<circle cx="12" cy="12" r="2" />
-											<circle cx="19" cy="12" r="2" />
-										</svg>
-									</div>
-
-									{/* Dropdown menu */}
-									{showOrgMenu && (
-										<div style={styles.orgMenuDropdown}>
-											<div style={styles.orgMenuItem} onClick={handleCreateOrg}>
-												Create Org
-											</div>
-										</div>
-									)}
-								</div>
+						<>
+							<div style={styles.createOrgButton} onClick={handleCreateOrg}>
+								Create Organization
 							</div>
+							<div style={styles.organizationsContent}>
+								<div style={styles.sectionHeader}>
+									<span>Organizations</span>
+								</div>
 
-							{/* Organization List */}
-							<ul className="nav-list">
-								{organizations.length > 0 ? (
-									organizations.map((org) => (
-										<li className="nav-item" key={org.organization_id}>
-											<div className="nav-link" onClick={() => handleOrgSelect(org.organizationname, org.organization_id)}>
-												{org.organizationname}
-											</div>
-										</li>
-									))
-								) : (
-									<div style={styles.emptyOrgs}>No organizations yet</div>
-								)}
-							</ul>
-						</div>
+								{/* Organization List */}
+								<ul className="nav-list">
+									{organizations.length > 0 ? (
+										organizations.map((org) => (
+											<li className="nav-item" key={org.organization_id}>
+												<div
+													className="nav-link"
+													onClick={() => handleOrgSelect(org.organizationname, org.organization_id)}
+												>
+													{org.organizationname}
+												</div>
+											</li>
+										))
+									) : (
+										<div style={styles.emptyOrgs}>No organizations yet</div>
+									)}
+								</ul>
+							</div>
+						</>
 					) : null}
 				</div>
 
@@ -893,6 +886,23 @@ const styles = {
 		fontSize: "0.85rem",
 		fontStyle: "italic",
 		textAlign: "center",
+	},
+	createOrgButton: {
+		padding: "10px 12px",
+		borderRadius: "8px",
+		cursor: "pointer",
+		fontSize: "15px",
+		fontWeight: "500",
+		color: "#FFFFFF",
+		backgroundColor: "#4B9CD3",
+		textAlign: "center",
+		margin: "20px",
+		marginTop: "0px",
+
+		transition: "background-color 0.2s ease-in-out",
+		"&:hover": {
+			backgroundColor: "#3A7CA5",
+		},
 	},
 	orgMenuContainer: {
 		position: "relative",
