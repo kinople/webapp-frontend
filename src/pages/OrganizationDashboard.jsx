@@ -316,84 +316,89 @@ const OrganizationDashboard = () => {
 	};
 
 	const renderMembersContent = () => (
-		<div style={styles.card}>
-			<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-				<div>
-					<h3 style={styles.cardTitle}>Active Members</h3>
-					<p style={styles.cardSubtitle}>{organization.members?.length || 0} active members</p>
+		<>
+			<div style={styles.card}>
+				<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+					<div>
+						<h3 style={styles.cardTitle}>Active Members</h3>
+						<p style={styles.cardSubtitle}>{organization.members?.length || 0} active members</p>
+					</div>
+					<button onClick={handleAddMemberClick} style={styles.button}>
+						+ Invite Member
+					</button>
 				</div>
-				<button onClick={handleAddMemberClick} style={styles.button}>
-					+ Invite Member
-				</button>
-			</div>
-			<table style={styles.table}>
-				<thead style={styles.tableHead}>
-					<tr>
-						<th style={styles.tableHeaderCell}>User</th>
-						<th style={styles.tableHeaderCell}>Joined</th>
-						<th style={styles.tableHeaderCell}>Role</th>
-						<th style={styles.tableHeaderCell}>Projects</th>
-						<th style={styles.tableHeaderCell}></th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr style={styles.tableRow}>
-						<td style={styles.tableCell}>Sujith Kumar</td>
-						<td style={styles.tableCell}>{"23 / 4 / 2003"}</td>
-						<td style={styles.tableCell}>{"Admin"}</td>
-						<td style={styles.tableCell}>{1}</td>
-						<td style={styles.tableCell}>
-							<button style={{ backgroundColor: "#818181ff", color: "white", padding: "5px", borderRadius: "3px" }}>
-								Leave Organisation
-							</button>
-						</td>
-					</tr>
-					<tr style={styles.tableRow}>
-						<td style={styles.tableCell}>Prathamesh</td>
-						<td style={styles.tableCell}>{"23 / 4 / 2003"}</td>
-						<td style={styles.tableCell}>{"Member"}</td>
-						<td style={styles.tableCell}>{1}</td>
-						<td style={styles.tableCell}>
-							<button style={{ backgroundColor: "#cc3939ff", color: "white", padding: "5px", borderRadius: "3px" }}>
-								Leave Organisation
-							</button>
-						</td>
-					</tr>
-					{organization.members?.map((m, idx) => (
-						<tr key={idx} style={styles.tableRow}>
-							<td style={styles.tableCell}>{m.username}</td>
-							<td style={styles.tableCell}>{new Date(m.createtime).toLocaleDateString()}</td>
-							<td style={styles.tableCell}>{m.role_name === "Owner" ? "Admin" : m.role_name}</td>
-							<td style={styles.tableCell}>{m.projects || 0}</td>
-							<td></td>
+				<table style={styles.table}>
+					<thead style={styles.tableHead}>
+						<tr>
+							<th style={styles.tableHeaderCell}>User</th>
+							<th style={styles.tableHeaderCell}>Joined</th>
+							<th style={styles.tableHeaderCell}>Role</th>
+							<th style={styles.tableHeaderCell}>Projects</th>
 						</tr>
-					))}
-				</tbody>
-			</table>
-			<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px" }}>
-				<div>
-					<h3 style={styles.cardTitle}>Pending Invites</h3>
-					<p style={styles.cardSubtitle}>0 pending invites</p>
+					</thead>
+					<tbody>
+						<tr style={styles.tableRow}>
+							<td style={styles.tableCell}>Sujith Kumar</td>
+							<td style={styles.tableCell}>{"23 / 4 / 2003"}</td>
+							<td style={styles.tableCell}>{"Admin"}</td>
+							<td style={styles.tableCell}>{1}</td>
+						</tr>
+						<tr style={styles.tableRow}>
+							<td style={styles.tableCell}>Prathamesh</td>
+							<td style={styles.tableCell}>{"23 / 4 / 2003"}</td>
+							<td style={styles.tableCell}>{"Member"}</td>
+							<td style={styles.tableCell}>{1}</td>
+						</tr>
+						{organization.members?.map((m, idx) => (
+							<tr key={idx} style={styles.tableRow}>
+								<td style={styles.tableCell}>{m.username}</td>
+								<td style={styles.tableCell}>{new Date(m.createtime).toLocaleDateString()}</td>
+								<td style={styles.tableCell}>{m.role_name === "Owner" ? "Admin" : m.role_name}</td>
+								<td style={styles.tableCell}>{m.projects || 0}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+				<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px" }}>
+					<div>
+						<h3 style={styles.cardTitle}>Pending Invites</h3>
+						<p style={styles.cardSubtitle}>0 pending invites</p>
+					</div>
 				</div>
+				<table style={styles.table}>
+					<thead style={styles.tableHead}>
+						<tr>
+							<th style={styles.tableHeaderCell}>User</th>
+							<th style={styles.tableHeaderCell}>Invited</th>
+							<th style={styles.tableHeaderCell}>Role</th>
+						</tr>
+					</thead>
+					<tbody>
+						{/* Placeholder for pending invites */}
+						<tr>
+							<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
+								No pending invites
+							</td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
-			<table style={styles.table}>
-				<thead style={styles.tableHead}>
-					<tr>
-						<th style={styles.tableHeaderCell}>User</th>
-						<th style={styles.tableHeaderCell}>Invited</th>
-						<th style={styles.tableHeaderCell}>Role</th>
-					</tr>
-				</thead>
-				<tbody>
-					{/* Placeholder for pending invites */}
-					<tr>
-						<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
-							No pending invites
-						</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
+
+			<button
+				style={{
+					backgroundColor: "#4B9CD3",
+					color: "white",
+					padding: "15px",
+					borderRadius: "5px",
+					border: "None",
+					marginLeft: "45%",
+					//height: "50px",
+					marginTop: "50px",
+				}}
+			>
+				<b>Leave Organisation</b>
+			</button>
+		</>
 	);
 
 	const renderBillingContent = () => (

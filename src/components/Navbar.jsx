@@ -109,12 +109,11 @@ const Navbar = () => {
 		const pathParts = location.pathname.split("/").filter((part) => part);
 		const isOrgSettingsPath = pathParts.length >= 3 && pathParts[1] === "organizations" && pathParts[2];
 		const isPersonalSettingsPath = pathParts.length >= 2 && pathParts[1] === "settings";
-		const isProjectPage = pathParts.length >= 2 && pathParts[0] && pathParts[1];
 
 		setIsInOrgSetting(isOrgSettingsPath);
-		setIsInProjectSetting(isProjectPage);
+
 		setIsInPersonalSetting(isPersonalSettingsPath);
-		setIsInSettings(isOrgSettingsPath || isProjectPage || isPersonalSettingsPath);
+		setIsInSettings(isOrgSettingsPath || isPersonalSettingsPath);
 
 		if (isOrgSettingsPath && organizations.length > 0) {
 			const orgId = pathParts[2];
@@ -474,53 +473,6 @@ const Navbar = () => {
 											navigate(`/${user}/organizations/${orgId}`, {
 												state: { section: "billing" },
 											});
-										}
-									}}
-								>
-									Billing & Usage
-								</div>
-							</li>
-						</ul>
-					) : isInProjectSetting ? (
-						<ul className="nav-list">
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "general" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("general");
-										const { user, id } = getRouteParams();
-										if (user && id) {
-											navigate(`/${user}/${id}`);
-										}
-									}}
-								>
-									General
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "members" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("members");
-										const { user, id } = getRouteParams();
-										if (user && id) {
-											// TODO: Add navigation to project members page when the route is defined
-											navigate(`/${user}/${id}`);
-										}
-									}}
-								>
-									Proj Members
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "billing" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("billing");
-										const { user, id } = getRouteParams();
-										if (user && id) {
-											// TODO: Add navigation to project billing page when the route is defined
-											navigate(`/${user}/${id}`);
 										}
 									}}
 								>
