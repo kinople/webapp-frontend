@@ -260,57 +260,74 @@ const ProjectSettingsDashboard = () => {
 	);
 
 	const renderProjectMembersContent = () => (
-		<div style={styles.card}>
-			<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-				<div>
-					<h3 style={styles.cardTitle}>Active Members</h3>
-					<p style={styles.cardSubtitle}>0 active members</p>
+		<>
+			<div style={styles.card}>
+				<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+					<div>
+						<h3 style={styles.cardTitle}>Active Members</h3>
+						<p style={styles.cardSubtitle}>0 active members</p>
+					</div>
+					<button onClick={handleOpenInviteModal} style={styles.button}>
+						+ Invite Member
+					</button>
 				</div>
-				<button onClick={handleOpenInviteModal} style={styles.button}>
-					+ Invite Member
-				</button>
-			</div>
-			<table style={styles.table}>
-				<thead style={styles.tableHead}>
-					<tr>
-						<th style={styles.tableHeaderCell}>User</th>
-						<th style={styles.tableHeaderCell}>Role</th>
-						<th style={styles.tableHeaderCell}>Joined</th>
-					</tr>
-				</thead>
-				<tbody>
-					{/* Placeholder for project members */}
-					<tr>
-						<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
-							No members yet.
-						</td>
-					</tr>
-				</tbody>
-			</table>
-			<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px" }}>
-				<div>
-					<h3 style={styles.cardTitle}>Pending Invites</h3>
-					<p style={styles.cardSubtitle}>0 pending invites</p>
+				<table style={styles.table}>
+					<thead style={styles.tableHead}>
+						<tr>
+							<th style={styles.tableHeaderCell}>User</th>
+							<th style={styles.tableHeaderCell}>Role</th>
+							<th style={styles.tableHeaderCell}>Joined</th>
+						</tr>
+					</thead>
+					<tbody>
+						{/* Placeholder for project members */}
+						<tr>
+							<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
+								No members yet.
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px" }}>
+					<div>
+						<h3 style={styles.cardTitle}>Pending Invites</h3>
+						<p style={styles.cardSubtitle}>0 pending invites</p>
+					</div>
 				</div>
+				<table style={styles.table}>
+					<thead style={styles.tableHead}>
+						<tr>
+							<th style={styles.tableHeaderCell}>User</th>
+							<th style={styles.tableHeaderCell}>Invited</th>
+							<th style={styles.tableHeaderCell}>Role</th>
+						</tr>
+					</thead>
+					<tbody>
+						{/* Placeholder for pending invites */}
+						<tr>
+							<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
+								No pending invites
+							</td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
-			<table style={styles.table}>
-				<thead style={styles.tableHead}>
-					<tr>
-						<th style={styles.tableHeaderCell}>User</th>
-						<th style={styles.tableHeaderCell}>Invited</th>
-						<th style={styles.tableHeaderCell}>Role</th>
-					</tr>
-				</thead>
-				<tbody>
-					{/* Placeholder for pending invites */}
-					<tr>
-						<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
-							No pending invites
-						</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
+
+			<button
+				style={{
+					backgroundColor: "#4B9CD3",
+					color: "white",
+					padding: "15px",
+					borderRadius: "5px",
+					border: "None",
+					marginLeft: "45%",
+					//height: "50px",
+					marginTop: "50px",
+				}}
+			>
+				<b>Leave Project</b>
+			</button>
+		</>
 	);
 
 	const renderBillingAndUsageContent = () => (
