@@ -8,6 +8,7 @@ import ProjectDashboard from './pages/ProjectDashboard'
 import ScriptBreakdown from './pages/ScriptBreakdown'
 import ScriptBreakdownNew from './pages/ScriptBreakdownNew'
 import CastList from './pages/CastList'
+import CastListNew from './pages/CastListNew'
 import Home from './pages/Home'
 import OrganizationDashboard from './pages/OrganizationDashboard'
 import CastOptions from './pages/CastOptions'
@@ -51,7 +52,7 @@ function AppContent() {
           <Route index element={<ProjectDashboard />} />
           <Route path="script" element={<ProtectedRoute><Script /></ProtectedRoute>} />
           <Route path="script-breakdown" element={<ProtectedRoute><ScriptBreakdownNew /></ProtectedRoute>} />
-          <Route path="cast-list" element={<ProtectedRoute><CastList /></ProtectedRoute>} />
+          <Route path="cast-list" element={<ProtectedRoute><CastListNew /></ProtectedRoute>} />
           <Route path="cast/:castId/options" element={<ProtectedRoute><CastOptions /></ProtectedRoute>} />
           <Route path="locations" element={<ProtectedRoute><Locations /></ProtectedRoute>} />
           <Route path="scheduling" element={<ProtectedRoute><Scheduling /></ProtectedRoute>} />

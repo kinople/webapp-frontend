@@ -15,6 +15,9 @@ const ManageSchedules = () => {
     const [isSaving, setIsSaving] = useState(false); // Add saving state
     const [selectedDates, setSelectedDates] = useState([]);
     const [originalDates, setOriginalDates] = useState([]); // Track original dates for comparison
+    const [chatInput, setChatInput] = useState('');
+    const [chatMessages, setChatMessages] = useState([]);
+    const [isSendingMessage, setIsSendingMessage] = useState(false);
     const [dateRangeStart, setDateRangeStart] = useState('');
     const [dateRangeEnd, setDateRangeEnd] = useState('');
     const [datePickerMode, setDatePickerMode] = useState('single'); // 'single' or 'range'
@@ -75,11 +78,12 @@ const ManageSchedules = () => {
     const getExistingDates = () => {
         if (!selectedElement || !scheduleData?.dates) return [];
         
-        const [type, name] = selectedElement.split('-');
-        const elementDates = scheduleData.dates[type === 'location' ? 'locations' : 'characters'];
+        const [type, name] = selectedElement.split('::');
+        const datesSection = type === 'location' ? 'locations' : 'characters';
+        const elementData = scheduleData.dates[datesSection]?.[name];
         
-        if (elementDates && elementDates[name] && elementDates[name].dates) {
-            return parseDateRanges(elementDates[name].dates);
+        if (elementData?.dates) {
+            return parseDateRanges(elementData.dates);
         }
         
         return [];
@@ -97,17 +101,21 @@ const ManageSchedules = () => {
 
     // Reset selected dates when element changes and load existing dates
     const handleElementChange = (value) => {
+        console.log('Element Changed:', value);
         setSelectedElement(value);
         setDateRangeStart('');
         setDateRangeEnd('');
         
         // Load existing dates for the selected element
         if (value && scheduleData?.dates) {
-            const [type, name] = value.split('-');
-            const elementDates = scheduleData.dates[type === 'location' ? 'locations' : 'characters'];
+            const [type, name] = value.split('::');
+            const datesSection = type === 'location' ? 'locations' : 'characters';
+            const elementData = scheduleData.dates[datesSection]?.[name];
+            console.log('Element Data:', elementData);
             
-            if (elementDates && elementDates[name] && elementDates[name].dates) {
-                const existingDates = parseDateRanges(elementDates[name].dates);
+            if (elementData?.dates) {
+                console.log('Found dates for:', name, elementData.dates);
+                const existingDates = parseDateRanges(elementData.dates);
                 setSelectedDates(existingDates);
                 setOriginalDates(existingDates); // Set original dates for comparison
             } else {
@@ -173,22 +181,26 @@ const ManageSchedules = () => {
         // Add locations
         if (scheduleData.locations && Array.isArray(scheduleData.locations)) {
             scheduleData.locations.forEach(location => {
+                // Use location name as the value since we have it in the dates data
                 options.push({
-                    value: `location-${location}`,
+                    value: `location::${location}`,
                     label: `📍 ${location}`,
                     type: 'location'
                 });
+
             });
         }
         
         // Add characters
         if (scheduleData.characters && Array.isArray(scheduleData.characters)) {
             scheduleData.characters.forEach(character => {
+                // Use character name as the value since we have it in the dates data
                 options.push({
-                    value: `character-${character}`,
+                    value: `character::${character}`,
                     label: `👤 ${character}`,
                     type: 'character'
                 });
+
             });
         }
         
@@ -228,14 +240,23 @@ const ManageSchedules = () => {
             const result = await response.json();
             console.log('Schedule generated successfully:', result);
             
-            // Refresh the schedule data to get the generated schedule
-            const refreshResponse = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
-            if (refreshResponse.ok) {
-                const refreshedData = await refreshResponse.json();
-                setScheduleData(refreshedData);
-            }
-            
-            alert('Schedule generated successfully!');
+            // Add a small delay before refreshing to ensure backend processing is complete
+            setTimeout(async () => {
+                try {
+                    // Refresh the schedule data to get the generated schedule
+                    const refreshResponse = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
+                    if (refreshResponse.ok) {
+                        const refreshedData = await refreshResponse.json();
+                        setScheduleData(refreshedData);
+                        alert('Schedule generated successfully!');
+                    } else {
+                        throw new Error('Failed to refresh schedule data');
+                    }
+                } catch (refreshError) {
+                    console.error('Error refreshing schedule:', refreshError);
+                    // Don't show error to user since schedule was generated successfully
+                }
+            }, 1000); // 1 second delay
             
         } catch (error) {
             console.error('Error generating schedule:', error);
@@ -406,11 +427,23 @@ const ManageSchedules = () => {
 
         try {
             setIsSaving(true); // Set saving state to true
-            const [type, name] = selectedElement.split('-');
+            const [type, name] = selectedElement.split('::');
+            const datesSection = type === 'location' ? 'locations' : 'characters';
             
-            // Get the element ID from the schedule data
-            const elementData = scheduleData.dates[type === 'location' ? 'locations' : 'characters'][name];
-            const elementId = elementData ? elementData.id : null;
+            console.log('Schedule Data:', scheduleData);
+            console.log('Selected Type:', type);
+            console.log('Selected Name:', name);
+            console.log('Dates Section:', scheduleData.dates?.[datesSection]);
+            
+            const elementData = scheduleData.dates?.[datesSection]?.[name];
+            console.log('Element Data:', elementData);
+            
+            if (!elementData || !elementData.id) {
+                throw new Error(`Could not find data for ${type} "${name}"`);
+            }
+            
+            const elementId = elementData.id;
+            console.log('Element ID:', elementId);
             
             const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}/dates`), {
                 method: 'POST',
@@ -543,6 +576,73 @@ const ManageSchedules = () => {
         }
         
         return JSON.stringify(schedule, null, 2);
+    };
+
+    const handleSendMessage = async () => {
+        if (!chatInput.trim()) return;
+
+        try {
+            setIsSendingMessage(true);
+            
+            // Add user message to chat
+            const userMessage = {
+                type: 'user',
+                content: chatInput,
+                timestamp: new Date().toISOString()
+            };
+            setChatMessages(prev => [...prev, userMessage]);
+            
+            // Clear input
+            setChatInput('');
+
+            // Send message to backend
+            const response = await fetch(getApiUrl(`/api/${id}/generate-schedule/${scheduleId}/extra-constraints`), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: chatInput
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to process message');
+            }
+
+            const result = await response.json();
+            
+            // Add assistant response to chat
+            const assistantMessage = {
+                type: 'assistant',
+                content: result.message,
+                constraints: result.extra_constraints,
+                timestamp: new Date().toISOString()
+            };
+            setChatMessages(prev => [...prev, assistantMessage]);
+
+            // Always refresh schedule data after a message response
+            const refreshResponse = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
+            if (refreshResponse.ok) {
+                const refreshedData = await refreshResponse.json();
+                console.log('Refreshed Schedule Data:', refreshedData);
+                setScheduleData(refreshedData);
+            } else {
+                console.error('Failed to refresh schedule data');
+            }
+
+        } catch (error) {
+            console.error('Error sending message:', error);
+            // Add error message to chat
+            const errorMessage = {
+                type: 'error',
+                content: `Error: ${error.message}`,
+                timestamp: new Date().toISOString()
+            };
+            setChatMessages(prev => [...prev, errorMessage]);
+        } finally {
+            setIsSendingMessage(false);
+        }
     };
 
     return (
@@ -795,24 +895,61 @@ const ManageSchedules = () => {
                     <div style={styles.scheduleHeader}>Scheduling Assistant</div>
                     <div style={styles.chatContainer}>
                         <div style={styles.chatMessages}>
-                            {/* Chat messages will go here */}
                             <div style={styles.welcomeMessage}>
                                 Hello! I'm Kino, your scheduling assistant. I can help you with:
                                 <ul style={styles.assistantList}>
                                     <li>Understanding the current schedule</li>
                                     <li>Suggesting optimal shooting dates</li>
+                                    <li>Adding scheduling constraints</li>
                                 </ul>
                                 How can I assist you today?
                             </div>
+                            {chatMessages.map((message, index) => (
+                                <div 
+                                    key={index} 
+                                    style={{
+                                        ...styles.messageContainer,
+                                        ...(message.type === 'user' ? styles.userMessage : {}),
+                                        ...(message.type === 'assistant' ? styles.assistantMessage : {}),
+                                        ...(message.type === 'error' ? styles.errorMessage : {})
+                                    }}
+                                >
+                                    <div style={styles.messageContent}>
+                                        {message.content}
+                                    </div>
+                                    {message.constraints && (
+                                        <div style={styles.constraintsContainer}>
+                                            <div style={styles.constraintsHeader}>Added Constraints:</div>
+                                            <pre style={styles.constraints}>
+                                                {JSON.stringify(message.constraints, null, 2)}
+                                            </pre>
+                                        </div>
+                                    )}
+                                    <div style={styles.messageTimestamp}>
+                                        {new Date(message.timestamp).toLocaleTimeString()}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                         <div style={styles.chatInputContainer}>
                             <input 
                                 type="text" 
-                                placeholder="Type your question here..."
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                                placeholder="Type your message here..."
                                 style={styles.chatInput}
+                                disabled={isSendingMessage}
                             />
-                            <button style={styles.sendButton}>
-                                Send
+                            <button 
+                                style={{
+                                    ...styles.sendButton,
+                                    ...(isSendingMessage ? styles.sendButtonDisabled : {})
+                                }}
+                                onClick={handleSendMessage}
+                                disabled={isSendingMessage}
+                            >
+                                {isSendingMessage ? 'Sending...' : 'Send'}
                             </button>
                         </div>
                     </div>
@@ -1309,6 +1446,62 @@ const styles = {
         display: 'flex',
         flexDirection: 'column',
         gap: '8px',
+    },
+    messageContainer: {
+        padding: '12px',
+        marginBottom: '12px',
+        borderRadius: '8px',
+        maxWidth: '85%',
+    },
+    userMessage: {
+        backgroundColor: '#007bff',
+        color: 'white',
+        marginLeft: 'auto',
+    },
+    assistantMessage: {
+        backgroundColor: '#f8f9fa',
+        color: '#333',
+        marginRight: 'auto',
+        border: '1px solid #dee2e6',
+    },
+    errorMessage: {
+        backgroundColor: '#dc3545',
+        color: 'white',
+        marginRight: 'auto',
+    },
+    messageContent: {
+        fontSize: '0.9rem',
+        lineHeight: '1.4',
+        marginBottom: '4px',
+    },
+    messageTimestamp: {
+        fontSize: '0.7rem',
+        opacity: 0.8,
+        marginTop: '4px',
+    },
+    constraintsContainer: {
+        marginTop: '8px',
+        padding: '8px',
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+        borderRadius: '4px',
+    },
+    constraintsHeader: {
+        fontSize: '0.8rem',
+        fontWeight: '500',
+        marginBottom: '4px',
+    },
+    constraints: {
+        fontSize: '0.8rem',
+        margin: 0,
+        whiteSpace: 'pre-wrap',
+        wordWrap: 'break-word',
+    },
+    sendButtonDisabled: {
+        backgroundColor: '#ccc',
+        cursor: 'not-allowed',
+        '&:hover': {
+            backgroundColor: '#ccc',
+        }
     },
 };
 
