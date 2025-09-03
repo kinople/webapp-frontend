@@ -70,11 +70,11 @@ function AppContent() {
 }
 
 function App() {
-  return (
-    <Router>
-      <AppContent />
-    </Router>
-  );
+	return (
+		<Router>
+			<AppContent />
+		</Router>
+	);
 }
 
-export default App
+export default App;

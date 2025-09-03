@@ -1,150 +1,272 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { getApiUrl, fetchWithAuth } from '../utils/api';
+import React, { useState, useEffect } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { getApiUrl, fetchWithAuth } from "../utils/api";
 
 const UserSettings = () => {
-  const { user } = useParams();
-  const [userDetails, setUserDetails] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+	const { user } = useParams();
+	const location = useLocation();
+	const [projects, setProjects] = useState([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState(null);
+	const [currentSection, setCurrentSection] = useState("profile");
+	const [userData, setUserData] = useState(null);
 
-  useEffect(() => {
-    fetchUserDetails();
-  }, [user]);
+	useEffect(() => {
+		if (location.state?.section) {
+			setCurrentSection(location.state.section);
+		}
+	}, [location.state]);
 
-  const fetchUserDetails = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetchWithAuth(getApiUrl(`/api/user/${user}`), {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+	useEffect(() => {
+		const fetchProjects = async () => {
+			try {
+				setLoading(true);
+				const response = await fetchWithAuth(getApiUrl(`/api/projects/${user}`), { method: "GET" });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch user details');
-      }
+				if (!response.ok) throw new Error("Failed to fetch projects");
 
-      const data = await response.json();
-      setUserDetails(data);
-    } catch (err) {
-      setError(err.message);
-      console.error('Error fetching user details:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+				const data = await response.json();
 
-  if (loading) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.loading}>Loading user details...</div>
-      </div>
-    );
-  }
+				//console.log("data---------------------------------- ", data);
 
-  if (error) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.error}>Error: {error}</div>
-      </div>
-    );
-  }
+				if (data) {
+					setProjects(data);
+				}
+			} catch (err) {
+				setError(err.message);
+			} finally {
+				setLoading(false);
+			}
+		};
 
-  return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>User Settings</h1>
-      </div>
-      
-      <div style={styles.content}>
-        <div style={styles.section}>
-          <h2 style={styles.sectionTitle}>Account Information</h2>
-          <div style={styles.userInfo}>
-            <div style={styles.infoItem}>
-              <label style={styles.label}>Username:</label>
-              <span style={styles.value}>{userDetails?.email || user}</span>
-            </div>
-            <div style={styles.infoItem}>
-              <label style={styles.label}>User ID:</label>
-              <span style={styles.value}>{user}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+		fetchProjects();
+	}, [user]);
 
-const styles = {
-  container: {
-    marginLeft: '250px', // Account for navbar width
-    padding: '2rem',
-    minHeight: '100vh',
-    backgroundColor: '#f8f9fa',
-  },
-  header: {
-    marginBottom: '2rem',
-    borderBottom: '1px solid #e9ecef',
-    paddingBottom: '1rem',
-  },
-  title: {
-    fontSize: '2rem',
-    fontWeight: 'bold',
-    color: '#333',
-    margin: 0,
-  },
-  content: {
-    maxWidth: '600px',
-  },
-  section: {
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    padding: '1.5rem',
-    marginBottom: '1.5rem',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-  },
-  sectionTitle: {
-    fontSize: '1.25rem',
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: '1rem',
-    margin: '0 0 1rem 0',
-  },
-  userInfo: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1rem',
-  },
-  infoItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1rem',
-  },
-  label: {
-    fontWeight: '500',
-    color: '#666',
-    minWidth: '100px',
-  },
-  value: {
-    color: '#333',
-    fontSize: '1rem',
-  },
-  loading: {
-    textAlign: 'center',
-    color: '#666',
-    padding: '2rem',
-    fontSize: '1.1rem',
-  },
-  error: {
-    textAlign: 'center',
-    color: '#dc3545',
-    padding: '2rem',
-    fontSize: '1.1rem',
-  },
+	useEffect(() => {
+		const fetchUserData = async () => {
+			try {
+				setLoading(true);
+				const response = await fetchWithAuth(getApiUrl(`/api/user/${user}`), {
+					method: "GET",
+					credentials: "include",
+					headers: {
+						"Content-Type": "application/json",
+					},
+				});
+
+				if (!response.ok) throw new Error("Failed to fetch user data");
+				const data = await response.json();
+
+				if (data) {
+					setUserData(data);
+				} else {
+					throw new Error(data.message);
+				}
+			} catch (err) {
+				setError(err.message);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fetchUserData();
+	}, [user]);
+
+	const styles = {
+		page: {
+			background: "linear-gradient(135deg, #f5f7fa, #c3cfe2)",
+			minHeight: "100vh",
+			padding: "32px",
+			paddingLeft: `calc(270px + 32px)`,
+			fontFamily: "sans-serif",
+		},
+		header: {
+			marginBottom: "32px",
+		},
+		title: {
+			fontSize: "28px",
+			fontWeight: "bold",
+			color: "#1f2937",
+			marginBottom: "8px",
+		},
+		subtitle: {
+			fontSize: "16px",
+			color: "#6b7280",
+		},
+		card: {
+			backgroundColor: "#ffffff",
+			borderRadius: "12px",
+			boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+			padding: "24px",
+			marginBottom: "24px",
+		},
+		cardHeader: {
+			borderBottom: "1px solid #e5e7eb",
+			paddingBottom: "16px",
+			marginBottom: "16px",
+		},
+		cardTitle: {
+			fontSize: "20px",
+			fontWeight: "600",
+			color: "#1f2937",
+		},
+		cardSubtitle: {
+			fontSize: "14px",
+			color: "#6b7280",
+			marginTop: "4px",
+		},
+		label: {
+			display: "block",
+			fontSize: "14px",
+			fontWeight: "500",
+			color: "#374151",
+			marginBottom: "8px",
+		},
+		input: {
+			width: "90%",
+			padding: "10px 12px",
+			borderRadius: "8px",
+			border: "1px solid #d1d5db",
+			backgroundColor: "#f9fafb",
+			color: "#1f2937",
+			fontSize: "14px",
+		},
+		button: {
+			backgroundColor: "#4B9CD3",
+			color: "#ffffff",
+			padding: "10px 16px",
+			borderRadius: "8px",
+			border: "none",
+			fontSize: "14px",
+			fontWeight: "600",
+			cursor: "pointer",
+			transition: "background-color 0.3s",
+		},
+		table: {
+			width: "100%",
+			borderCollapse: "collapse",
+		},
+		tableHead: {
+			backgroundColor: "#f9fafb",
+		},
+		tableHeaderCell: {
+			padding: "12px 16px",
+			textAlign: "left",
+			fontSize: "12px",
+			fontWeight: "600",
+			color: "#6b7280",
+			textTransform: "uppercase",
+			borderBottom: "1px solid #e5e7eb",
+		},
+		tableRow: {
+			borderBottom: "1px solid #e5e7eb",
+		},
+		tableCell: {
+			padding: "16px",
+			fontSize: "14px",
+			color: "#374151",
+		},
+	};
+
+	const renderProfileContent = () => {
+		return (
+			<>
+				<div style={styles.card}>
+					<div style={styles.cardHeader}>
+						<h3 style={styles.cardTitle}>Profile</h3>
+						<p style={styles.cardSubtitle}>Manage your personal information.</p>
+					</div>
+					<div>
+						<div style={{ marginBottom: "16px" }}>
+							<label style={styles.label}>Email</label>
+							<input type="text" value={userData.email || ""} readOnly style={styles.input} />
+						</div>
+						<button style={styles.button}>Update Profile</button>
+					</div>
+				</div>
+				<div style={styles.card}>
+					<div style={styles.cardHeader}>
+						<h3 style={styles.cardTitle}>Active Projects</h3>
+						<p style={styles.cardSubtitle}>{projects.length} active projects</p>
+					</div>
+					<table style={styles.table}>
+						<thead style={styles.tableHead}>
+							<tr>
+								<th style={styles.tableHeaderCell}>Project Name</th>
+								<th style={styles.tableHeaderCell}>Type</th>
+								<th style={styles.tableHeaderCell}>Created</th>
+							</tr>
+						</thead>
+						<tbody>
+							{projects.map((p, idx) => (
+								<tr key={idx} style={styles.tableRow}>
+									<td style={styles.tableCell}>{p.projectName}</td>
+									<td style={styles.tableCell}>{p.projectType}</td>
+									<td style={styles.tableCell}>{new Date(p.createTime).toLocaleDateString()}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</>
+		);
+	};
+
+	const renderInvitationsContent = () => (
+		<div style={styles.card}>
+			<div style={styles.cardHeader}>
+				<h3 style={styles.cardTitle}>Invitations</h3>
+				<p style={styles.cardSubtitle}>Manage your pending invitations.</p>
+			</div>
+			<table style={styles.table}>
+				<thead style={styles.tableHead}>
+					<tr>
+						<th style={styles.tableHeaderCell}>Organization</th>
+						<th style={styles.tableHeaderCell}>Invited</th>
+						<th style={styles.tableHeaderCell}>Role</th>
+						<th style={styles.tableHeaderCell}>Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+					{/* Placeholder for pending invites */}
+					<tr>
+						<td colSpan="4" style={{ ...styles.tableCell, textAlign: "center" }}>
+							No pending invites
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	);
+
+	const renderBillingContent = () => (
+		<div style={styles.card}>
+			<div style={styles.cardHeader}>
+				<h3 style={styles.cardTitle}>Billing</h3>
+				<p style={styles.cardSubtitle}>Manage your subscription and view invoices.</p>
+			</div>
+			<div>
+				<p>You are currently on the Free Plan.</p>
+				<button style={{ ...styles.button, backgroundColor: "#6b7280" }}>Upgrade Plan</button>
+			</div>
+		</div>
+	);
+
+	if (loading) return <div style={{ paddingLeft: "270px", paddingTop: "2rem" }}>Loading projects...</div>;
+	if (error) return <div style={{ paddingLeft: "270px", paddingTop: "2rem", color: "red" }}>Error: {error}</div>;
+
+	return (
+		<div style={styles.page}>
+			<div style={styles.header}>
+				<h1 style={styles.title}>User Settings</h1>
+				<p style={styles.subtitle}>Manage your account settings.</p>
+			</div>
+
+			{currentSection === "profile" && renderProfileContent()}
+			{currentSection === "invitations" && renderInvitationsContent()}
+			{currentSection === "billing" && renderBillingContent()}
+		</div>
+	);
 };
 
 export default UserSettings;

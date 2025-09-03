@@ -91,11 +91,12 @@ const Navbar = () => {
 	const [currentOrg, setCurrentOrg] = useState("Personal");
 
 	// Add state for organization menu dropdown
+	const [showOrgMenu, setShowOrgMenu] = useState(false);
 
 	// Add state to track if we're in settings view
 	const [isInSettings, setIsInSettings] = useState(false);
-	const [isInOrgSetting, setIsInOrgSetting] = useState(false);
-	const [isInPersonalSetting, setIsInPersonalSetting] = useState(false);
+	const [isInOrgSetting, setisInOrgSetting] = useState(false);
+	const [isInPersonalSetting, setisInPersonalSetting] = useState(false);
 	const [isInProjectSetting, setIsInProjectSetting] = useState(false);
 
 	// Add state for selected settings section
@@ -104,17 +105,13 @@ const Navbar = () => {
 	// Add state for user dropdown
 	const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-	// Add useEffect to detect if we're on a settings page
+	// Add useEffect to detect if we're on an organization settings page
 	useEffect(() => {
 		const pathParts = location.pathname.split("/").filter((part) => part);
 		const isOrgSettingsPath = pathParts.length >= 3 && pathParts[1] === "organizations" && pathParts[2];
-		const isPersonalSettingsPath = pathParts.length >= 2 && pathParts[1] === "settings";
+		setIsInSettings(isOrgSettingsPath);
 
-		setIsInOrgSetting(isOrgSettingsPath);
-
-		setIsInPersonalSetting(isPersonalSettingsPath);
-		setIsInSettings(isOrgSettingsPath || isPersonalSettingsPath);
-
+		// If we're on an organization settings page, set the current org
 		if (isOrgSettingsPath && organizations.length > 0) {
 			const orgId = pathParts[2];
 			const org = organizations.find((o) => o.organization_id.toString() === orgId);
@@ -133,7 +130,7 @@ const Navbar = () => {
 
 	// Also load organizations when component mounts
 	useEffect(() => {
-		if (user) {
+		if (user && organizations.length === 0) {
 			fetchOrganizations();
 		}
 	}, [user]);
@@ -211,7 +208,12 @@ const Navbar = () => {
 		});
 	};
 
+	const handleOrgMenuClick = () => {
+		setShowOrgMenu(!showOrgMenu);
+	};
+
 	const handleCreateOrg = () => {
+		setShowOrgMenu(false);
 		// Navigate to create organization page
 		navigate(`/${user}/create-organization`);
 	};
@@ -248,11 +250,19 @@ const Navbar = () => {
 	};
 
 	const handleSettingsClick = () => {
+		setIsInSettings(true);
 		if (currentOrg === "Personal") {
+			// Navigate to user settings page instead of showing modal
+
+			setisInPersonalSetting(true);
 			navigate(`/${user}/settings`);
 		} else {
+			// Navigate to specific organization settings page
 			const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+			setisInOrgSetting(true);
 			if (orgId) {
+				//setisInOrgSetting(true);
+				setIsInSettings(true);
 				navigate(`/${user}/organizations/${orgId}`);
 			}
 		}
@@ -279,15 +289,6 @@ const Navbar = () => {
 	const handleUserDropdownClick = () => {
 		setShowUserDropdown(!showUserDropdown);
 	};
-
-	useEffect(() => {
-		const create_org = location.state?.create_org || "";
-		if (create_org === "success") {
-			fetchOrganizations();
-			// Reset the state to avoid re-fetching on subsequent re-renders
-			navigate(location.pathname, { replace: true });
-		}
-	}, [location.state]);
 
 	return (
 		<div style={styles.container}>
@@ -360,12 +361,12 @@ const Navbar = () => {
 							onClick={() => {
 								const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
 								handleOrgSelect("Personal", null);
-								// navigate(`/${user}`, {
-								// 	state: {
-								// 		organizationId: orgId,
-								// 		organizationName: currentOrg,
-								// 	},
-								// });
+								navigate(`/${user}`, {
+									state: {
+										organizationId: orgId,
+										organizationName: currentOrg,
+									},
+								});
 							}}
 						>
 							<div
@@ -387,130 +388,104 @@ const Navbar = () => {
 
 				{/* Middle Section - Flexible space */}
 				<div style={styles.middleSection}>
-					{isInPersonalSetting ? (
-						<ul className="nav-list">
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "profile" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("profile");
-										navigate(`/${user}/settings`, {
-											state: { section: "profile" },
-										});
-									}}
-								>
-									Profile
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "invitations" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("invitations");
-										navigate(`/${user}/settings`, {
-											state: { section: "invitations" },
-										});
-									}}
-								>
-									Invitations
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "billing" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("billing");
-										navigate(`/${user}/settings`, {
-											state: { section: "billing" },
-										});
-									}}
-								>
-									Billing & Usage
-								</div>
-							</li>
-						</ul>
-					) : isInOrgSetting ? (
-						<ul className="nav-list">
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "general" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("general");
-										const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-										if (orgId) {
-											navigate(`/${user}/organizations/${orgId}`, {
-												state: { section: "general" },
-											});
-										}
-									}}
-								>
-									General
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "members" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("members");
-										const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-										if (orgId) {
-											navigate(`/${user}/organizations/${orgId}`, {
-												state: { section: "members" },
-											});
-										}
-									}}
-								>
-									Org Members
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "billing" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("billing");
-										const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-										if (orgId) {
-											navigate(`/${user}/organizations/${orgId}`, {
-												state: { section: "billing" },
-											});
-										}
-									}}
-								>
-									Billing & Usage
-								</div>
-							</li>
-						</ul>
-					) : currentOrg === "Personal" ? (
+					{isInSettings ? (
+						isInPersonalSetting ? (
+							<h1>IN personal</h1>
+						) : isInOrgSetting ? (
+							<h1>in org </h1>
+						) : (
+							<ul className="nav-list">
+								<li className="nav-item">
+									<div
+										className={`nav-link${selectedSettingsSection === "general" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("general");
+											const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+											if (orgId) {
+												navigate(`/${user}/organizations/${orgId}`, {
+													state: { section: "general" },
+												});
+											}
+										}}
+									>
+										General
+									</div>
+								</li>
+								<li className="nav-item">
+									<div
+										className={`nav-link${selectedSettingsSection === "members" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("members");
+											const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+											if (orgId) {
+												navigate(`/${user}/organizations/${orgId}`, {
+													state: { section: "members" },
+												});
+											}
+										}}
+									>
+										Org Members
+									</div>
+								</li>
+								<li className="nav-item">
+									<div
+										className={`nav-link${selectedSettingsSection === "billing" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("billing");
+											const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+											if (orgId) {
+												navigate(`/${user}/organizations/${orgId}`, {
+													state: { section: "billing" },
+												});
+											}
+										}}
+									>
+										Billing & Usage
+									</div>
+								</li>
+							</ul>
+						)
+					) : (
 						// Show Organizations Section when Personal is selected
-						<>
-							<div style={styles.createOrgButton} onClick={handleCreateOrg}>
-								Create Organization
-							</div>
-							<div style={styles.organizationsContent}>
-								<div style={styles.sectionHeader}>
-									<span>Organizations</span>
-								</div>
+						<div style={styles.organizationsContent}>
+							<div style={styles.sectionHeader}>
+								<span>Organizations</span>
+								<div style={styles.orgMenuContainer}>
+									<div style={styles.threeDots} onClick={handleOrgMenuClick} title="Organization options">
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+											<circle cx="5" cy="12" r="2" />
+											<circle cx="12" cy="12" r="2" />
+											<circle cx="19" cy="12" r="2" />
+										</svg>
+									</div>
 
-								{/* Organization List */}
-								<ul className="nav-list">
-									{organizations.length > 0 ? (
-										organizations.map((org) => (
-											<li className="nav-item" key={org.organization_id}>
-												<div
-													className="nav-link"
-													onClick={() => handleOrgSelect(org.organizationname, org.organization_id)}
-												>
-													{org.organizationname}
-												</div>
-											</li>
-										))
-									) : (
-										<div style={styles.emptyOrgs}>No organizations yet</div>
+									{/* Dropdown menu */}
+									{showOrgMenu && (
+										<div style={styles.orgMenuDropdown}>
+											<div style={styles.orgMenuItem} onClick={handleCreateOrg}>
+												Create Org
+											</div>
+										</div>
 									)}
-								</ul>
+								</div>
 							</div>
-						</>
-					) : null}
+
+							{/* Organization List */}
+							<ul className="nav-list">
+								{organizations.length > 0 ? (
+									organizations.map((org) => (
+										<li className="nav-item" key={org.organization_id}>
+											<div className="nav-link" onClick={() => handleOrgSelect(org.organizationname, org.organization_id)}>
+												{org.organizationname}
+											</div>
+										</li>
+									))
+								) : (
+									<div style={styles.emptyOrgs}>No organizations yet</div>
+								)}
+							</ul>
+						</div>
+					) }
 				</div>
 
 				{/* Settings Section at Bottom - Always visible */}
@@ -838,23 +813,6 @@ const styles = {
 		fontSize: "0.85rem",
 		fontStyle: "italic",
 		textAlign: "center",
-	},
-	createOrgButton: {
-		padding: "10px 12px",
-		borderRadius: "8px",
-		cursor: "pointer",
-		fontSize: "15px",
-		fontWeight: "500",
-		color: "#FFFFFF",
-		backgroundColor: "#4B9CD3",
-		textAlign: "center",
-		margin: "20px",
-		marginTop: "0px",
-
-		transition: "background-color 0.2s ease-in-out",
-		"&:hover": {
-			backgroundColor: "#3A7CA5",
-		},
 	},
 	orgMenuContainer: {
 		position: "relative",
