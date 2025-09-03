@@ -27,6 +27,7 @@ import CreateOrganization from './pages/CreateOrganization'
 import ForgotPassword from './pages/ForgotPassword'
 import ProjectLayout from './components/ProjectLayout'
 import UserSettings from './pages/UserSettings'
+import ProjectSettingsDashboard from './pages/ProjectSettingsDashboard'
 
 function AppContent() {
   const location = useLocation();
@@ -59,6 +60,7 @@ function AppContent() {
           <Route path="manage-dates" element={<ProtectedRoute><ManageDates /></ProtectedRoute>} />
           <Route path="scheduling/:scheduleId" element={<ProtectedRoute><ManageSchedules /></ProtectedRoute>} />
           <Route path="call-sheets" element={<ProtectedRoute><CallSheetHome /></ProtectedRoute>} />
+          <Route path="settings" element={<ProtectedRoute><ProjectSettingsDashboard /></ProtectedRoute>} />
           <Route path="manage-shoot-days" element={<ProtectedRoute><ManageShootDays /></ProtectedRoute>} />
           <Route path="dpr" element={<ProtectedRoute><Contact /></ProtectedRoute>} />
           <Route path="call-sheets/:scheduleName" element={<ProtectedRoute><CallSheet /></ProtectedRoute>} />
@@ -70,11 +72,11 @@ function AppContent() {
 }
 
 function App() {
-  return (
-    <Router>
-      <AppContent />
-    </Router>
-  );
+	return (
+		<Router>
+			<AppContent />
+		</Router>
+	);
 }
 
-export default App
+export default App;
