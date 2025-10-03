@@ -28,7 +28,7 @@ const Sidebar = () => {
 		["Breakdown", <FaLayerGroup />, `/${user}/${id}/script-breakdown`],
 		["Cast List", <FaUsers />, `/${user}/${id}/cast-list`],
 		["Locations", <FaMapMarkerAlt />, `/${user}/${id}/locations`],
-		["Scheduling", <FaCalendarAlt />, `/${user}/${id}/scheduling`],
+		["Scheduling", <FaCalendarAlt />, `/${user}/${id}/scheduling/1`],
 		["Call Sheets", <FaClipboardList />, `/${user}/${id}/call-sheets`],
 		["Daily Reports", <FaChartBar />, `/${user}/${id}/dpr`],
 	];
@@ -214,6 +214,7 @@ const Sidebar = () => {
 											state={{ section: path }}
 											className={`nav-link${isActive ? " active" : ""}`}
 										>
+											{" "}
 											<span className="icon-wrapper">{Icon}</span>
 											{label}
 										</Link>

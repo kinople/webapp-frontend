@@ -179,7 +179,7 @@ const UserSettings = () => {
 					<div>
 						<div style={{ marginBottom: "16px" }}>
 							<label style={styles.label}>Email</label>
-							<input type="text" value={userData.email || ""} readOnly style={styles.input} />
+							<input type="text" value={userData?.email || ""} readOnly style={styles.input} />
 						</div>
 						<button style={styles.button}>Update Profile</button>
 					</div>
