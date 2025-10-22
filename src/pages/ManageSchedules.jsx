@@ -8,6 +8,11 @@ import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import DOODSchedule from "../components/DOOD";
 
+import React from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import Loader from "../components/Loader";
+
 const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, characterMap }) => {
 	const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: scene.id, disabled: !isEditing });
 
@@ -223,11 +228,13 @@ const ManageSchedules = () => {
 				};
 				return acc;
 			}, {});
+			console.log("schedule_by_day", schedule_by_day);
 
 			const parsedSceneHours = Object.entries(sceneHours).reduce((acc, [sceneNumber, time]) => {
 				acc[sceneNumber] = parseHours(time);
 				return acc;
 			}, {});
+			console.log("parsed scene hourrs", parsedSceneHours);
 
 			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`), {
 				method: "POST",
@@ -250,7 +257,7 @@ const ManageSchedules = () => {
 			} else {
 				setScheduleDays(filteredDays);
 			}
-
+			fetchScheduleData();
 			alert("Schedule saved successfully!");
 			setIsEditing(false);
 		} catch (error) {
@@ -287,7 +294,7 @@ const ManageSchedules = () => {
 					if (breakdownData.tsv_content) {
 						const parsedScenes = parseTSV(breakdownData.tsv_content);
 						setScenes(parsedScenes);
-						//console.log("break-down------------- ", parsedScenes);
+						console.log("break-down------------- ", parsedScenes);
 					}
 				}
 			} catch (error) {
@@ -323,10 +330,6 @@ const ManageSchedules = () => {
 			const data = await response.json();
 			console.log("schedule-data ------------ ", data);
 			setScheduleData(data);
-			if (data.locations && data.locations.length > 0) {
-				setElementType("location");
-				setElement(data.locations[0]);
-			}
 		} catch (error) {
 			console.error("Error fetching schedule data:", error);
 			setError(error.message);
@@ -380,6 +383,7 @@ const ManageSchedules = () => {
 						return newScene;
 					}),
 				}));
+				console.log("days -- ", days);
 				setScheduleDays(days);
 			} else {
 				// Fallback if scenes are not loaded yet
@@ -659,7 +663,9 @@ const ManageSchedules = () => {
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify(payload),
+				body: JSON.stringify({
+					payload,
+				}),
 			});
 
 			if (!response.ok) {
@@ -1063,7 +1069,6 @@ const ManageSchedules = () => {
 			const userMessage = {
 				type: "user",
 				content: chatInput,
-				timestamp: new Date().toISOString(),
 			};
 			setChatMessages((prev) => [...prev, userMessage]);
 
@@ -1071,13 +1076,16 @@ const ManageSchedules = () => {
 			setChatInput("");
 
 			// Send message to backend
-			const response = await fetch(getApiUrl(`/api/${id}/generate-schedule/${scheduleId}/extra-constraints`), {
+			const response = await fetch(getApiUrl(`/api/${id}/query`), {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify({
-					message: chatInput,
+					question: chatInput,
+					schedule: scheduleData,
+					scheduleDays: scheduleDays,
+					breakdown: scenes,
 				}),
 			});
 
@@ -1087,24 +1095,27 @@ const ManageSchedules = () => {
 
 			const result = await response.json();
 
+			console.log("bot ouput: ", result);
+
 			// Add assistant response to chat
 			const assistantMessage = {
 				type: "assistant",
 				content: result.message,
-				constraints: result.extra_constraints,
-				timestamp: new Date().toISOString(),
+				// constraints: result.extra_constraints,
+				// timestamp: new Date().toISOString(),
 			};
 			setChatMessages((prev) => [...prev, assistantMessage]);
+			fetchScheduleData();
 
-			// Always refresh schedule data after a message response
-			const refreshResponse = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
-			if (refreshResponse.ok) {
-				const refreshedData = await refreshResponse.json();
-				console.log("Refreshed Schedule Data:", refreshedData);
-				setScheduleData(refreshedData);
-			} else {
-				console.error("Failed to refresh schedule data");
-			}
+			// // Always refresh schedule data after a message response
+			// const refreshResponse = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
+			// if (refreshResponse.ok) {
+			// 	const refreshedData = await refreshResponse.json();
+			// 	console.log("Refreshed Schedule Data:", refreshedData);
+			// 	setScheduleData(refreshedData);
+			// } else {
+			// 	console.error("Failed to refresh schedule data");
+			// }
 		} catch (error) {
 			console.error("Error sending message:", error);
 			// Add error message to chat
@@ -1191,6 +1202,7 @@ const ManageSchedules = () => {
 										alert(` You have not saved flexible dates for ${element}`);
 									}
 									setElement(e.target.value);
+									console.log(scheduleData);
 								}}
 								style={styles.elementDropdown}
 							>
@@ -1238,7 +1250,7 @@ const ManageSchedules = () => {
 							scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element] &&
 							scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element]["flexible"] && (
 								<div style={styles.existingDatesInfo}>
-									<span > ✅ Flexible dates saved for {element}</span>
+									<span> ✅ Flexible dates saved for {element}</span>
 								</div>
 							)}
 						{selectedElement ? (
@@ -1421,7 +1433,7 @@ const ManageSchedules = () => {
 				</div>
 
 				<div style={styles.centerPanel}>
-					<div style={styles.scheduleHeader}>Rough Schedule</div>
+					<div style={styles.scheduleHeader}>Schedule</div>
 					<div style={styles.maxPagesSection}>
 						<div style={styles.maxPagesUpper}>
 							<div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -1671,17 +1683,24 @@ const ManageSchedules = () => {
 										...(message.type === "error" ? styles.errorMessage : {}),
 									}}
 								>
-									<div style={styles.messageContent}>{message.content}</div>
-									{message.constraints && (
+									<div style={styles.messageContent}>
+										<ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+									</div>
+									{/* {message.constraints && (
 										<div style={styles.constraintsContainer}>
 											<div style={styles.constraintsHeader}>Added Constraints:</div>
 											<pre style={styles.constraints}>{JSON.stringify(message.constraints, null, 2)}</pre>
 										</div>
 									)}
-									<div style={styles.messageTimestamp}>{new Date(message.timestamp).toLocaleTimeString()}</div>
+									<div style={styles.messageTimestamp}>{new Date(message.timestamp).toLocaleTimeString()}</div> */}
 								</div>
 							))}
 						</div>
+						{isSendingMessage && (
+							<div style={{ ...styles.messageContainer, ...styles.assistantMessage, margin: "20px" }}>
+								<Loader />
+							</div>
+						)}
 						<div style={styles.chatInputContainer}>
 							<input
 								type="text"
@@ -1989,10 +2008,16 @@ const styles = {
 		maxHeight: "calc(100vh - 100px)", // Adjust height as needed
 	},
 	rightPanel: {
-		flex: 0.5,
+		flex: 1.5,
 		backgroundColor: "#fff",
 		display: "flex",
 		flexDirection: "column",
+		overflowY: "auto", // Make the central part scrollable
+		overflowX: "hidden", // Remove horizontal scrolling
+		maxHeight: "calc(100vh - 100px)", // Adjust height as needed
+		// Make the central part scrollable
+		// Remove horizontal scrolling
+		// Adjust height as needed
 	},
 	chatContainer: {
 		flex: 1,
@@ -2189,29 +2214,6 @@ const styles = {
 			backgroundColor: "#218838",
 		},
 	},
-	addButton: {
-		padding: "8px 16px",
-		backgroundColor: "#007bff",
-		color: "white",
-		border: "none",
-		borderRadius: "4px",
-		fontSize: "0.9rem",
-		cursor: "pointer",
-	},
-	removeButton: {
-		padding: "4px 8px",
-		backgroundColor: "#dc3545",
-		color: "white",
-		border: "none",
-		borderRadius: "4px",
-		fontSize: "0.8rem",
-		cursor: "pointer",
-		":disabled": {
-			backgroundColor: "#ccc",
-			cursor: "not-allowed",
-		},
-	},
-
 	addButton: {
 		padding: "8px 16px",
 		backgroundColor: "#007bff",
