@@ -7,7 +7,8 @@ import { DndContext, closestCenter, useDroppable, PointerSensor, KeyboardSensor,
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import DOODSchedule from "../components/DOOD";
-
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
 import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -81,6 +82,8 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 		id: day.id,
 	});
 
+	const [drop, setDrop] = useState(true);
+
 	const d = day.date.split("-");
 
 	return (
@@ -89,7 +92,7 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 			style={{
 				margin: "10px",
 				padding: "10px",
-				backgroundColor: "#f4f4f4",
+				backgroundColor: drop ? "#f4f4f4ff" : "#bdbdbdff",
 				borderRadius: "4px",
 				width: "100%",
 				display: "flex",
@@ -98,6 +101,13 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 		>
 			<div style={{ width: "95%", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 				<h4>{d[2] + "-" + d[1] + "-" + d[0]}</h4>
+				<button
+					onClick={() => {
+						setDrop(!drop);
+					}}
+				>
+					{drop ? "^" : "v"}
+				</button>
 				{isEditing && (
 					<button
 						onClick={() => {
@@ -110,35 +120,37 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 					</button>
 				)}
 			</div>
-			<SortableContext items={day.scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-				<table style={styles.tableStyle}>
-					<thead>
-						<tr style={{ backgroundColor: "#e0e0e0" }}>
-							<th style={styles.thStyle}>Scene</th>
+			{drop && (
+				<SortableContext items={day.scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+					<table style={styles.tableStyle}>
+						<thead>
+							<tr style={{ backgroundColor: "#e0e0e0" }}>
+								<th style={styles.thStyle}>Scene</th>
 
-							<th style={styles.thStyle}>Int./Ext.</th>
-							<th style={{ ...styles.thStyle, ...styles.locationSynopsisColumn }}>Location/synopsis</th>
-							{<th style={styles.thStyle}>Pgs</th>}
+								<th style={styles.thStyle}>Int./Ext.</th>
+								<th style={{ ...styles.thStyle, ...styles.locationSynopsisColumn }}>Location/synopsis</th>
+								{<th style={styles.thStyle}>Pgs</th>}
 
-							<th style={styles.thStyle}>Characters</th>
+								<th style={styles.thStyle}>Characters</th>
 
-							{<th style={{ margin: "100px", ...styles.thStyle }}>Est. Hours</th>}
-						</tr>
-					</thead>
-					<tbody>
-						{day.scenes.map((scene) => (
-							<SceneCard
-								key={scene.id}
-								scene={scene}
-								isEditing={isEditing}
-								scheduleMode={scheduleMode}
-								sceneHours={sceneHours}
-								setSceneHours={setSceneHours}
-							/>
-						))}
-					</tbody>
-				</table>
-			</SortableContext>
+								{<th style={{ margin: "100px", ...styles.thStyle }}>Est. Hours</th>}
+							</tr>
+						</thead>
+						<tbody>
+							{day.scenes.map((scene) => (
+								<SceneCard
+									key={scene.id}
+									scene={scene}
+									isEditing={isEditing}
+									scheduleMode={scheduleMode}
+									sceneHours={sceneHours}
+									setSceneHours={setSceneHours}
+								/>
+							))}
+						</tbody>
+					</table>
+				</SortableContext>
+			)}
 		</div>
 	);
 };
@@ -207,6 +219,8 @@ const ManageSchedules = () => {
 	const [newScheduleDayInput, setNewScheduleDayInput] = useState("");
 	const [sceneHours, setSceneHours] = useState({});
 	const [DOODSelected, setDOODselected] = useState(false);
+	const [generatedMaxScenes, setGeneratedMaxScenes] = useState("");
+	const [scheduleDates, setScheduleDates] = useState({ start: "N/A", end: "N/A" });
 
 	const handleSaveChanges = async () => {
 		try {
@@ -330,6 +344,7 @@ const ManageSchedules = () => {
 			const data = await response.json();
 			console.log("schedule-data ------------ ", data);
 			setScheduleData(data);
+			setGeneratedMaxScenes(data["generated_schedule"]["max_scenes_per_day"] || "N/A");
 		} catch (error) {
 			console.error("Error fetching schedule data:", error);
 			setError(error.message);
@@ -384,6 +399,17 @@ const ManageSchedules = () => {
 					}),
 				}));
 				console.log("days -- ", days);
+				const dates = days.map((item) => new Date(item.date));
+				const startDate = new Date(Math.min(...dates));
+				const endDate = new Date(Math.max(...dates));
+				const formatDate = (d) =>
+					d.toLocaleDateString("en-US", {
+						year: "numeric",
+						month: "long",
+						day: "numeric",
+					});
+
+				setScheduleDates({ start: formatDate(startDate), end: formatDate(endDate) });
 				setScheduleDays(days);
 			} else {
 				// Fallback if scenes are not loaded yet
@@ -663,16 +689,13 @@ const ManageSchedules = () => {
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({
-					payload,
-				}),
+				body: JSON.stringify(payload),
 			});
 
-			if (!response.ok) {
-				throw new Error("Failed to generate schedule");
-			}
-
 			const result = await response.json();
+			if (!response.ok) {
+				throw new Error(`${result.message} \n Try changing constraints`);
+			}
 			console.log("Schedule generated successfully:", result);
 
 			// Add a small delay before refreshing to ensure backend processing is complete
@@ -683,6 +706,8 @@ const ManageSchedules = () => {
 					if (refreshResponse.ok) {
 						const refreshedData = await refreshResponse.json();
 						setScheduleData(refreshedData);
+						setGeneratedMaxScenes(refreshedData["generated_schedule"]["max_scenes_per_day"] || "N/A");
+
 						alert("Schedule generated successfully!");
 					} else {
 						throw new Error("Failed to refresh schedule data");
@@ -694,7 +719,7 @@ const ManageSchedules = () => {
 			}, 1000); // 1 second delay
 		} catch (error) {
 			console.error("Error generating schedule:", error);
-			alert("Failed to generate schedule: " + error.message);
+			alert("Failed to generate schedule  - " + error.message);
 		} finally {
 			setIsGenerating(false);
 		}
@@ -726,11 +751,7 @@ const ManageSchedules = () => {
 	const addDateRange = async (t = "range") => {
 		let start = dateRangeStart;
 		let end = dateRangeEnd;
-		if (t === "flexible") {
-			start = scheduleData?.first_date;
-			end = scheduleData?.last_date;
-		}
-		console.log(start);
+
 		if (!start || !end) {
 			alert("Please select both start and end dates for the range");
 			return;
@@ -786,17 +807,17 @@ const ManageSchedules = () => {
 		const endDate = new Date(scheduleData.last_date);
 
 		// Get the first Sunday of the week containing the start date
-		const firstSunday = new Date(startDate);
-		firstSunday.setDate(startDate.getDate() - startDate.getDay());
+		// const firstSunday = new Date(startDate);
+		// firstSunday.setDate(startDate.getDate() - startDate.getDay());
 
-		// Get the last Saturday of the week containing the end date
-		const lastSaturday = new Date(endDate);
-		lastSaturday.setDate(endDate.getDate() + (6 - endDate.getDay()));
+		// // Get the last Saturday of the week containing the end date
+		// const lastSaturday = new Date(endDate);
+		// lastSaturday.setDate(endDate.getDate() + (6 - endDate.getDay()));
 
 		const days = [];
-		const currentDate = new Date(firstSunday);
+		const currentDate = new Date(startDate);
 
-		while (currentDate <= lastSaturday) {
+		while (currentDate <= endDate) {
 			days.push(new Date(currentDate));
 			currentDate.setDate(currentDate.getDate() + 1);
 		}
@@ -835,17 +856,16 @@ const ManageSchedules = () => {
 
 	// Handle calendar date click
 	const handleCalendarDateClick = (date) => {
-		const dateStr = date.toISOString().split("T")[0];
-		const scheduleStart = new Date(scheduleData.first_date);
-		const scheduleEnd = new Date(scheduleData.last_date);
+		const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
 
-		// Only allow selection of dates within the schedule range
-		if (date < scheduleStart || date > scheduleEnd) return;
+		console.log("clicked on ", dateStr);
 
 		setSelectedDates((prev) => {
 			if (prev.includes(dateStr)) {
+				console.log("removed");
 				return prev.filter((d) => d !== dateStr);
 			} else {
+				console.log("added");
 				return [...prev, dateStr].sort();
 			}
 		});
@@ -947,68 +967,29 @@ const ManageSchedules = () => {
 	// Generate calendar for scheduled dates
 	const generateScheduledCalendar = () => {
 		const scheduledDates = getScheduledDates();
-		if (scheduledDates.length === 0) return null;
+		// const getActiveStartDate = () => {
+		// 	if (scheduledDates.length > 0) {
+		// 		const firstDate = new Date(scheduledDates[0]);
+		// 		return new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+		// 	}
+		// 	return new Date(); // fallback to current month
+		// };
 
+		const tileClassNameforScheduledDates = ({ date, view }) => {
+			if (view === "month") {
+				const formattedDate = date.toLocaleDateString("en-CA").split("T")[0]; // gives "YYYY-MM-DD"
+				const scheduledDates = getScheduledDates();
+
+				if (scheduledDates.includes(formattedDate)) {
+					return "highlight-blue";
+				}
+			}
+		};
 		return (
 			<div style={styles.scheduledCalendarContainer}>
-				<div style={styles.calendarHeader}>Scheduled Dates ({scheduledDates.length})</div>
-				<div style={styles.calendarGrid}>
-					<div style={styles.calendarDaysHeader}>
-						{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-							<div key={day} style={styles.calendarDayHeader}>
-								{day}
-							</div>
-						))}
-					</div>
-					<div style={styles.calendarDaysGrid}>
-						{generateCalendarDays().map((date, index) => {
-							const dateStr = date.toISOString().split("T")[0];
-							const isScheduled = scheduledDates.includes(dateStr);
-							const isWithinSchedule = date >= new Date(scheduleData.first_date) && date <= new Date(scheduleData.last_date);
-							const isOtherMonth =
-								date.getMonth() !== new Date(scheduleData.first_date).getMonth() &&
-								date.getMonth() !== new Date(scheduleData.last_date).getMonth();
-
-							return (
-								<div
-									key={index}
-									style={{
-										...styles.calendarDay,
-										...(isScheduled ? styles.calendarDayScheduled : {}),
-										...(isOtherMonth ? styles.calendarDayOtherMonth : {}),
-										...(!isWithinSchedule ? styles.calendarDayDisabled : {}),
-										cursor: "default", // Remove pointer cursor for scheduled dates
-									}}
-								>
-									{date.getDate()}
-								</div>
-							);
-						})}
-					</div>
-				</div>
+				<Calendar tileDisabled={() => true} tileClassName={tileClassNameforScheduledDates} />
 			</div>
 		);
-	};
-
-	// Format schedule for display
-	const formatScheduleForDisplay = (schedule) => {
-		if (typeof schedule === "string") return schedule;
-
-		if (schedule?.schedule_by_day) {
-			let formattedSchedule = "";
-			Object.values(schedule.schedule_by_day).forEach((day) => {
-				formattedSchedule += `Date: ${day.date}\n`;
-				formattedSchedule += `Scenes:\n`;
-				day.scenes?.forEach((scene) => {
-					formattedSchedule += `  Scene ${scene.scene_number} at ${scene.location_name}\n`;
-					formattedSchedule += `  Characters: ${scene.character_ids.join(", ")}\n\n`;
-				});
-				formattedSchedule += "\n";
-			});
-			return formattedSchedule;
-		}
-
-		return JSON.stringify(schedule, null, 2);
 	};
 
 	const handleAddScheduleDay = () => {
@@ -1146,6 +1127,16 @@ const ManageSchedules = () => {
 		);
 	}
 
+	const tileClassName = ({ date, view }) => {
+		if (view === "month") {
+			const formattedDate = date.toLocaleDateString("en-CA").split("T")[0]; // gives "YYYY-MM-DD"
+
+			if (selectedDates.includes(formattedDate)) {
+				return "highlight-blue";
+			}
+		}
+	};
+
 	return (
 		<div style={styles.pageContainer}>
 			<ProjectHeader />
@@ -1155,10 +1146,10 @@ const ManageSchedules = () => {
 				</div>
 				<div style={styles.headerRight}>
 					<div style={styles.dateInfo}>
-						<div>Estd. Start Date: {scheduleData?.first_date || "Not set"}</div>
-						<div>Estd. End Date: {scheduleData?.last_date || "Not set"}</div>
+						<div>Schedule Start Date: {scheduleDates.start || "Not set"}</div>
+						<div>Schedule End Date:  {scheduleDates.end || "Not set"}</div>
 					</div>
-				</div>{" "}
+				</div>
 			</div>
 			<div style={styles.content}>
 				<div style={styles.leftPanel}>
@@ -1284,13 +1275,7 @@ const ManageSchedules = () => {
 									)}
 
 								{datePickerMode === "fixed" && datePickerValue === "single" && (
-									<input
-										type="date"
-										min={scheduleData?.first_date}
-										max={scheduleData?.last_date}
-										onChange={handleSingleDateChange}
-										style={styles.datePicker}
-									/>
+									<input type="date" onChange={handleSingleDateChange} style={styles.datePicker} />
 								)}
 
 								{datePickerValue === "range" && datePickerMode === "fixed" && (
@@ -1299,8 +1284,6 @@ const ManageSchedules = () => {
 											<input
 												type="date"
 												value={dateRangeStart}
-												min={scheduleData?.first_date}
-												max={scheduleData?.last_date}
 												onChange={handleRangeStartChange}
 												style={styles.dateRangeInput}
 												placeholder="Start Date"
@@ -1309,8 +1292,7 @@ const ManageSchedules = () => {
 											<input
 												type="date"
 												value={dateRangeEnd}
-												min={dateRangeStart || scheduleData?.first_date}
-												max={scheduleData?.last_date}
+												min={dateRangeStart}
 												onChange={handleRangeEndChange}
 												style={styles.dateRangeInput}
 												placeholder="End Date"
@@ -1369,9 +1351,9 @@ const ManageSchedules = () => {
 												)}
 											</div>
 										</div>
-										{selectedDates.length > 0 && (
+										{scheduleData?.first_date && scheduleData?.last_date && selectedDates.length > 0 && (
 											<div style={styles.calendarContainer}>
-												<div style={styles.calendarHeader}>{getCalendarMonthYear()}</div>
+												{/* <div style={styles.calendarHeader}>{getCalendarMonthYear()}</div>
 												<div style={styles.calendarGrid}>
 													<div style={styles.calendarDaysHeader}>
 														{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
@@ -1385,12 +1367,6 @@ const ManageSchedules = () => {
 															const dateStr = date.toISOString().split("T")[0];
 															const isSelected = selectedDates.includes(dateStr);
 															const isInRange = isDateInRange(date);
-															const isWithinSchedule =
-																date >= new Date(scheduleData.first_date) &&
-																date <= new Date(scheduleData.last_date);
-															const isOtherMonth =
-																date.getMonth() !== new Date(scheduleData.first_date).getMonth() &&
-																date.getMonth() !== new Date(scheduleData.last_date).getMonth();
 
 															return (
 																<div
@@ -1399,8 +1375,6 @@ const ManageSchedules = () => {
 																		...styles.calendarDay,
 																		...(isSelected && isInRange ? styles.calendarDayRangeSelected : {}),
 																		...(isSelected && !isInRange ? styles.calendarDaySingleSelected : {}),
-																		...(isOtherMonth ? styles.calendarDayOtherMonth : {}),
-																		...(!isWithinSchedule ? styles.calendarDayDisabled : {}),
 																	}}
 																	onClick={() => handleCalendarDateClick(date)}
 																>
@@ -1409,7 +1383,9 @@ const ManageSchedules = () => {
 															);
 														})}
 													</div>
-												</div>
+												</div> */}
+
+												<Calendar onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
 											</div>
 										)}
 									</div>
@@ -1433,7 +1409,32 @@ const ManageSchedules = () => {
 				</div>
 
 				<div style={styles.centerPanel}>
-					<div style={styles.scheduleHeader}>Schedule</div>
+					<div
+						style={{
+							...styles.scheduleHeader,
+							display: "flex",
+							alignItems: "center",
+							justifyContent: "center",
+							gap: "8px",
+							fontSize: "18px",
+							fontWeight: "400",
+							textAlign: "center",
+						}}
+					>
+						Schedule
+						{scheduleData?.schedule && (
+							<span
+								style={{
+									fontSize: "14px",
+									color: "#1e90ff",
+									fontWeight: "500",
+								}}
+							>
+								&nbsp;– Generated Schedule for {generatedMaxScenes || "N/A"} max scenes per day
+							</span>
+						)}
+					</div>
+
 					<div style={styles.maxPagesSection}>
 						<div style={styles.maxPagesUpper}>
 							<div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -1752,11 +1753,13 @@ const styles = {
 	},
 	headerRight: {
 		textAlign: "right",
+
 	},
 	dateInfo: {
 		fontSize: "0.9rem",
 		color: "#555",
 		lineHeight: "1.4",
+		textAlign: "left",
 	},
 	content: {
 		display: "flex",
@@ -2377,6 +2380,11 @@ const styles = {
 		padding: "7px",
 		margin: "3px",
 		fontSize: "0.85rem", // Reduced font size for cells
+	},
+	highlight: {
+		background: "#007bff !important",
+		color: " white ",
+		borderRadius: "50%",
 	},
 };
 export default ManageSchedules;
