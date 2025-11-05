@@ -1111,21 +1111,21 @@ const ManageSchedules = () => {
 		}
 	};
 
-	if (DOODSelected) {
-		return (
-			<>
-				<button
-					onClick={() => {
-						setDOODselected(false);
-					}}
-					style={styles.addButton}
-				>
-					Back
-				</button>
-				<DOODSchedule scheduleData={scheduleData} />
-			</>
-		);
-	}
+	// if (DOODSelected) {
+	// 	return (
+	// 		<>
+	// 			<button
+	// 				onClick={() => {
+	// 					setDOODselected(false);
+	// 				}}
+	// 				style={styles.addButton}
+	// 			>
+	// 				Back
+	// 			</button>
+	// 			<DOODSchedule scheduleData={scheduleData} />
+	// 		</>
+	// 	);
+	// }
 
 	const tileClassName = ({ date, view }) => {
 		if (view === "month") {
@@ -1147,7 +1147,7 @@ const ManageSchedules = () => {
 				<div style={styles.headerRight}>
 					<div style={styles.dateInfo}>
 						<div>Schedule Start Date: {scheduleDates.start || "Not set"}</div>
-						<div>Schedule End Date:  {scheduleDates.end || "Not set"}</div>
+						<div>Schedule End Date: {scheduleDates.end || "Not set"}</div>
 					</div>
 				</div>
 			</div>
@@ -1753,7 +1753,6 @@ const styles = {
 	},
 	headerRight: {
 		textAlign: "right",
-
 	},
 	dateInfo: {
 		fontSize: "0.9rem",
@@ -1772,6 +1771,8 @@ const styles = {
 		backgroundColor: "#fff",
 		display: "flex",
 		flexDirection: "column",
+		height: "calc(100vh - 120px)", // Add this line
+		overflow: "auto", // Add this line
 	},
 	elementSelector: {
 		padding: "15px",
@@ -2008,7 +2009,7 @@ const styles = {
 		flexDirection: "column",
 		overflowY: "auto", // Make the central part scrollable
 		overflowX: "hidden", // Remove horizontal scrolling
-		maxHeight: "calc(100vh - 100px)", // Adjust height as needed
+		height: "calc(100vh - 120px)", // Add this line
 	},
 	rightPanel: {
 		flex: 1.5,
@@ -2017,10 +2018,7 @@ const styles = {
 		flexDirection: "column",
 		overflowY: "auto", // Make the central part scrollable
 		overflowX: "hidden", // Remove horizontal scrolling
-		maxHeight: "calc(100vh - 100px)", // Adjust height as needed
-		// Make the central part scrollable
-		// Remove horizontal scrolling
-		// Adjust height as needed
+		height: "calc(100vh - 120px)", // Add this line
 	},
 	chatContainer: {
 		flex: 1,
