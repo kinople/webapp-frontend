@@ -1140,6 +1140,15 @@ const ManageSchedules = () => {
 	return (
 		<div style={styles.pageContainer}>
 			<ProjectHeader />
+			{isGenerating && (
+				<div style={styles.modalOverlay}>
+					<div style={styles.modalContent}>
+						<div style={styles.spinner}></div>
+						<p style={styles.loadingText}>Generating Schedule...</p>
+					</div>
+				</div>
+			)}
+
 			<div style={styles.header}>
 				<div>
 					<h2 style={styles.pageTitle}>Scheduling</h2>
@@ -2383,6 +2392,58 @@ const styles = {
 		background: "#007bff !important",
 		color: " white ",
 		borderRadius: "50%",
+	},
+	modalOverlay: {
+		position: "fixed",
+		top: 0,
+		left: 0,
+		width: "100%",
+		height: "100%",
+		backgroundColor: "rgba(0, 0, 0, 0.6)",
+		display: "flex",
+		justifyContent: "center",
+		alignItems: "center",
+		zIndex: 1000,
+	},
+	modalContent: {
+		backgroundColor: "white",
+		padding: "40px",
+		borderRadius: "12px",
+		boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
+		textAlign: "center",
+		minWidth: "300px",
+	},
+	spinner: {
+		width: "50px",
+		height: "50px",
+		border: "5px solid #f3f3f3",
+		borderTop: "5px solid #3498db",
+		borderRadius: "50%",
+		margin: "0 auto 20px",
+		animation: "spin 1s linear infinite",
+	},
+	loadingText: {
+		margin: 0,
+		fontSize: "18px",
+		color: "#333",
+		fontWeight: 500,
+	},
+	closeButton: {
+		position: "absolute",
+		top: "10px",
+		right: "10px",
+		backgroundColor: "transparent",
+		border: "none",
+		fontSize: "28px",
+		color: "#999",
+		cursor: "pointer",
+		width: "30px",
+		height: "30px",
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: "4px",
+		transition: "all 0.2s ease",
 	},
 };
 export default ManageSchedules;

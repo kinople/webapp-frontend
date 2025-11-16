@@ -1,5 +1,5 @@
 // src/pages/ScriptBreakdown.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import ProjectHeader from "../components/ProjectHeader";
 import { getApiUrl } from "../utils/api";
@@ -119,6 +119,7 @@ const ScriptBreakdownNew = () => {
 	const tableWrapRef = useRef(null);
 	const [showLeftShadow, setShowLeftShadow] = useState(false);
 	const [showRightShadow, setShowRightShadow] = useState(false);
+	const [editParsing, setEditParsing] = useState(false);
 
 	const updateShadows = () => {
 		const el = tableWrapRef.current;
@@ -232,7 +233,6 @@ const ScriptBreakdownNew = () => {
 		console.log(parsing[idx]);
 		setViewMode("scene");
 
-		if (selectedScript) loadPdfPreview(selectedScript.name);
 		// scroll to top so editor is visible
 		window.scrollTo({ top: 0, behavior: "smooth" });
 	};
@@ -252,30 +252,28 @@ const ScriptBreakdownNew = () => {
 		return selectedScript.name === latest.name && selectedScript.version === latest.version;
 	};
 
-	const handleSaveSceneChanges = async () => {
+	const handleSaveSceneChanges = useCallback(async () => {
 		if (!editingScene) return;
 		try {
 			const updated = [...scriptBreakdown];
 			updated[editingSceneIndex] = editingScene;
 			const headers = Object.keys(updated[0] || {});
 			const tsvContent = [headers.join("\t"), ...updated.map((row) => headers.map((h) => row[h] || "").join("\t"))].join("\n");
-
+			console.log("parsing still", parsing);
 			const response = await fetch(getApiUrl(`/api/${id}/update-breakdown`), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ tsv_content: tsvContent }),
+				body: JSON.stringify({ tsv_content: tsvContent, parsing: parsing }),
 			});
 
 			if (!response.ok) throw new Error("Failed to save changes");
 			setScriptBreakdown(updated);
 			alert("Changes saved successfully!");
-			setViewMode("table");
-			setEditingScene(null);
 		} catch (e) {
 			console.error(e);
 			alert("Failed to save changes. Try again.");
 		}
-	};
+	}, [parsing, editingScene, scriptBreakdown]);
 
 	/* ---------- props columns: explicit list ---------- */
 	const propsHeaderNames = useMemo(() => {
@@ -563,6 +561,63 @@ const ScriptBreakdownNew = () => {
 		});
 	}
 
+	useEffect(() => {
+		console.log("saving parsing in backend..........");
+		handleSaveSceneChanges();
+	}, [parsing]);
+
+	const EditParsingModal = () => {
+		const handleSave = () => {
+			const newPars = [...parsing];
+			newPars[editingSceneIndex] = editingSceneParsing;
+			setParsing(newPars);
+			setEditParsing(false);
+		};
+
+		return (
+			<div style={styles.overlay}>
+				<div style={styles.modal}>
+					{/* Editable Title */}
+					<input
+						type="text"
+						value={editingSceneParsing.heading}
+						onChange={(e) =>
+							setEditingSceneParsing({
+								...editingSceneParsing,
+								heading: e.target.value,
+							})
+						}
+						placeholder="Scene Title"
+						style={styles.sceneHeadingInput}
+					/>
+
+					{/* Editable Content */}
+					<textarea
+						style={styles.textArea}
+						value={editingSceneParsing.content}
+						onChange={(e) =>
+							setEditingSceneParsing({
+								...editingSceneParsing,
+								content: e.target.value,
+							})
+						}
+						placeholder="Enter scene content..."
+					/>
+
+					{/* Buttons */}
+					<div style={styles.buttonRow}>
+						<button style={styles.saveBtn} onClick={handleSave}>
+							Save
+						</button>
+						<button style={styles.closeBtnM} onClick={() => setEditParsing(false)}>
+							Close
+						</button>
+					</div>
+				</div>
+			</div>
+		);
+	};
+
 	return (
 		<div style={styles.pageContainer}>
 			<ProjectHeader />
@@ -603,6 +658,8 @@ const ScriptBreakdownNew = () => {
 				</div>
 			</div>
 
+			{editParsing && EditParsingModal()}
+
 			<div style={styles.mainContent}>
 				<div style={styles.contentWrapper}>
 					{viewMode === "scene" ? (
@@ -611,24 +668,27 @@ const ScriptBreakdownNew = () => {
 							<div style={styles.rightPane}>
 								<div style={styles.pdfHeader}>
 									<h3 style={styles.pdfTitle}>Script Preview</h3>
+									<button
+										style={styles.editBtn}
+										onClick={() => {
+											setEditParsing(true);
+										}}
+									>
+										edit
+									</button>
 								</div>
 
 								{
-									/* Simple: mark up with classes if your content is already structured */
+									<div style={styles.screenplayContainer}>
+										{/* Scene Heading (title of the scene) */}
+										<div style={styles.sceneHeading}>{editingSceneParsing.heading?.toUpperCase() || "UNTITLED SCENE"}</div>
 
-									
-										<div style={styles.screenplayContainer}>
-											{/* Scene Heading (title of the scene) */}
-											<div style={styles.sceneHeading}>{editingSceneParsing.heading?.toUpperCase() || "UNTITLED SCENE"}</div>
-
-											{/* Scene Content (parsed screenplay lines) */}
-											{editingSceneParsing.content ? (
-												renderScreenplay(editingSceneParsing.content, styles)
-											) : (
-												<p style={styles.actionText}>No content available.</p>
-											)}
-										</div>
-									
+										{editingSceneParsing.content ? (
+											renderScreenplay(editingSceneParsing.content, styles)
+										) : (
+											<p style={styles.actionText}>No content available.</p>
+										)}
+									</div>
 								}
 							</div>
 						</div>
@@ -671,6 +731,86 @@ const ScriptBreakdownNew = () => {
 
 /* -------- styles -------- */
 const styles = {
+	overlay: {
+		position: "fixed",
+		top: 0,
+		left: 0,
+		width: "100vw",
+		height: "100vh",
+		background: "rgba(0,0,0,0.6)",
+		display: "flex",
+		justifyContent: "center",
+		alignItems: "center",
+		zIndex: 1000,
+		padding: "20px",
+	},
+
+	modal: {
+		background: "#fff",
+		padding: "20px",
+		borderRadius: "10px",
+		width: "600px",
+		maxHeight: "80vh",
+		overflowY: "auto",
+		overflowX: "hidden",
+		padding: "20px",
+		display: "flex",
+		flexDirection: "column",
+		justifyContent: "center",
+		alignItems: "center",
+		boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+	},
+
+	sceneHeadingInput: {
+		fontSize: "20px",
+		fontWeight: "bold",
+		marginBottom: "15px",
+		padding: "10px",
+		border: "1px solid #ccc",
+		borderRadius: "5px",
+		width: "80%",
+	},
+
+	textArea: {
+		width: "70vh",
+		height: "60vh",
+		resize: "none",
+		padding: "10px",
+		borderRadius: "5px",
+		border: "1px solid #ccc",
+		fontFamily: "monospace",
+		fontSize: "14px",
+		lineHeight: "1.5",
+		whiteSpace: "pre-wrap",
+		overflowY: "auto",
+	},
+
+	buttonRow: {
+		display: "flex",
+		justifyContent: "flex-end",
+		marginTop: "15px",
+		gap: "10px",
+	},
+
+	saveBtn: {
+		background: "#28a745",
+		color: "#fff",
+		border: "none",
+		padding: "8px 16px",
+		borderRadius: "5px",
+		cursor: "pointer",
+		fontWeight: "500",
+	},
+
+	closeBtnM: {
+		background: "#dc3545",
+		color: "#fff",
+		border: "none",
+		padding: "8px 16px",
+		borderRadius: "5px",
+		cursor: "pointer",
+		fontWeight: "500",
+	},
 	pageContainer: {
 		display: "flex",
 		flexDirection: "column",
@@ -711,6 +851,7 @@ const styles = {
 		borderRadius: 8,
 		cursor: "pointer",
 		fontSize: 13,
+		marginLeft: 450,
 	},
 
 	mainContent: { display: "flex", flexGrow: 1, minHeight: "calc(100vh - 80px)" },
@@ -735,7 +876,7 @@ const styles = {
 	editLayout: { display: "flex", height: "calc(100vh - 160px)" },
 	leftPane: { width: "50%", padding: 16, overflowY: "auto" },
 	rightPane: { width: "50%", display: "flex", flexDirection: "column", borderLeft: "1px solid #eef2f7" },
-	pdfHeader: { padding: 8, borderBottom: "1px solid #eef2f7" },
+	pdfHeader: { padding: 8, borderBottom: "1px solid #eef2f7", display: "flex", flexDirection: "row" },
 	pdfTitle: { margin: 0, fontSize: 14, fontWeight: 600 },
 	pdfViewer: { width: "100%", height: "100%", border: "none", flexGrow: 1 },
 	pdfPlaceholder: { flexGrow: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "rows" },
