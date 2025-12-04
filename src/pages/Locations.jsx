@@ -347,7 +347,7 @@ const Locations = () => {
 							</div>
 
 							<div style={styles.actionButtons}>
-								<button style={styles.button}>Add Location</button>
+								<button style={styles.AddLocationbutton}>Add Location</button>
 								<button style={styles.button}>Remove Location</button>
 							</div>
 
@@ -413,7 +413,7 @@ const Locations = () => {
 												{expandedOptions.has(index) && (
 													<div style={styles.optionButtons}>
 														<button
-															style={styles.button}
+															style={styles.AddLocationbutton}
 															onClick={() => {
 																setSelectedLocationIndex(index);
 																setShowAddOptionModal(true);
@@ -637,6 +637,14 @@ const Locations = () => {
 };
 
 const styles = {
+	// Page-level styles (from CastListNew for modern look)
+	page: {
+		minHeight: "100vh",
+		background: "linear-gradient(135deg, #f5f7fa, #c3cfe2)",
+		fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',
+		padding: "2rem",
+		color: "#0f1724",
+	},
 	pageContainer: {
 		display: "flex",
 		flexDirection: "column",
@@ -646,11 +654,31 @@ const styles = {
 	mainContent: {
 		padding: "20px",
 	},
-	contentArea: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "20px",
+	contentArea: { display: "flex", flexDirection: "column", gap: "2rem" },
+	heading: { fontSize: "2rem", color: "#2C3440", margin: 0 },
+	subheading: { fontSize: "1.2rem", color: "#2C3440", margin: 0 },
+
+	scriptInfo: {
+		textAlign: "center",
+		padding: "1rem",
+		backgroundColor: "rgba(255,255,255,0.6)",
+		backdropFilter: "blur(8px)",
+		borderRadius: "12px",
+		border: "1px solid rgba(255,255,255,0.8)",
+		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
 	},
+
+	card: {
+		display: "flex",
+		borderRadius: "12px",
+		overflow: "hidden",
+		background: "rgba(255,255,255,0.6)",
+		backdropFilter: "blur(8px)",
+		border: "1px solid rgba(230,230,230,0.9)",
+		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
+	},
+
+	// Action buttons
 	actionButtons: {
 		display: "flex",
 		gap: "10px",
@@ -664,32 +692,83 @@ const styles = {
 		borderRadius: "4px",
 		cursor: "pointer",
 	},
+	AddLocationbutton: {
+		padding: "8px 16px",
+		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
+		border: "none",
+		borderRadius: "4px",
+		color: "white",
+		cursor: "pointer",
+	},
+
+	// Location containers
 	locationGroupContainer: {
 		display: "flex",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
+		borderRadius: "12px",
 		overflow: "hidden",
+		background: "rgba(255,255,255,0.6)",
+		backdropFilter: "blur(8px)",
+		border: "1px solid rgba(230,230,230,0.9)",
+		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
 		minHeight: "fit-content",
 		maxHeight: "400px",
 	},
+	locationContainer: {
+		display: "flex",
+		borderRadius: "12px",
+		overflow: "hidden",
+		background: "rgba(255,255,255,0.6)",
+		backdropFilter: "blur(8px)",
+		border: "1px solid rgba(230,230,230,0.9)",
+		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
+		minHeight: "fit-content",
+		maxHeight: "400px",
+	},
+	ungroupedContainer: {
+		display: "flex",
+		borderRadius: "12px",
+		overflow: "hidden",
+		background: "rgba(255,255,255,0.6)",
+		backdropFilter: "blur(8px)",
+		border: "1px solid rgba(230,230,230,0.9)",
+		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
+	},
+
+	/* Left grey framed panel */
 	leftPanel: {
-		width: "250px",
-		backgroundColor: "#f0f0f0",
-		padding: "20px",
+		width: "300px",
+		padding: "1rem",
+		background: "#f3f4f6",
+		borderRight: "1px solid rgba(0,0,0,0.04)",
 		display: "flex",
 		flexDirection: "column",
-		gap: "20px",
+		gap: "12px",
 		overflow: "auto",
 		minHeight: "fit-content",
 	},
-	rightPanel: {
-		flex: 1,
-		padding: "20px",
-		backgroundColor: "#fff",
-		overflow: "auto",
-		minHeight: "fit-content",
+	leftTop: { display: "flex", alignItems: "center", gap: 12 },
+	indexBadge: {
+		width: 36,
+		height: 36,
+		borderRadius: "50%",
+		background: "#fff",
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		fontWeight: 700,
+		color: "#111827",
+		boxShadow: "0 2px 6px rgba(2,6,23,0.06)",
 	},
+	leftTitle: { fontSize: 16, fontWeight: 700, color: "#0f1724" },
+	leftSection: { display: "flex", flexDirection: "column" },
+
+	// Group/Location header styles
 	groupHeader: {
+		display: "flex",
+		alignItems: "center",
+		gap: "10px",
+	},
+	locationHeader: {
 		display: "flex",
 		alignItems: "center",
 		gap: "10px",
@@ -697,74 +776,220 @@ const styles = {
 	groupNumber: {
 		backgroundColor: "#fff",
 		borderRadius: "50%",
-		width: "24px",
-		height: "24px",
+		width: "36px",
+		height: "36px",
 		display: "flex",
 		alignItems: "center",
 		justifyContent: "center",
+		fontWeight: 700,
+		color: "#111827",
+		boxShadow: "0 2px 6px rgba(2,6,23,0.06)",
+		fontSize: "14px",
+	},
+	locationNumber: {
+		backgroundColor: "#fff",
+		borderRadius: "50%",
+		width: "36px",
+		height: "36px",
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		fontWeight: 700,
+		color: "#111827",
+		boxShadow: "0 2px 6px rgba(2,6,23,0.06)",
+		fontSize: "14px",
 	},
 	groupName: {
-		fontWeight: "bold",
+		fontWeight: 700,
+		color: "#0f1724",
+		fontSize: 16,
 	},
+	locationName: {
+		fontWeight: 700,
+		color: "#0f1724",
+		fontSize: 16,
+	},
+	ungroupedTitle: {
+		margin: 0,
+		fontWeight: 700,
+		color: "#0f1724",
+		fontSize: 16,
+	},
+
+	// Scene stats and counts
 	sceneStats: {
 		display: "flex",
 		flexDirection: "column",
 		gap: "10px",
 	},
+	locationStats: {
+		display: "flex",
+		flexDirection: "column",
+		gap: "10px",
+	},
+	locationInfo: {
+		display: "flex",
+		flexDirection: "column",
+		gap: "5px",
+		fontSize: "0.9em",
+		color: "#666",
+	},
+	countBox: {
+		minWidth: 52,
+		padding: "8px 10px",
+		borderRadius: 8,
+		background: "#fff",
+		border: "1px solid #e6edf3",
+		fontWeight: 700,
+		textAlign: "center",
+		color: "#0f1724",
+	},
+	smallCount: {
+		display: "flex",
+		flexDirection: "column",
+		gap: 4,
+		alignItems: "center",
+		minWidth: 56,
+	},
+	smallLabel: { fontSize: 12, color: "#6b7280" },
+	smallNumber: { fontWeight: 700, color: "#111827" },
+	sceneCountNumber: {
+		display: "inline-block",
+		padding: "8px 10px",
+		backgroundColor: "#fff",
+		border: "1px solid #e6edf3",
+		borderRadius: "8px",
+		fontSize: "14px",
+		minWidth: "52px",
+		textAlign: "center",
+		fontWeight: 700,
+		color: "#0f1724",
+		marginLeft: "8px",
+	},
+
+	lgBadge: {
+		display: "inline-flex",
+		alignItems: "center",
+		justifyContent: "center",
+		padding: "6px 10px",
+		borderRadius: 999,
+		background: "#fff",
+		border: "1px solid #e6edf3",
+		fontSize: 13,
+		color: "#0f1724",
+	},
+
+	// Checkbox styles
 	checkboxGroup: {
 		display: "flex",
 		flexDirection: "column",
 		gap: "5px",
 	},
+	checkbox: {
+		cursor: "default",
+	},
+
+	// Input styles
 	numberInput: {
 		width: "40px",
 		textAlign: "center",
+		padding: "4px",
+		borderRadius: "4px",
+		border: "1px solid #e6edf3",
 	},
-	viewButtons: {
-		display: "flex",
-		gap: "10px",
+
+	// View buttons
+	viewButtons: { display: "flex", gap: 8, marginTop: 6 },
+	viewBtn: {
+		flex: 1,
+		padding: "0.6rem",
+		borderRadius: 8,
+		border: "1px solid #e6edf3",
+		background: "#fff",
+		cursor: "pointer",
+		fontWeight: 700,
+		transition: "all 0.3s ease",
+	},
+	viewBtnActive: {
+		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
+		color: "#fff",
+		border: "none",
 	},
 	viewButton: {
-		padding: "8px 16px",
-		backgroundColor: "#fff",
-		border: "1px solid #ccc",
-		borderRadius: "20px",
-		cursor: "pointer",
 		flex: 1,
+		padding: "0.6rem",
+		borderRadius: 8,
+		border: "1px solid #e6edf3",
+		background: "#fff",
+		cursor: "pointer",
+		fontWeight: 700,
 		transition: "all 0.3s ease",
 	},
 	activeViewButton: {
-		backgroundColor: "rgb(72, 77, 72)",
+		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
 		color: "#fff",
-		border: "1px solid rgb(72, 77, 72)",
+		border: "none",
 	},
-	optionButtons: {
-		display: "flex",
-		gap: "10px",
-		marginBottom: "20px",
+	inactiveViewButton: {
+		backgroundColor: "#f3f4f6",
+		color: "#666",
+		border: "1px solid #e6e9ef",
 	},
+
+	/* Right panel */
+	rightPanel: {
+		flex: 1,
+		padding: "1rem",
+		backgroundColor: "#fff",
+		overflow: "auto",
+		minHeight: "fit-content",
+	},
+
+	optionButtons: { display: "flex", gap: "0.5rem", marginBottom: "1rem" },
+	newBtn: {
+		padding: "0.6rem 1.0rem",
+		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
+		color: "#fff",
+		border: "none",
+		borderRadius: "6px",
+		cursor: "pointer",
+	},
+	removeBtn: {
+		padding: "0.6rem 1.0rem",
+		background: "#f3f4f6",
+		border: "1px solid #e6e9ef",
+		borderRadius: "6px",
+		cursor: "pointer",
+	},
+
+	// Table styles
 	table: {
 		width: "100%",
 		borderCollapse: "collapse",
+		background: "#fff",
+		borderRadius: "8px",
+		overflow: "hidden",
 		border: "1px solid #e0e0e0",
-		backgroundColor: "#fff",
-		"& th": {
-			position: "sticky",
-			top: 0,
-			backgroundColor: "#f8f8f8",
-			zIndex: 1,
-			borderBottom: "2px solid #ddd",
-			padding: "12px 16px",
-			textAlign: "left",
-			fontWeight: "bold",
-			color: "#333",
-		},
-		"& td": {
-			padding: "12px 16px",
-			textAlign: "left",
-			borderBottom: "1px solid #e0e0e0",
-			verticalAlign: "middle",
-		},
+	},
+	th: {
+		textAlign: "left",
+		padding: "0.75rem",
+		background: "rgba(0,0,0,0.03)",
+		fontSize: 13,
+		color: "#334155",
+		position: "sticky",
+		top: 0,
+		zIndex: 1,
+		borderBottom: "2px solid #ddd",
+		fontWeight: "bold",
+	},
+	tr: { borderBottom: "1px solid rgba(0,0,0,0.06)" },
+	td: {
+		padding: "0.75rem",
+		verticalAlign: "top",
+		fontSize: 14,
+		textAlign: "left",
+		borderBottom: "1px solid #e0e0e0",
 	},
 	tableRow: {
 		backgroundColor: "#fff",
@@ -777,7 +1002,7 @@ const styles = {
 		"& td": {
 			color: "#666",
 			fontSize: "0.95em",
-			paddingLeft: "32px", // Indent secondary options
+			paddingLeft: "32px",
 		},
 		"&:hover": {
 			backgroundColor: "#f5f5f5",
@@ -793,6 +1018,9 @@ const styles = {
 		fontSize: "0.9em",
 		fontStyle: "italic",
 	},
+	emptyRow: { textAlign: "center", color: "#666", padding: "1rem" },
+
+	// Button styles
 	iconButton: {
 		background: "none",
 		border: "none",
@@ -805,11 +1033,38 @@ const styles = {
 			backgroundColor: "#f0f0f0",
 		},
 	},
+	scenesButton: {
+		padding: "0.6rem",
+		backgroundColor: "#f3f4f6",
+		border: "1px solid #e6e9ef",
+		borderRadius: "8px",
+		cursor: "pointer",
+		fontSize: "0.9em",
+		color: "#0f1724",
+		fontWeight: 600,
+		"&:hover": {
+			backgroundColor: "#e5e7eb",
+		},
+	},
+	lockBtn: {
+		padding: "0.35rem 0.7rem",
+		border: "1px solid #d1d5db",
+		borderRadius: "6px",
+		cursor: "pointer",
+		background: "#fff",
+		fontSize: "0.9em",
+		transition: "all 0.2s",
+	},
+	lockedBtn: {
+		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
+		color: "#fff",
+		border: "none",
+	},
 	lockButton: {
-		padding: "6px 12px",
+		padding: "0.35rem 0.7rem",
 		backgroundColor: "#fff",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
+		border: "1px solid #d1d5db",
+		borderRadius: "6px",
 		cursor: "pointer",
 		fontSize: "0.9em",
 		transition: "all 0.2s",
@@ -819,60 +1074,111 @@ const styles = {
 		},
 	},
 	lockedButton: {
-		backgroundColor: "#4CAF50",
+		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
 		color: "white",
-		border: "1px solid #4CAF50",
+		border: "none",
 		"&:hover": {
-			backgroundColor: "#45a049",
-			borderColor: "#45a049",
+			background: "linear-gradient(135deg, #5f4fd1, #00a67d)",
 		},
 	},
-	ungroupedContainer: {
-		display: "flex",
-		border: "1px solid #ccc",
+	removeButton: {
+		padding: "4px 8px",
+		backgroundColor: "#dc3545",
+		color: "white",
+		border: "none",
 		borderRadius: "4px",
-		overflow: "hidden",
+		cursor: "pointer",
+		fontSize: "12px",
+		"&:hover": {
+			backgroundColor: "#c82333",
+		},
 	},
-	ungroupedTitle: {
-		margin: 0,
-		fontWeight: "bold",
+	removeButtonContainer: {
+		display: "flex",
+		justifyContent: "center",
+		padding: "16px",
+		borderTop: "1px solid #e0e0e0",
 	},
-	message: {
-		textAlign: "center",
-		padding: "2rem",
-		color: "#666",
-	},
-	errorMessage: {
-		textAlign: "center",
-		padding: "2rem",
-		color: "#dc3545",
-	},
-	checkbox: {
-		cursor: "default",
-	},
+
+	// Message styles
+	message: { textAlign: "center", padding: "2rem", color: "#666" },
+	errorMessage: { textAlign: "center", padding: "2rem", color: "#dc3545" },
+
+	// Modal styles
 	modalOverlay: {
 		position: "fixed",
 		top: 0,
 		left: 0,
 		right: 0,
 		bottom: 0,
-		backgroundColor: "rgba(0, 0, 0, 0.5)",
+		backgroundColor: "rgba(0,0,0,0.5)",
 		display: "flex",
-		justifyContent: "center",
 		alignItems: "center",
+		justifyContent: "center",
 		zIndex: 1000,
+		padding: 16,
 	},
 	modalContent: {
-		backgroundColor: "#fff",
-		padding: "20px",
-		borderRadius: "8px",
-		minWidth: "300px",
-		maxWidth: "500px",
+		background: "rgba(255,255,255,0.98)",
+		backdropFilter: "blur(6px)",
+		borderRadius: "12px",
+		padding: "1.25rem",
+		width: "100%",
+		maxWidth: "760px",
 		maxHeight: "80vh",
+		boxShadow: "0 10px 30px rgba(2,6,23,0.12)",
 		display: "flex",
 		flexDirection: "column",
 		gap: "15px",
 	},
+	modalTitle: { margin: 0, marginBottom: "0.75rem", color: "#2C3440", fontSize: 18 },
+	closeButton: {
+		padding: "0.55rem 0.9rem",
+		background: "#f3f4f6",
+		border: "1px solid #e6e9ef",
+		borderRadius: "8px",
+		cursor: "pointer",
+		alignSelf: "flex-end",
+	},
+
+	// Form styles
+	form: { display: "flex", flexDirection: "column", gap: "0.75rem" },
+	formGroup: { display: "flex", flexDirection: "column", gap: "0.35rem" },
+	label: { fontWeight: "600", color: "#2C3440", fontSize: 13 },
+	input: {
+		padding: "0.6rem",
+		borderRadius: "8px",
+		border: "1px solid #e6edf3",
+		fontSize: "0.95rem",
+		background: "#fff",
+	},
+	select: {
+		padding: "0.6rem",
+		borderRadius: "8px",
+		border: "1px solid #e6edf3",
+		backgroundColor: "#fff",
+		fontSize: "0.95rem",
+		width: "100%",
+		maxWidth: "200px",
+	},
+	formButtons: { display: "flex", gap: "0.75rem", justifyContent: "flex-end", marginTop: 6 },
+	submitButton: {
+		padding: "0.6rem 1.0rem",
+		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
+		color: "#fff",
+		border: "none",
+		borderRadius: "8px",
+		cursor: "pointer",
+	},
+	cancelButton: {
+		padding: "0.55rem 0.9rem",
+		background: "#f3f4f6",
+		border: "1px solid #e6e9ef",
+		borderRadius: "8px",
+		cursor: "pointer",
+	},
+
+	// Scenes list styles
 	scenesList: {
 		display: "flex",
 		flexDirection: "column",
@@ -881,75 +1187,23 @@ const styles = {
 		overflowY: "auto",
 		padding: "10px",
 		backgroundColor: "#f5f5f5",
-		borderRadius: "4px",
+		borderRadius: "8px",
 	},
 	sceneItem: {
 		padding: "8px",
 		backgroundColor: "#fff",
-		borderRadius: "4px",
+		borderRadius: "6px",
 		boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
 	},
-	closeButton: {
-		padding: "8px 16px",
-		backgroundColor: "#e0e0e0",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-		alignSelf: "flex-end",
-	},
-	form: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "15px",
-	},
-	formGroup: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "5px",
-	},
-	input: {
-		padding: "8px",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
-		fontSize: "14px",
-	},
-	formButtons: {
-		display: "flex",
-		gap: "10px",
-		justifyContent: "flex-end",
-		marginTop: "10px",
-	},
-	submitButton: {
-		padding: "8px 16px",
-		backgroundColor: "#4CAF50",
-		color: "white",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-	},
-	cancelButton: {
-		padding: "8px 16px",
-		backgroundColor: "#e0e0e0",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-	},
-	select: {
-		padding: "4px 8px",
-		borderRadius: "4px",
-		border: "1px solid #ccc",
-		backgroundColor: "#fff",
-		fontSize: "14px",
-		width: "100%",
-		maxWidth: "200px",
-	},
+
+	// Date picker styles
 	datePickerContainer: {
 		position: "fixed",
 		zIndex: 5000,
 		backgroundColor: "white",
-		boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-		borderRadius: "4px",
-		padding: "8px",
+		boxShadow: "0 10px 30px rgba(2,6,23,0.12)",
+		borderRadius: "12px",
+		padding: "12px",
 		minWidth: "300px",
 		transform: "translateX(-50%)",
 		bottom: "calc(100% - 200px)",
@@ -960,13 +1214,13 @@ const styles = {
 	},
 	dateDisplay: {
 		backgroundColor: "#fff",
-		borderRadius: "4px",
+		borderRadius: "8px",
 		"& .react-datepicker": {
 			border: "none",
 			boxShadow: "none",
 		},
 		"& .react-datepicker__day--highlighted": {
-			backgroundColor: "#4CAF50",
+			backgroundColor: "#6c5ce7",
 			color: "white",
 		},
 		"& .react-datepicker__day--keyboard-selected": {
@@ -987,15 +1241,16 @@ const styles = {
 	dateTag: {
 		display: "flex",
 		alignItems: "center",
-		backgroundColor: "#e0e0e0",
-		padding: "4px 8px",
-		borderRadius: "4px",
-		fontSize: "14px",
+		backgroundColor: "#f3f4f6",
+		padding: "6px 10px",
+		borderRadius: "6px",
+		fontSize: "13px",
+		border: "1px solid #e6edf3",
 	},
 	removeDate: {
 		background: "none",
 		border: "none",
-		marginLeft: "4px",
+		marginLeft: "6px",
 		cursor: "pointer",
 		padding: "0 4px",
 		fontSize: "16px",
@@ -1004,15 +1259,10 @@ const styles = {
 			color: "#dc3545",
 		},
 	},
-	removeButtonContainer: {
-		display: "flex",
-		justifyContent: "center",
-		padding: "16px",
-		borderTop: "1px solid #e0e0e0",
-	},
 	flexibleText: {
 		fontStyle: "italic",
 		color: "#666",
+		fontSize: "0.9em",
 	},
 	dateToggleContainer: {
 		marginBottom: "15px",
@@ -1022,94 +1272,10 @@ const styles = {
 		alignItems: "center",
 		gap: "8px",
 		cursor: "pointer",
+		fontSize: "0.95rem",
 	},
 	dateToggleCheckbox: {
 		cursor: "pointer",
-	},
-	locationContainer: {
-		display: "flex",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
-		overflow: "hidden",
-		minHeight: "fit-content",
-		maxHeight: "400px",
-	},
-	locationHeader: {
-		display: "flex",
-		alignItems: "center",
-		gap: "10px",
-	},
-	locationNumber: {
-		backgroundColor: "#fff",
-		borderRadius: "50%",
-		width: "24px",
-		height: "24px",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		fontSize: "12px",
-	},
-	locationName: {
-		fontWeight: "bold",
-	},
-	locationStats: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "10px",
-	},
-	locationInfo: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "5px",
-		fontSize: "0.9em",
-		color: "#666",
-	},
-	scenesButton: {
-		padding: "4px 8px",
-		backgroundColor: "#e0e0e0",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-		fontSize: "0.9em",
-		color: "#333",
-		"&:hover": {
-			backgroundColor: "#d0d0d0",
-		},
-	},
-	scriptInfo: {
-		marginBottom: "20px",
-	},
-	inactiveViewButton: {
-		backgroundColor: "#e0e0e0",
-		color: "#666",
-		border: "1px solid #ccc",
-		"&:hover": {
-			backgroundColor: "#f0f0f0",
-			borderColor: "#ccc",
-		},
-	},
-	sceneCountNumber: {
-		display: "inline-block",
-		padding: "4px 8px",
-		backgroundColor: "#fff",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
-		fontSize: "14px",
-		minWidth: "40px",
-		textAlign: "center",
-		marginLeft: "8px",
-	},
-	removeButton: {
-		padding: "4px 8px",
-		backgroundColor: "#dc3545",
-		color: "white",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-		fontSize: "12px",
-		"&:hover": {
-			backgroundColor: "#c82333",
-		},
 	},
 };
 

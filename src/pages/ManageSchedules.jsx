@@ -43,13 +43,19 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 						type="number"
 						style={{ width: "40px", marginLeft: "10px" }}
 						placeholder="HH"
-						value={sceneHours[scene.scene_number]?.hours || ""}
+						value={sceneHours[scene.scene_number]?.hours ?? ""}
 						onChange={(e) => {
 							const newSceneHours = { ...sceneHours };
 							if (!newSceneHours[scene.scene_number]) {
 								newSceneHours[scene.scene_number] = { hours: "", minutes: "" };
 							}
-							newSceneHours[scene.scene_number].hours = e.target.value;
+							const value = parseInt(e.target.value);
+							console.log(value);
+							if (value < 0) {
+								alert("Cannot have negative values for hours");
+								return;
+							}
+							newSceneHours[scene.scene_number].hours = value;
 							setSceneHours(newSceneHours);
 						}}
 					/>
@@ -61,13 +67,19 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 						type="number"
 						style={{ width: "40px", marginLeft: "10px" }}
 						placeholder="MM"
-						value={sceneHours[scene.scene_number]?.minutes || ""}
+						value={sceneHours[scene.scene_number]?.minutes ?? ""}
 						onChange={(e) => {
 							const newSceneHours = { ...sceneHours };
 							if (!newSceneHours[scene.scene_number]) {
 								newSceneHours[scene.scene_number] = { hours: "", minutes: "" };
 							}
-							newSceneHours[scene.scene_number].minutes = e.target.value;
+							const value = parseInt(e.target.value);
+							console.log(value);
+							if (value < 0 || value > 60) {
+								alert("Enter a acceptable value for minutes");
+								return;
+							}
+							newSceneHours[scene.scene_number].minutes = value;
 							setSceneHours(newSceneHours);
 						}}
 					/>
@@ -221,10 +233,151 @@ const ManageSchedules = () => {
 	const [DOODSelected, setDOODselected] = useState(false);
 	const [generatedMaxScenes, setGeneratedMaxScenes] = useState("");
 	const [scheduleDates, setScheduleDates] = useState({ start: "N/A", end: "N/A" });
+	const [HoursSaved, setHoursSaved] = useState(false);
 
+	const [conflicts, setConflicts] = useState([]);
+	const [showConflictModal, setShowConflictModal] = useState(false);
+
+	const ConflictsModal = () => {
+		if (!showConflictModal) return null;
+		console.log("conflicts are : ", conflicts);
+
+		const styles = {
+			overlay: {
+				position: "fixed",
+				top: 0,
+				left: 0,
+				right: 0,
+				bottom: 0,
+				backgroundColor: "rgba(0, 0, 0, 0.5)",
+				display: "flex",
+				justifyContent: "center",
+				alignItems: "center",
+				zIndex: 1000,
+			},
+			modal: {
+				backgroundColor: "#fff",
+				borderRadius: "8px",
+				padding: "2rem",
+				maxWidth: "600px",
+				width: "90%",
+				maxHeight: "80vh",
+				overflow: "auto",
+				boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+				position: "relative",
+			},
+			header: {
+				display: "flex",
+				justifyContent: "space-between",
+				alignItems: "center",
+				marginBottom: "1.5rem",
+				borderBottom: "2px solid #eee",
+				paddingBottom: "1rem",
+			},
+			heading: {
+				fontSize: "1.5rem",
+				fontWeight: "600",
+				color: "#333",
+				margin: 0,
+			},
+			closeButton: {
+				backgroundColor: "transparent",
+				border: "none",
+				fontSize: "1.5rem",
+				cursor: "pointer",
+				color: "#666",
+				padding: "0.25rem 0.5rem",
+				borderRadius: "4px",
+				transition: "background-color 0.2s",
+			},
+			closeButtonHover: {
+				backgroundColor: "#f5f5f5",
+			},
+			content: {
+				display: "flex",
+				flexDirection: "column",
+				gap: "0.75rem",
+			},
+			conflictItem: {
+				padding: "0.75rem 1rem",
+				backgroundColor: "#fff5f5",
+				borderLeft: "4px solid #dc2626",
+				borderRadius: "4px",
+				color: "#dc2626",
+				fontSize: "0.95rem",
+			},
+			noConflicts: {
+				padding: "2rem",
+				textAlign: "center",
+				color: "#10b981",
+				fontSize: "1rem",
+			},
+			conflictCount: {
+				fontSize: "0.9rem",
+				color: "#666",
+				marginBottom: "1rem",
+				fontWeight: "500",
+			},
+		};
+
+		return (
+			<div
+				style={styles.overlay}
+				onClick={() => {
+					setShowConflictModal(false);
+				}}
+			>
+				<div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+					<div style={styles.header}>
+						<h2 style={styles.heading}>Conflicts in the Schedule</h2>
+						<button
+							style={styles.closeButton}
+							onClick={() => {
+								setShowConflictModal(false);
+							}}
+							onMouseEnter={(e) => {
+								e.target.style.backgroundColor = styles.closeButtonHover.backgroundColor;
+							}}
+							onMouseLeave={(e) => {
+								e.target.style.backgroundColor = "transparent";
+							}}
+						>
+							×
+						</button>
+					</div>
+
+					<div style={styles.content}>
+						{conflicts.length > 0 ? (
+							<>
+								<p style={styles.conflictCount}>
+									Found {conflicts.length} scene
+									{conflicts.length !== 1 ? "s" : ""} with conflicts
+								</p>
+
+								{conflicts.map((sceneConflict, index) => (
+									<div key={index} style={{ marginBottom: "1rem" }}>
+										<div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
+											Scene {sceneConflict.scene_number} scheduled on – {sceneConflict.date}
+										</div>
+
+										{sceneConflict.conflicts.map((msg, i) => (
+											<div key={i} style={styles.conflictItem}>
+												{msg}
+											</div>
+										))}
+									</div>
+								))}
+							</>
+						) : (
+							<div style={styles.noConflicts}>✓ No conflicts found in the schedule</div>
+						)}
+					</div>
+				</div>
+			</div>
+		);
+	};
 	const handleSaveChanges = async () => {
 		try {
-			// ✅ Filter out days with no scenes
 			const filteredDays = scheduleDays.filter((day) => {
 				return day.scenes && day.scenes.length > 0;
 			});
@@ -244,30 +397,18 @@ const ManageSchedules = () => {
 			}, {});
 			console.log("schedule_by_day", schedule_by_day);
 
-			const parsedSceneHours = Object.entries(sceneHours).reduce((acc, [sceneNumber, time]) => {
-				acc[sceneNumber] = parseHours(time);
-				return acc;
-			}, {});
-			console.log("parsed scene hourrs", parsedSceneHours);
-
 			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`), {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({ schedule_by_day, scene_hours: parsedSceneHours }),
+				body: JSON.stringify({ schedule_by_day }),
 			});
 
 			if (!response.ok) {
 				const errorData = await response.json();
-				if (response.status === 400 && errorData.conflicts) {
-					const conflictMessage = errorData.conflicts.join("\n");
-					alert(`Failed to save schedule due to availability conflicts:\n${conflictMessage}`);
-				} else {
-					throw new Error(errorData.message || "Failed to save schedule");
-				}
-				setScheduleDays(originalScheduleDays); // Revert to original state
-				return;
+
+				throw new Error(errorData.message || "Failed to save schedule");
 			} else {
 				setScheduleDays(filteredDays);
 			}
@@ -304,11 +445,18 @@ const ManageSchedules = () => {
 						throw new Error("Failed to fetch breakdown");
 					}
 					const breakdownData = await breakdownResponse.json();
+					console.log(breakdownData);
 
 					if (breakdownData.tsv_content) {
 						const parsedScenes = parseTSV(breakdownData.tsv_content);
 						setScenes(parsedScenes);
+
 						console.log("break-down------------- ", parsedScenes);
+					}
+
+					if (breakdownData.hours) {
+						setHoursSaved(true);
+						setSceneHours(breakdownData.hours);
 					}
 				}
 			} catch (error) {
@@ -582,40 +730,68 @@ const ManageSchedules = () => {
 		}
 	}, [scheduleData, selectedElement]);
 
-	// Reload given dates section data
-	const reloadGivenDatesData = async () => {
-		if (!selectedElement) return;
+	useEffect(() => {
+		const detectConflicts = () => {
+			const sceneConflicts = {}; // Key: scene_number, Value: { date, conflicts: [] }
+			const scheduleByDay = scheduleData?.schedule?.schedule_by_day || {};
+			const characterDates = scheduleData?.dates?.characters || {};
+			const locationDates = scheduleData?.dates?.locations || {};
 
-		try {
-			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
-			if (!response.ok) {
-				throw new Error("Failed to reload schedule data");
-			}
-			const data = await response.json();
+			Object.entries(scheduleByDay).forEach(([date, dayData]) => {
+				const scenes = dayData.scenes || [];
 
-			// Update only the dates section of schedule data
-			setScheduleData((prev) => ({
-				...prev,
-				dates: data.dates,
+				scenes.forEach((scene) => {
+					const { scene_number, location_name, character_names, character_ids } = scene;
+					const conflictList = [];
+
+					// Check character availability conflicts
+					character_ids?.forEach((charId, index) => {
+						const charName = character_names?.[index];
+						const charData = characterDates[charName];
+
+						if (charData && charData.dates.length > 0) {
+							if (!charData.dates.includes(dayData.date)) {
+								conflictList.push(`Character "${charName}" is not available on ${dayData.date}`);
+							}
+						}
+					});
+
+					// Check location availability conflicts
+					const locationData = locationDates[location_name];
+					if (locationData && locationData.dates.length > 0) {
+						if (!locationData.dates.includes(dayData.date)) {
+							conflictList.push(`Location "${location_name}" is not available on ${dayData.date}`);
+						}
+					}
+
+					if (conflictList.length > 0) {
+						// Accumulate scene-wise conflicts
+						if (!sceneConflicts[scene_number]) {
+							sceneConflicts[scene_number] = {
+								date: dayData.date,
+								conflicts: [],
+							};
+						}
+						sceneConflicts[scene_number].conflicts.push(...conflictList);
+					}
+				});
+			});
+
+			// Convert sceneConflicts map to an array for easier rendering/use
+			const newConflicts = Object.entries(sceneConflicts).map(([scene_number, { date, conflicts }]) => ({
+				scene_number,
+				date,
+				conflicts,
 			}));
 
-			// Reload dates for current element
-			const [type, name] = selectedElement.split("::");
-			const elementDates = data.dates[type === "location" ? "locations" : "characters"];
+			setConflicts(newConflicts);
+		};
 
-			if (elementDates && elementDates[name] && elementDates[name].dates) {
-				const refreshedDates = parseDateRanges(elementDates[name].dates);
-				console.log("refreshed dates ::::::::", refreshedDates);
-				setSelectedDates(refreshedDates);
-				setOriginalDates(refreshedDates); // Update original dates after reload
-			} else {
-				setSelectedDates([]);
-				setOriginalDates([]);
-			}
-		} catch (error) {
-			console.error("Error reloading given dates data:", error);
+		if (scheduleData) {
+			detectConflicts();
+			console.log("conflicts----------", conflicts);
 		}
-	};
+	}, [scheduleData]);
 
 	// Create dropdown options from schedule data
 	const getElementOptions = (type) => {
@@ -670,6 +846,9 @@ const ManageSchedules = () => {
 			}
 		} else if (scheduleMode === "hours") {
 			const parsedHours = parseHours(maxHours);
+			if (!HoursSaved) {
+				alertMessage = "Please save Hours for each scene before generating schedule";
+			}
 			if (parsedHours <= 0) {
 				alertMessage = "Please enter a valid number of hours per day";
 			} else {
@@ -981,12 +1160,24 @@ const ManageSchedules = () => {
 				const scheduledDates = getScheduledDates();
 
 				if (scheduledDates.includes(formattedDate)) {
-					return "highlight-blue";
+					return "highlight-green";
 				}
 			}
 		};
 		return (
 			<div style={styles.scheduledCalendarContainer}>
+				<style>
+					{`
+                        .highlight-green {
+                          background-color: #307c1fff !important;
+                          color: white !important;
+                          border-radius: 6px;
+                        }
+                        
+
+                      `}
+				</style>
+
 				<Calendar tileDisabled={() => true} tileClassName={tileClassNameforScheduledDates} />
 			</div>
 		);
@@ -1056,6 +1247,8 @@ const ManageSchedules = () => {
 			// Clear input
 			setChatInput("");
 
+			console.log("chatbot data : ", scheduleData, scheduleDays, scenes);
+
 			// Send message to backend
 			const response = await fetch(getApiUrl(`/api/${id}/query`), {
 				method: "POST",
@@ -1108,6 +1301,48 @@ const ManageSchedules = () => {
 			setChatMessages((prev) => [...prev, errorMessage]);
 		} finally {
 			setIsSendingMessage(false);
+		}
+	};
+
+	const handleSaveHours = async () => {
+		for (let day of scheduleDays) {
+			for (let scene of day.scenes) {
+				if (!(scene.scene_number in sceneHours)) {
+					alert(`Enter estimated Hours and minutes for scene ${scene.scene_number} before saving `);
+					return;
+				}
+			}
+		}
+
+		try {
+			// First, get the list of scripts for the project
+			const scriptsResponse = await fetch(getApiUrl(`/api/${id}/script-list`));
+			if (!scriptsResponse.ok) {
+				throw new Error("Failed to fetch script list");
+			}
+			const scripts = await scriptsResponse.json();
+			const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
+
+			if (sortedScripts.length > 0) {
+				const latestScript = sortedScripts[0];
+
+				// Then, fetch the breakdown for the latest script
+				const SaveResponse = await fetch(getApiUrl(`/api/save-hours?script_id=${latestScript.id}`), {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						sceneHours,
+					}),
+				});
+				if (!SaveResponse.ok) {
+					throw new Error("Failed to save hours");
+				}
+				alert("Est. hours saved successlfully");
+			}
+		} catch (error) {
+			alert("Error while saving hours ", error);
 		}
 	};
 
@@ -1362,39 +1597,23 @@ const ManageSchedules = () => {
 										</div>
 										{scheduleData?.first_date && scheduleData?.last_date && selectedDates.length > 0 && (
 											<div style={styles.calendarContainer}>
-												{/* <div style={styles.calendarHeader}>{getCalendarMonthYear()}</div>
-												<div style={styles.calendarGrid}>
-													<div style={styles.calendarDaysHeader}>
-														{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-															<div key={day} style={styles.calendarDayHeader}>
-																{day}
-															</div>
-														))}
-													</div>
-													<div style={styles.calendarDaysGrid}>
-														{generateCalendarDays().map((date, index) => {
-															const dateStr = date.toISOString().split("T")[0];
-															const isSelected = selectedDates.includes(dateStr);
-															const isInRange = isDateInRange(date);
-
-															return (
-																<div
-																	key={index}
-																	style={{
-																		...styles.calendarDay,
-																		...(isSelected && isInRange ? styles.calendarDayRangeSelected : {}),
-																		...(isSelected && !isInRange ? styles.calendarDaySingleSelected : {}),
-																	}}
-																	onClick={() => handleCalendarDateClick(date)}
-																>
-																	{date.getDate()}
-																</div>
-															);
-														})}
-													</div>
-												</div> */}
-
-												<Calendar onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
+												<style>
+													{`
+                                                        .highlight-blue {
+                                                            background-color: #0643bbff !important;
+                                                            color: white !important;
+                                                            border-radius: 6px;
+                                                        }
+														
+                                                        
+                                                        `}
+												</style>
+												<Calendar
+													selectRange={false}
+													activeStartDate={null}
+													onClickDay={handleCalendarDateClick}
+													tileClassName={tileClassName}
+												/>
 											</div>
 										)}
 									</div>
@@ -1443,6 +1662,48 @@ const ManageSchedules = () => {
 							</span>
 						)}
 					</div>
+
+					{conflicts.length > 0 && (
+						<div
+							style={{
+								...styles.scheduleHeader,
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								gap: "16px",
+								fontSize: "18px",
+								fontWeight: "400",
+								textAlign: "center",
+							}}
+						>
+							<button
+								style={{
+									padding: "4px 8px",
+									backgroundColor: "#dc3545",
+									color: "white",
+									border: "none",
+									borderRadius: "4px",
+									cursor: "pointer",
+								}}
+								onClick={() => {
+									setShowConflictModal(true);
+								}}
+							>
+								Show conflicts
+							</button>
+
+							<span
+								style={{
+									fontSize: "14px",
+									color: "#dc3545",
+									fontWeight: "500",
+								}}
+							>
+								There are some conflicts in this schedule
+							</span>
+						</div>
+					)}
+					<ConflictsModal />
 
 					<div style={styles.maxPagesSection}>
 						<div style={styles.maxPagesUpper}>
@@ -1563,8 +1824,15 @@ const ManageSchedules = () => {
 										Edit
 									</button>
 								))}
+
+							{scheduleMode == "hours" && (
+								<button style={styles.editButton} onClick={handleSaveHours}>
+									Save Est. Hours
+								</button>
+							)}
 						</div>
 					</div>
+
 					{scheduleData?.schedule && (
 						<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
 							<div style={{ display: "flex", flexDirection: "column" }}>
@@ -1615,23 +1883,29 @@ const ManageSchedules = () => {
 											{/* <td style={styles.tdStyle}>{scene["Time of Day"] || scene["Time"]}</td> */}
 											{<td style={styles.tdStyle}>{scene["Page Eighths"] || scene["Pgs"]}</td>}
 											{/* <td style={styles.tdStyle}>{scene["Synopsis"]}</td> */}
-											<td style={styles.tdStyle}>{scene["Characters"]}</td>
+											<td style={styles.tdStyle}> {scene["Characters"]}</td>
 											{
 												<td style={styles.tdStyle}>
 													<input
 														type="number"
 														style={{ width: "40px" }}
 														placeholder="HH"
-														value={sceneHours[scene["Scene Number"] || scene["Scene No."]]?.hours || ""}
+														value={sceneHours[scene["Scene Number"] ?? scene["Scene No."]]?.hours ?? ""}
 														onChange={(e) => {
 															const newSceneHours = { ...sceneHours };
 															if (!newSceneHours[scene["Scene Number"] || scene["Scene No."]]) {
 																newSceneHours[scene["Scene Number"] || scene["Scene No."]] = {
-																	hours: "",
-																	minutes: "",
+																	hours: None,
+																	minutes: None,
 																};
 															}
-															newSceneHours[scene["Scene Number"] || scene["Scene No."]].hours = e.target.value;
+															const value = parseInt(e.target.value);
+															console.log(value);
+															if (value < 0) {
+																alert("Cannot have negative values for hours");
+																return;
+															}
+															newSceneHours[scene["Scene Number"] || scene["Scene No."]].hours = value;
 															setSceneHours(newSceneHours);
 														}}
 													/>
@@ -1642,7 +1916,7 @@ const ManageSchedules = () => {
 														type="number"
 														style={{ width: "40px" }}
 														placeholder="MM"
-														value={sceneHours[scene["Scene Number"] || scene["Scene No."]]?.minutes || ""}
+														value={sceneHours[scene["Scene Number"] ?? scene["Scene No."]]?.minutes ?? ""}
 														onChange={(e) => {
 															const newSceneHours = { ...sceneHours };
 															if (!newSceneHours[scene["Scene Number"] || scene["Scene No."]]) {
@@ -1651,7 +1925,13 @@ const ManageSchedules = () => {
 																	minutes: "",
 																};
 															}
-															newSceneHours[scene["Scene Number"] || scene["Scene No."]].minutes = e.target.value;
+															const value = parseInt(e.target.value);
+															console.log(value);
+															if (value < 0 || value > 60) {
+																alert("Enter a acceptable value for minutes");
+																return;
+															}
+															newSceneHours[scene["Scene Number"] || scene["Scene No."]].minutes = value;
 															setSceneHours(newSceneHours);
 														}}
 													/>
@@ -2098,7 +2378,14 @@ const styles = {
 		alignItems: "center",
 		gap: "4px",
 		flexWrap: "wrap",
+		position: "sticky",
+		top: 0,
+		zIndex: 10,
+
+		background: "linear-gradient(to bottom, rgba(255,255,255,1), rgba(255, 255, 255, 0.58))",
+		backdropFilter: "blur(2px)", // optional — gives a smooth look
 	},
+
 	maxPagesUpper: {
 		padding: "8px",
 		display: "flex",
@@ -2393,6 +2680,7 @@ const styles = {
 		color: " white ",
 		borderRadius: "50%",
 	},
+
 	modalOverlay: {
 		position: "fixed",
 		top: 0,
