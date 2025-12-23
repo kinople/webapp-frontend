@@ -1,0 +1,368 @@
+/* Home.css - Styles for Home page (Figma Design) */
+
+.home-page {
+	height: 835px;
+	margin-bottom: 0;
+	padding-bottom: 0px;
+	margin-left: 238px; /* Space for sidebar */
+	font-family: "Inter", sans-serif;
+	overflow: hidden;
+	transition: margin-left 0.3s ease;
+	
+}
+
+/* Expanded state when navbar is collapsed */
+.home-page.navbar-collapsed {
+	margin-left: 60px;
+}
+
+.home-main-content {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 14px 0;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+/* Header Section */
+.home-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0 12px;
+	margin-bottom: 26px;
+	margin-top: 48px;
+	flex-shrink: 0;
+}
+
+.home-title {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 32px;
+	line-height: normal;
+	color: #0d062d;
+	margin: 0;
+	text-transform: capitalize;
+}
+
+/* Sort By Button */
+.home-sort-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	width: 98px;
+	height: 29px;
+	background-color: transparent;
+	border: 0.73px solid #ff2d18;
+	border-radius: 4.377px;
+	cursor: pointer;
+	padding: 0;
+}
+
+.home-sort-btn:hover {
+	background-color: rgba(255, 45, 24, 0.05);
+}
+
+.home-sort-icon {
+	width: 12.852px;
+	height: 11.6px;
+	color: #ff2d18;
+}
+
+.home-sort-text {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 11.672px;
+	line-height: normal;
+	color: #ff2d18;
+	text-transform: capitalize;
+}
+
+.home-sort-caret {
+	width: 12.852px;
+	height: 11.6px;
+	color: #ff2d18;
+}
+
+/* Projects Container */
+.home-projects-container {
+	flex: 1;
+	padding: 0 12px;
+	overflow-y: auto;
+	min-height: 0; /* Important for flex child scrolling */
+}
+
+/* Projects Grid */
+.home-projects-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 8px;
+	padding-bottom: 16px;
+}
+
+@media (max-width: 1400px) {
+	.home-projects-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+@media (max-width: 1100px) {
+	.home-projects-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+
+@media (max-width: 800px) {
+	.home-projects-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Project Card */
+.home-project-card {
+	display: flex;
+	flex-direction: column;
+	background-color: #ffffff;
+	border: 0.285px solid #b1b1b1;
+	border-radius: 14.682px;
+	padding: 23px 20px;
+	min-height: 120px;
+	text-decoration: none;
+	cursor: pointer;
+	transition: box-shadow 0.2s ease, transform 0.2s ease;
+	box-sizing: border-box;
+}
+
+.home-project-card:hover {
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+	transform: translateY(-2px);
+}
+
+.home-card-content {
+	display: flex;
+	flex-direction: column;
+	gap: 11px;
+	width: 100%;
+}
+
+.home-card-info {
+	display: flex;
+	flex-direction: column;
+	gap: 11px;
+}
+
+.home-card-title {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 16.518px;
+	line-height: normal;
+	color: #0d062d;
+	margin: 0;
+}
+
+.home-card-type {
+	font-family: "Inter", sans-serif;
+	font-weight: 400;
+	font-size: 11.012px;
+	line-height: normal;
+	color: #787486;
+	margin: 0;
+}
+
+/* Card Stats */
+.home-card-stats {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	flex-wrap: wrap;
+}
+
+.home-stat-item {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.home-stat-icon {
+	width: 14px;
+	height: 14px;
+	color: #787486;
+	flex-shrink: 0;
+}
+
+.home-stat-text {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 11.012px;
+	line-height: normal;
+	color: #787486;
+}
+
+/* Footer Section */
+.home-footer {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 0 12px;
+	flex-shrink: 0;
+	background-color: #ffffff;
+	bottom: 0;
+	right: 0;
+	
+}
+
+.home-footer-divider {
+	width: 100%;
+	height: 2px;
+	background-color: #ebebed;
+}
+
+.home-footer-content {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 12px;
+}
+
+/* Footer Left - Results */
+.home-footer-left {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.home-results-selector {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 26px;
+	width: 84px;
+	height: 44px;
+	background-color: transparent;
+	border: 1px solid #eeeef2;
+	border-radius: 12px;
+	cursor: pointer;
+}
+
+.home-results-selector:hover {
+	background-color: rgba(0, 0, 0, 0.02);
+}
+
+.home-results-count {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 16px;
+	line-height: normal;
+	color: #000000;
+}
+
+.home-results-caret {
+	width: 24px;
+	height: 24px;
+	color: #000000;
+}
+
+.home-results-text {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 13.183px;
+	line-height: normal;
+	color: #000000;
+}
+
+/* Footer Right - Pagination */
+.home-footer-right {
+	display: flex;
+	align-items: center;
+	gap: 21px;
+}
+
+.home-page-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	padding: 10px 0;
+	width: 84px;
+	background-color: transparent;
+	border: none;
+	border-radius: 12px;
+	cursor: pointer;
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 16px;
+	line-height: normal;
+	color: #bebebe;
+}
+
+.home-page-btn:hover:not(.home-page-btn-disabled) {
+	background-color: rgba(0, 0, 0, 0.02);
+	color: #000000;
+}
+
+.home-page-btn-disabled {
+	cursor: not-allowed;
+}
+
+.home-page-icon {
+	width: 24px;
+	height: 24px;
+}
+
+.home-page-numbers {
+	display: flex;
+	align-items: center;
+	gap: 21px;
+}
+
+.home-page-number {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 44px;
+	background-color: transparent;
+	border: 1px solid #eeeef2;
+	border-radius: 12px;
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 16px;
+	line-height: normal;
+	color: #000000;
+	cursor: pointer;
+}
+
+.home-page-number.active {
+	border-color: #eeeef2;
+}
+
+.home-page-number:hover:not(.active) {
+	background-color: rgba(0, 0, 0, 0.02);
+}
+
+.home-page-number-text {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 16px;
+	line-height: normal;
+	color: #bebebe;
+	cursor: pointer;
+}
+
+.home-page-number-text:hover {
+	color: #000000;
+}
+
+/* Empty state */
+.home-empty {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 40px;
+	font-family: "Inter", sans-serif;
+	font-size: 14px;
+	color: #787486;
+}

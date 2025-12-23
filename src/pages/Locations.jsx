@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import ProjectHeader from "../components/ProjectHeader";
 import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
+import "../css/Locations.css";
 
 // Create a memoized modal component
 const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm }) => {
@@ -21,44 +22,44 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 	);
 
 	return (
-		<div style={modalStyles.overlay}>
-			<div style={modalStyles.content}>
+		<div className="overlay">
+			<div className="content">
 				<h3>Add Location Option</h3>
-				<form onSubmit={handleSubmit} style={modalStyles.form}>
-					<div style={modalStyles.formGroup}>
+				<form onSubmit={handleSubmit} className="form">
+					<div className="formGroup">
 						<label>Location Name:</label>
 						<input
 							type="text"
 							value={optionForm.locationName || ""}
 							onChange={(e) => handleInputChange("locationName", e.target.value)}
-							style={modalStyles.input}
+							className="input"
 							required
 							autoFocus
 						/>
 					</div>
-					<div style={modalStyles.formGroup}>
+					<div className="formGroup">
 						<label>Address:</label>
 						<input
 							type="text"
 							value={optionForm.address || ""}
 							onChange={(e) => handleInputChange("address", e.target.value)}
-							style={modalStyles.input}
+							className="input"
 						/>
 					</div>
-					<div style={modalStyles.formGroup}>
+					<div className="formGroup">
 						<label>Notes:</label>
 						<textarea
 							value={optionForm.notes || ""}
 							onChange={(e) => handleInputChange("notes", e.target.value)}
-							style={modalStyles.textarea}
+							className="textarea"
 							placeholder=""
 						/>
 					</div>
-					<div style={modalStyles.formButtons}>
-						<button type="submit" style={modalStyles.submitButton}>
+					<div className="formButtons">
+						<button type="submit" className="submitButton">
 							Add Option
 						</button>
-						<button type="button" onClick={onClose} style={modalStyles.cancelButton}>
+						<button type="button" onClick={onClose} className="cancelButton">
 							Cancel
 						</button>
 					</div>
@@ -67,78 +68,6 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 		</div>
 	);
 });
-
-// Move modal styles outside the component to prevent recreation
-const modalStyles = {
-	overlay: {
-		position: "fixed",
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-		backgroundColor: "rgba(0, 0, 0, 0.5)",
-		display: "flex",
-		justifyContent: "center",
-		alignItems: "center",
-		zIndex: 1000,
-	},
-	content: {
-		backgroundColor: "#fff",
-		padding: "20px",
-		borderRadius: "8px",
-		minWidth: "300px",
-		maxWidth: "500px",
-		maxHeight: "80vh",
-		display: "flex",
-		flexDirection: "column",
-		gap: "15px",
-	},
-	form: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "15px",
-	},
-	formGroup: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "5px",
-	},
-	input: {
-		padding: "8px",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
-		fontSize: "14px",
-	},
-	textarea: {
-		padding: "8px",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
-		fontSize: "14px",
-		minHeight: "60px",
-		resize: "vertical",
-	},
-	formButtons: {
-		display: "flex",
-		gap: "10px",
-		justifyContent: "flex-end",
-		marginTop: "10px",
-	},
-	submitButton: {
-		padding: "8px 16px",
-		backgroundColor: "#4CAF50",
-		color: "white",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-	},
-	cancelButton: {
-		padding: "8px 16px",
-		backgroundColor: "#e0e0e0",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-	},
-};
 
 const Locations = () => {
 	const { user, id } = useParams();
@@ -329,53 +258,50 @@ const Locations = () => {
 	};
 
 	return (
-		<div style={styles.pageContainer}>
+		<div className="pageContainer">
 			<ProjectHeader />
-			<div style={styles.mainContent}>
-				<div style={styles.contentArea}>
+			<div className="mainContent">
+				<div className="contentArea">
 					{isLoading ? (
-						<div style={styles.message}>Loading locations...</div>
+						<div className="message">Loading locations...</div>
 					) : error ? (
-						<div style={styles.errorMessage}>{error}</div>
+						<div className="errorMessage">{error}</div>
 					) : !locationData || locationData.locations.length === 0 ? (
-						<div style={styles.message}>No locations found</div>
+						<div className="message">No locations found</div>
 					) : (
 						<>
-							<div style={styles.scriptInfo}>
+							<div className="scriptInfo">
 								<h2>Locations - {locationData.project_name}</h2>
 								<p>Total Locations: {locationData.total_locations}</p>
 							</div>
 
-							<div style={styles.actionButtons}>
-								<button style={styles.AddLocationbutton}>Add Location</button>
-								<button style={styles.button}>Remove Location</button>
+							<div className="actionButtons">
+								<button className="AddLocationbutton">Add Location</button>
+								<button className="button">Remove Location</button>
 							</div>
 
 							{locationData.locations.map((location, index) => (
-								<div key={index} style={styles.locationContainer}>
-									<div style={styles.leftPanel}>
-										<div style={styles.locationHeader}>
-											<span style={styles.locationNumber}>{index + 1}</span>
-											<span style={styles.locationName}>{location.location}</span>
+								<div key={index} className="locationContainer">
+									<div className="leftPanel">
+										<div className="locationHeader">
+											<span className="locationNumber">{index + 1}</span>
+											<span className="locationName">{location.location}</span>
 										</div>
 
-										<div style={styles.locationStats}>
-											<div style={styles.sceneCount}>
+										<div className="locationStats">
+											<div className="sceneCount">
 												No. of Scenes
-												<span style={styles.sceneCountNumber}>{location.scene_count}</span>
+												<span className="sceneCountNumber">{location.scene_count}</span>
 											</div>
-											<div style={styles.locationInfo}>
+											<div className="locationInfo">
 												<div>Int./Ext.: {location.int_ext_types?.join(", ") || "-"}</div>
 												<div>Times: {location.times?.join(", ") || "-"}</div>
 											</div>
 										</div>
 
-										<div style={styles.viewButtons}>
+										<div className="viewButtons">
 											<button
-												style={{
-													...styles.viewButton,
-													...(expandedOptions.has(index) ? styles.activeViewButton : styles.inactiveViewButton),
-												}}
+												className={`viewButton ${expandedOptions.has(index) ? "activeViewButton" : "inactiveViewButton"}`}
 												onClick={() => {
 													setExpandedOptions((prev) => new Set(prev).add(index));
 													setExpandedScenes((prev) => {
@@ -388,10 +314,7 @@ const Locations = () => {
 												View Options
 											</button>
 											<button
-												style={{
-													...styles.viewButton,
-													...(expandedScenes.has(index) ? styles.activeViewButton : styles.inactiveViewButton),
-												}}
+												className={`viewButton ${expandedScenes.has(index) ? "activeViewButton" : "inactiveViewButton"}`}
 												onClick={() => {
 													setExpandedScenes((prev) => new Set(prev).add(index));
 													setExpandedOptions((prev) => {
@@ -406,14 +329,14 @@ const Locations = () => {
 										</div>
 									</div>
 
-									<div style={styles.rightPanel}>
+									<div className="rightPanel">
 										{!expandedScenes.has(index) ? (
 											// Show location options table
 											<>
 												{expandedOptions.has(index) && (
-													<div style={styles.optionButtons}>
+													<div className="optionButtons">
 														<button
-															style={styles.AddLocationbutton}
+															className="AddLocationbutton"
 															onClick={() => {
 																setSelectedLocationIndex(index);
 																setShowAddOptionModal(true);
@@ -423,11 +346,7 @@ const Locations = () => {
 														</button>
 
 														<button
-															style={{
-																...styles.button,
-																backgroundColor: isSelectingMode.has(index) ? "#6c757d" : "#e0e0e0",
-																color: isSelectingMode.has(index) ? "white" : "black",
-															}}
+															className={`button ${isSelectingMode.has(index) ? "selecting" : "notSelecting"}`}
 															onClick={() => {
 																if (!isSelectingMode.has(index)) {
 																	// Enter selection mode
@@ -479,7 +398,7 @@ const Locations = () => {
 
 														{isSelectingMode.has(index) && (
 															<button
-																style={styles.button}
+																className="button"
 																onClick={() => {
 																	// Clear selections for this location and exit selecting mode
 																	setSelectedOptions((prev) => {
@@ -503,7 +422,7 @@ const Locations = () => {
 														)}
 													</div>
 												)}
-												<table style={styles.table}>
+												<table className="table">
 													<thead>
 														<tr>
 															{isSelectingMode.has(index) && <th>Select</th>}
@@ -523,7 +442,7 @@ const Locations = () => {
 																);
 
 																return (
-																	<tr key={optionIndex} style={styles.tableRow}>
+																	<tr key={optionIndex} className="tableRow">
 																		{isSelectingMode.has(index) && (
 																			<td>
 																				<input
@@ -549,15 +468,9 @@ const Locations = () => {
 																		<td>
 																			<button
 																				onClick={() => toggleLockOption(index, optionId)}
-																				style={{
-																					...styles.lockButton,
-																					...(isLocked ? styles.lockedButton : {}),
-																					opacity: !isLocked && hasAnyLocked ? 0.5 : 1,
-																					cursor:
-																						!isLocked && hasAnyLocked
-																							? "not-allowed"
-																							: "pointer",
-																				}}
+																				className={`lockButton ${isLocked ? "lockedButton" : ""} ${
+																					!isLocked && hasAnyLocked ? "disabled" : ""
+																				}`}
 																				disabled={!isLocked && hasAnyLocked}
 																				title={
 																					isLocked
@@ -574,7 +487,7 @@ const Locations = () => {
 																);
 															})
 														) : (
-															<tr style={styles.tableRow}>
+															<tr className="tableRow">
 																<td
 																	colSpan={isSelectingMode.has(index) ? "5" : "5"}
 																	style={{ textAlign: "center", fontStyle: "italic", color: "#666" }}
@@ -588,7 +501,7 @@ const Locations = () => {
 											</>
 										) : (
 											// Show scenes table - simplified without breakdown data
-											<table style={styles.table}>
+											<table className="table">
 												<thead>
 													<tr>
 														<th>Scene No.</th>
@@ -599,14 +512,14 @@ const Locations = () => {
 												<tbody>
 													{location.scenes && location.scenes.length > 0 ? (
 														location.scenes.map((scene, sceneIndex) => (
-															<tr key={sceneIndex} style={styles.tableRow}>
+															<tr key={sceneIndex} className="tableRow">
 																<td>{scene.scene_number}</td>
 																<td>{scene.int_ext}</td>
 																<td>{scene.time}</td>
 															</tr>
 														))
 													) : (
-														<tr style={styles.tableRow}>
+														<tr className="tableRow">
 															<td colSpan="3" style={{ textAlign: "center", fontStyle: "italic", color: "#666" }}>
 																No scenes available
 															</td>

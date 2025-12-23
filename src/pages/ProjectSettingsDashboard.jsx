@@ -11,10 +11,106 @@ const ProjectSettingsDashboard = () => {
 	const [currentSection, setCurrentSection] = useState("general");
 	const [showInviteMemberModal, setShowInviteMemberModal] = useState(false);
 	const [inviteMemberLoading, setInviteMemberLoading] = useState(false);
-	const [inviteMemberFormData, setInviteMemberFormData] = useState({ username: "", role_id: 1 });
+	const [inviteMemberFormData, setInviteMemberFormData] = useState({ username: "", role_id: 2 });
 	const [project, setProject] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
+
+	// Team members state
+	const [teamMembers, setTeamMembers] = useState([]);
+	const [teamLoading, setTeamLoading] = useState(false);
+	const [confirmDelete, setConfirmDelete] = useState(null);
+
+	const roles = [
+		{ id: 1, name: "Owner", description: "Has all permissions" },
+		{ id: 2, name: "Member", description: "Permission to edit projects" },
+		{ id: 3, name: "Viewer", description: "Can see the projects" },
+	];
+
+	// Fetch team members from API
+	const fetchTeamMembers = async () => {
+		try {
+			setTeamLoading(true);
+			setError(null);
+
+			const response = await fetchWithAuth(getApiUrl(`/api/projects/${projectid}/team`), {
+				method: "GET",
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to fetch team members");
+			}
+
+			const data = await response.json();
+			setTeamMembers(data);
+		} catch (err) {
+			console.error("Error fetching team members:", err);
+			setError(err.message);
+		} finally {
+			setTeamLoading(false);
+		}
+	};
+
+	// Add team member via API
+	const addTeamMember = async (username, roleId) => {
+		try {
+			setInviteMemberLoading(true);
+			setError(null);
+
+			const response = await fetchWithAuth(getApiUrl(`/api/projects/${projectid}/team/${username}`), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ role_id: roleId }),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({ message: "Failed to add team member" }));
+				throw new Error(errorData.message || "Failed to add team member");
+			}
+
+			await fetchTeamMembers();
+			handleCloseInviteModal();
+		} catch (err) {
+			setError(err.message);
+			console.error("Error adding team member:", err);
+		} finally {
+			setInviteMemberLoading(false);
+		}
+	};
+
+	// Remove team member via API
+	const removeTeamMember = async (username) => {
+		try {
+			setTeamLoading(true);
+			setError(null);
+
+			const response = await fetchWithAuth(getApiUrl(`/api/projects/${projectid}/team/${username}`), {
+				method: "DELETE",
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({ message: "Failed to remove team member" }));
+				throw new Error(errorData.message || "Failed to remove team member");
+			}
+
+			await fetchTeamMembers();
+			setConfirmDelete(null);
+		} catch (err) {
+			setError(err.message);
+			console.error("Error removing team member:", err);
+		} finally {
+			setTeamLoading(false);
+		}
+	};
+
+	// Fetch team members when members section is active
+	useEffect(() => {
+		if (currentSection === "members") {
+			fetchTeamMembers();
+		}
+	}, [currentSection, projectid]);
 
 	useEffect(() => {
 		const section = location.state?.section || "general";
@@ -45,10 +141,28 @@ const ProjectSettingsDashboard = () => {
 
 	const handleInviteMemberSubmit = (e) => {
 		e.preventDefault();
-		// This is a frontend-only implementation, no API call will be made.
-		console.log("Invite Member Form Submitted:", inviteMemberFormData);
-		alert("Invite functionality is frontend-only for now.");
-		handleCloseInviteModal();
+		if (inviteMemberFormData.username.trim()) {
+			addTeamMember(inviteMemberFormData.username.trim(), inviteMemberFormData.role_id);
+		}
+	};
+
+	const handleDeleteClick = (username) => {
+		setConfirmDelete(username);
+	};
+
+	const handleConfirmDelete = () => {
+		if (confirmDelete) {
+			removeTeamMember(confirmDelete);
+		}
+	};
+
+	const handleCancelDelete = () => {
+		setConfirmDelete(null);
+	};
+
+	const getRoleName = (roleId) => {
+		const role = roles.find((r) => r.id === roleId);
+		return role ? role.name : "Unknown";
 	};
 
 	const styles = {
@@ -265,29 +379,88 @@ const ProjectSettingsDashboard = () => {
 				<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 					<div>
 						<h3 style={styles.cardTitle}>Active Members</h3>
-						<p style={styles.cardSubtitle}>0 active members</p>
+						<p style={styles.cardSubtitle}>
+							{teamMembers.length} active member{teamMembers.length !== 1 ? "s" : ""}
+						</p>
 					</div>
 					<button onClick={handleOpenInviteModal} style={styles.button}>
-						+ Invite Member
+						+ Add Member
 					</button>
 				</div>
+
+				{/* Error message */}
+				{error && (
+					<div style={{ color: "#dc2626", backgroundColor: "#fef2f2", padding: "12px", borderRadius: "8px", marginBottom: "16px" }}>{error}</div>
+				)}
+
 				<table style={styles.table}>
 					<thead style={styles.tableHead}>
 						<tr>
 							<th style={styles.tableHeaderCell}>User</th>
 							<th style={styles.tableHeaderCell}>Role</th>
-							<th style={styles.tableHeaderCell}>Joined</th>
+							<th style={styles.tableHeaderCell}>Action</th>
 						</tr>
 					</thead>
 					<tbody>
-						{/* Placeholder for project members */}
-						<tr>
-							<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
-								No members yet.
-							</td>
-						</tr>
+						{teamLoading ? (
+							<tr>
+								<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
+									Loading members...
+								</td>
+							</tr>
+						) : teamMembers.length === 0 ? (
+							<tr>
+								<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
+									No members yet.
+								</td>
+							</tr>
+						) : (
+							teamMembers.map((member) => (
+								<tr key={member.username} style={styles.tableRow}>
+									<td style={styles.tableCell}>
+										<div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+											<div
+												style={{
+													width: "32px",
+													height: "32px",
+													borderRadius: "50%",
+													backgroundColor: "#4B9CD3",
+													display: "flex",
+													alignItems: "center",
+													justifyContent: "center",
+													color: "white",
+													fontWeight: "600",
+													fontSize: "14px",
+												}}
+											>
+												{member.username?.charAt(0).toUpperCase() || "?"}
+											</div>
+											<span>{member.username}</span>
+										</div>
+									</td>
+									<td style={styles.tableCell}>{getRoleName(member.role_id)}</td>
+									<td style={styles.tableCell}>
+										<button
+											onClick={() => handleDeleteClick(member.username)}
+											style={{
+												backgroundColor: "#ef4444",
+												color: "white",
+												padding: "6px 12px",
+												borderRadius: "6px",
+												border: "none",
+												cursor: "pointer",
+												fontSize: "13px",
+											}}
+										>
+											Remove
+										</button>
+									</td>
+								</tr>
+							))
+						)}
 					</tbody>
 				</table>
+
 				<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px" }}>
 					<div>
 						<h3 style={styles.cardTitle}>Pending Invites</h3>
@@ -321,12 +494,43 @@ const ProjectSettingsDashboard = () => {
 					borderRadius: "5px",
 					border: "None",
 					marginLeft: "45%",
-					//height: "50px",
 					marginTop: "50px",
 				}}
 			>
 				<b>Leave Project</b>
 			</button>
+
+			{/* Delete Confirmation Modal */}
+			{confirmDelete && (
+				<div style={styles.modalOverlay}>
+					<div style={styles.modal}>
+						<div style={styles.modalHeader}>
+							<h3 style={styles.modalTitle}>Confirm Remove Member</h3>
+							<button onClick={handleCancelDelete} style={styles.closeButton}>
+								&times;
+							</button>
+						</div>
+						<div style={styles.modalBody}>
+							<p>
+								Are you sure you want to remove <strong>{confirmDelete}</strong> from this project?
+							</p>
+						</div>
+						<div style={styles.modalFooter}>
+							<button type="button" onClick={handleCancelDelete} style={styles.cancelButton}>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={handleConfirmDelete}
+								style={{ ...styles.button, backgroundColor: "#ef4444" }}
+								disabled={teamLoading}
+							>
+								{teamLoading ? "Removing..." : "Remove"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</>
 	);
 
@@ -355,7 +559,7 @@ const ProjectSettingsDashboard = () => {
 				<div style={styles.modalOverlay}>
 					<div style={styles.modal}>
 						<div style={styles.modalHeader}>
-							<h3 style={styles.modalTitle}>Invite New Member</h3>
+							<h3 style={styles.modalTitle}>Add Team Member</h3>
 							<button onClick={handleCloseInviteModal} style={styles.closeButton}>
 								&times;
 							</button>
@@ -379,12 +583,19 @@ const ProjectSettingsDashboard = () => {
 									<select
 										name="role_id"
 										value={inviteMemberFormData.role_id}
-										onChange={handleInviteMemberInputChange}
+										onChange={(e) =>
+											setInviteMemberFormData((prev) => ({
+												...prev,
+												role_id: parseInt(e.target.value, 10),
+											}))
+										}
 										style={styles.input}
 									>
-										<option value={1}>Owner</option>
-										<option value={2}>Editor</option>
-										<option value={3}>Viewer</option>
+										{roles.map((role) => (
+											<option key={role.id} value={role.id}>
+												{role.name} - {role.description}
+											</option>
+										))}
 									</select>
 								</div>
 							</div>
@@ -393,7 +604,7 @@ const ProjectSettingsDashboard = () => {
 									Cancel
 								</button>
 								<button type="submit" disabled={inviteMemberLoading} style={styles.button}>
-									{inviteMemberLoading ? "Inviting..." : "Send Invite"}
+									{inviteMemberLoading ? "Adding..." : "Add Member"}
 								</button>
 							</div>
 						</form>

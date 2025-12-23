@@ -1,0 +1,259 @@
+.org-page {
+	background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+	min-height: 100vh;
+	padding: 32px;
+	padding-left: calc(270px + 32px);
+	font-family: sans-serif;
+}
+
+.org-header {
+	margin-bottom: 32px;
+}
+
+.org-title {
+	font-size: 28px;
+	font-weight: bold;
+	color: #1f2937;
+	margin-bottom: 8px;
+}
+
+.org-subtitle {
+	font-size: 16px;
+	color: #6b7280;
+}
+
+.org-card {
+	background-color: #ffffff;
+	border-radius: 12px;
+	box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+	padding: 24px;
+	margin-bottom: 24px;
+}
+
+.org-card-flex {
+	display: flex;
+	justify-content: space-between;
+	flex-direction: column;
+}
+
+.org-card-header {
+	border-bottom: 1px solid #e5e7eb;
+	padding-bottom: 16px;
+	margin-bottom: 16px;
+}
+
+.org-card-header-flex {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.org-card-header-mt {
+	margin-top: 24px;
+}
+
+.org-card-title {
+	font-size: 20px;
+	font-weight: 600;
+	color: #1f2937;
+}
+
+.org-card-subtitle {
+	font-size: 14px;
+	color: #6b7280;
+	margin-top: 4px;
+}
+
+.org-label {
+	display: block;
+	font-size: 14px;
+	font-weight: 500;
+	color: #374151;
+	margin-bottom: 8px;
+}
+
+.org-input {
+	width: 100%;
+	padding: 10px 12px;
+	border-radius: 8px;
+	border: 1px solid #d1d5db;
+	background-color: #f9fafb;
+	color: #1f2937;
+	font-size: 14px;
+}
+
+.org-input:focus {
+	outline: none;
+	border-color: #4b9cd3;
+}
+
+.org-input-wrapper {
+	margin-bottom: 24px;
+	width: 90%;
+}
+
+.org-input-wrapper-modal {
+	margin-bottom: 16px;
+}
+
+.org-button {
+	background-color: #4b9cd3;
+	color: #ffffff;
+	padding: 10px 16px;
+	border-radius: 8px;
+	border: none;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color 0.3s;
+}
+
+.org-button:hover {
+	background-color: #3a8bc2;
+}
+
+.org-button:disabled {
+	opacity: 0.7;
+	cursor: not-allowed;
+}
+
+.org-button-gray {
+	background-color: #6b7280;
+}
+
+.org-button-gray:hover {
+	background-color: #5b6270;
+}
+
+.org-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.org-table-head {
+	background-color: #f9fafb;
+}
+
+.org-table-header-cell {
+	padding: 12px 16px;
+	text-align: left;
+	font-size: 12px;
+	font-weight: 600;
+	color: #6b7280;
+	text-transform: uppercase;
+	border-bottom: 1px solid #e5e7eb;
+}
+
+.org-table-row {
+	border-bottom: 1px solid #e5e7eb;
+}
+
+.org-table-cell {
+	padding: 16px;
+	font-size: 14px;
+	color: #374151;
+}
+
+.org-table-cell-center {
+	text-align: center;
+}
+
+.org-modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: rgba(0, 0, 0, 0.5);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	z-index: 1000;
+}
+
+.org-modal {
+	background-color: #ffffff;
+	border-radius: 12px;
+	box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+	width: 100%;
+	max-width: 500px;
+	padding: 24px;
+}
+
+.org-modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 16px;
+}
+
+.org-modal-title {
+	font-size: 20px;
+	font-weight: 600;
+	color: #1f2937;
+}
+
+.org-close-button {
+	background-color: transparent;
+	border: none;
+	color: #6b7280;
+	font-size: 24px;
+	cursor: pointer;
+}
+
+.org-close-button:hover {
+	color: #374151;
+}
+
+.org-modal-body {
+	padding-top: 16px;
+}
+
+.org-modal-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 12px;
+	margin-top: 24px;
+}
+
+.org-cancel-button {
+	background-color: #e5e7eb;
+	color: #374151;
+	padding: 10px 16px;
+	border-radius: 8px;
+	border: none;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.org-cancel-button:hover {
+	background-color: #d1d5db;
+}
+
+.org-leave-button {
+	background-color: #4b9cd3;
+	color: white;
+	padding: 15px;
+	border-radius: 5px;
+	border: none;
+	margin-left: 45%;
+	margin-top: 50px;
+	cursor: pointer;
+	font-weight: bold;
+}
+
+.org-leave-button:hover {
+	background-color: #3a8bc2;
+}
+
+.org-loading {
+	padding-left: 270px;
+	padding-top: 2rem;
+}
+
+.org-error {
+	padding-left: 270px;
+	padding-top: 2rem;
+	color: red;
+}

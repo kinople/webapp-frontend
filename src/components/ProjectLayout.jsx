@@ -1,17 +1,25 @@
 // src/components/ProjectLayout.js
-import React from 'react';
-import { Outlet } from 'react-router-dom';
-import Sidebar from './Sidebar';
+import React from "react";
+import { Outlet } from "react-router-dom";
+import { useSelector } from "react-redux";
+import Sidebar from "./Sidebar";
 
 const ProjectLayout = () => {
-  return (
-    <div>
-      <Sidebar />
-      <div style={{ marginLeft: '240px' }}> {/* Adjust based on navbar width */}
-        <Outlet />
-      </div>
-    </div>
-  );
+	const sidebarCollapsed = useSelector((state) => state.ui.navbarCollapsed);
+
+	return (
+		<div>
+			<Sidebar />
+			<div
+				style={{
+					marginLeft: sidebarCollapsed ? "60px" : "238px",
+					transition: "margin-left 0.3s ease",
+				}}
+			>
+				<Outlet />
+			</div>
+		</div>
+	);
 };
 
 export default ProjectLayout;

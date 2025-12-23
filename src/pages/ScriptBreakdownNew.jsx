@@ -1,8 +1,9 @@
-// src/pages/ScriptBreakdown.jsx
+// src/pages/ScriptBreakdownNew.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import ProjectHeader from "../components/ProjectHeader";
 import { getApiUrl } from "../utils/api";
+import "../css/ScriptBreakdownNew.css";
+import { PiMagnifyingGlass, PiSlidersHorizontal } from "react-icons/pi";
 
 /*
   ScriptBreakdown page - final variant:
@@ -22,7 +23,7 @@ const parseTSV = (tsvText) => {
 		return lines
 			.slice(1)
 			.filter((l) => l.trim() !== "")
-			.map((line) => {
+			.map((line, lineIdx) => {
 				const values = line.split("\t").map((v) => v.trim());
 				return headers.reduce((obj, header, idx) => {
 					obj[header] = values[idx] || "";
@@ -78,11 +79,11 @@ function TagInput({ value = "", onChange }) {
 	};
 
 	return (
-		<div style={localUI.tagWrap}>
+		<div className="sbn-tag-wrap">
 			{tags.map((t, i) => (
-				<div key={i} style={localUI.tag}>
+				<div key={i} className="sbn-tag">
 					<span style={{ marginRight: 8 }}>{t}</span>
-					<button style={localUI.tagX} onClick={() => removeTag(i)} aria-label={`Remove ${t}`}>
+					<button className="sbn-tag-x" onClick={() => removeTag(i)} aria-label={`Remove ${t}`}>
 						×
 					</button>
 				</div>
@@ -92,8 +93,89 @@ function TagInput({ value = "", onChange }) {
 				placeholder="Add tag and press Enter"
 				onChange={(e) => setInput(e.target.value)}
 				onKeyDown={handleKey}
-				style={localUI.tagInput}
+				className="sbn-tag-input"
 			/>
+		</div>
+	);
+}
+
+/* ---------- CharacterTagInput - select characters from available list ---------- */
+function CharacterTagInput({ selectedIds = [], allCharacters = [], onChange }) {
+	const [showDropdown, setShowDropdown] = useState(false);
+	const [searchTerm, setSearchTerm] = useState("");
+	const wrapperRef = useRef(null);
+
+	// Get selected character objects
+	const selectedCharacters = useMemo(() => {
+		return selectedIds.map((id) => allCharacters.find((c) => c.id === id)).filter(Boolean);
+	}, [selectedIds, allCharacters]);
+
+	// Get available characters (not already selected)
+	const availableCharacters = useMemo(() => {
+		const filtered = allCharacters.filter((c) => !selectedIds.includes(c.id));
+		if (!searchTerm) return filtered;
+		return filtered.filter((c) => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
+	}, [allCharacters, selectedIds, searchTerm]);
+
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (e) => {
+			if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+				setShowDropdown(false);
+			}
+		};
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
+
+	const addCharacter = (charId) => {
+		if (!selectedIds.includes(charId)) {
+			onChange([...selectedIds, charId]);
+		}
+		setSearchTerm("");
+		setShowDropdown(false);
+	};
+
+	const removeCharacter = (charId) => {
+		onChange(selectedIds.filter((id) => id !== charId));
+	};
+
+	return (
+		<div className="sbn-character-tag-wrap" ref={wrapperRef}>
+			<div className="sbn-character-tags">
+				{selectedCharacters.map((char) => (
+					<div key={char.id} className="sbn-tag sbn-character-tag">
+						<span style={{ marginRight: 8 }}>{char.name}</span>
+						<button className="sbn-tag-x" onClick={() => removeCharacter(char.id)} aria-label={`Remove ${char.name}`}>
+							×
+						</button>
+					</div>
+				))}
+				<div className="sbn-character-input-wrap">
+					<input
+						type="text"
+						value={searchTerm}
+						onChange={(e) => setSearchTerm(e.target.value)}
+						onFocus={() => setShowDropdown(true)}
+						placeholder="Search & add character..."
+						className="sbn-tag-input sbn-character-search"
+					/>
+				</div>
+			</div>
+			{showDropdown && availableCharacters.length > 0 && (
+				<div className="sbn-character-dropdown">
+					{availableCharacters.map((char) => (
+						<div key={char.id} className="sbn-character-option" onClick={() => addCharacter(char.id)}>
+							{char.name}
+						</div>
+					))}
+				</div>
+			)}
+			{showDropdown && availableCharacters.length === 0 && searchTerm && (
+				<div className="sbn-character-dropdown">
+					<div className="sbn-character-no-results">No characters found</div>
+				</div>
+			)}
 		</div>
 	);
 }
@@ -114,12 +196,19 @@ const ScriptBreakdownNew = () => {
 	const [hasBreakdown, setHasBreakdown] = useState(false);
 	const [filterText, setFilterText] = useState("");
 	const [parsing, setParsing] = useState([]);
+	// All characters available in the script (from API)
+	const [allCharacters, setAllCharacters] = useState([]);
+	// Scene breakdowns as JSON objects
+	const [sceneBreakdowns, setSceneBreakdowns] = useState([]);
 	// scrolling shadows
 	const [editingSceneParsing, setEditingSceneParsing] = useState({});
+	// Character IDs for the currently editing scene
+	const [editingCharacterIds, setEditingCharacterIds] = useState([]);
 	const tableWrapRef = useRef(null);
 	const [showLeftShadow, setShowLeftShadow] = useState(false);
 	const [showRightShadow, setShowRightShadow] = useState(false);
 	const [editParsing, setEditParsing] = useState(false);
+	const [activeTab, setActiveTab] = useState("master");
 
 	const updateShadows = () => {
 		const el = tableWrapRef.current;
@@ -161,6 +250,14 @@ const ScriptBreakdownNew = () => {
 				setParsing(data.parsing);
 			} else {
 				setError("No parsing data found");
+			}
+			// Store characters list
+			if (data.characters) {
+				setAllCharacters(data.characters);
+			}
+			// Store scene breakdowns as JSON
+			if (data.scene_breakdowns) {
+				setSceneBreakdowns(data.scene_breakdowns);
 			}
 			if (data.tsv_content) {
 				const parsed = parseTSV(data.tsv_content);
@@ -223,13 +320,48 @@ const ScriptBreakdownNew = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [id]);
 
+	// Helper function to convert JSON scene breakdown to display format
+	const sceneBreakdownToDisplayFormat = (sceneData) => {
+		if (!sceneData) return null;
+		// Convert array fields to comma-separated strings
+		const arrayToString = (arr) => {
+			if (!arr || !Array.isArray(arr) || arr.length === 0) return "N/A";
+			return arr.join(", ");
+		};
+		return {
+			"Scene Number": sceneData.scene_number || "",
+			"Int./Ext.": sceneData.int_ext || "",
+			Location: sceneData.location || "",
+			Time: sceneData.time || "",
+			"Page Eighths": sceneData.page_eighths || "",
+			Synopsis: sceneData.synopsis || "",
+			Characters: arrayToString(sceneData.characters),
+			"Action Props": arrayToString(sceneData.action_props),
+			"Other Props": arrayToString(sceneData.other_props),
+			"Picture Vehicles": arrayToString(sceneData.picture_vehicles),
+			Animals: arrayToString(sceneData.animals),
+			Extras: arrayToString(sceneData.extras),
+			Wardrobe: arrayToString(sceneData.wardrobe),
+			"Set Dressing": arrayToString(sceneData.set_dressing),
+		};
+	};
+
 	/* ---------- open the scene editor (either from button or row click) ---------- */
 	const openSceneEditorAt = (index) => {
-		if (!scriptBreakdown || scriptBreakdown.length === 0) return;
-		const idx = Math.max(0, Math.min(index, scriptBreakdown.length - 1));
+		if (!sceneBreakdowns || sceneBreakdowns.length === 0) return;
+		const idx = Math.max(0, Math.min(index, sceneBreakdowns.length - 1));
 		setEditingSceneIndex(idx);
-		setEditingScene({ ...scriptBreakdown[idx] });
+		// Use JSON scene breakdown data (which is correct) instead of TSV parsed data
+		const sceneData = sceneBreakdowns[idx];
+		const displayData = sceneBreakdownToDisplayFormat(sceneData);
+		setEditingScene(displayData);
 		setEditingSceneParsing(parsing[idx]);
+		// Set character IDs from scene breakdowns
+		if (sceneData && sceneData.characters_ids) {
+			setEditingCharacterIds([...sceneData.characters_ids]);
+		} else {
+			setEditingCharacterIds([]);
+		}
 		console.log(parsing[idx]);
 		setViewMode("scene");
 
@@ -252,28 +384,73 @@ const ScriptBreakdownNew = () => {
 		return selectedScript.name === latest.name && selectedScript.version === latest.version;
 	};
 
+	// Helper function to parse comma-separated string to array, handling N/A values
+	const parseToArray = (value) => {
+		if (!value || value.trim().toUpperCase() === "N/A") return [];
+		return value
+			.split(",")
+			.map((item) => item.trim())
+			.filter(Boolean);
+	};
+
 	const handleSaveSceneChanges = useCallback(async () => {
 		if (!editingScene) return;
 		try {
-			const updated = [...scriptBreakdown];
-			updated[editingSceneIndex] = editingScene;
-			const headers = Object.keys(updated[0] || {});
-			const tsvContent = [headers.join("\t"), ...updated.map((row) => headers.map((h) => row[h] || "").join("\t"))].join("\n");
-			console.log("parsing still", parsing);
+			// Update the TSV breakdown for table display
+			const updatedBreakdown = [...scriptBreakdown];
+			updatedBreakdown[editingSceneIndex] = editingScene;
+			console.log("editing scene is ", editingScene);
+
+			// Update the scene breakdowns (JSON format) with all fields from editingScene
+			const updatedSceneBreakdowns = [...sceneBreakdowns];
+			if (updatedSceneBreakdowns[editingSceneIndex]) {
+				// Get character names from the IDs for the characters field
+				const charNames = editingCharacterIds.map((id) => allCharacters.find((c) => c.id === id)?.name).filter(Boolean);
+
+				updatedSceneBreakdowns[editingSceneIndex] = {
+					...updatedSceneBreakdowns[editingSceneIndex],
+					// Map all fields from editingScene to scene breakdown format
+					scene_number: editingScene["Scene Number"] || updatedSceneBreakdowns[editingSceneIndex].scene_number,
+					int_ext: editingScene["Int./Ext."] || updatedSceneBreakdowns[editingSceneIndex].int_ext,
+					location: editingScene["Location"] || updatedSceneBreakdowns[editingSceneIndex].location,
+					time: editingScene["Time"] || updatedSceneBreakdowns[editingSceneIndex].time,
+					page_eighths: editingScene["Page Eighths"] || updatedSceneBreakdowns[editingSceneIndex].page_eighths,
+					synopsis: editingScene["Synopsis"] || updatedSceneBreakdowns[editingSceneIndex].synopsis,
+					// Characters handled via character IDs
+					characters_ids: [...editingCharacterIds],
+					characters: charNames,
+					// Parse array fields from comma-separated strings
+					action_props: parseToArray(editingScene["Action Props"]),
+					other_props: parseToArray(editingScene["Other Props"]),
+					picture_vehicles: parseToArray(editingScene["Picture Vehicles"]),
+					animals: parseToArray(editingScene["Animals"]),
+					extras: parseToArray(editingScene["Extras"]),
+					wardrobe: parseToArray(editingScene["Wardrobe"]),
+					set_dressing: parseToArray(editingScene["Set Dressing"]),
+				};
+			}
+
+			console.log("Saving scene breakdowns", updatedSceneBreakdowns[editingSceneIndex]);
+
 			const response = await fetch(getApiUrl(`/api/${id}/update-breakdown`), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ tsv_content: tsvContent, parsing: parsing }),
+				body: JSON.stringify({
+					scene_breakdowns: updatedSceneBreakdowns,
+					parsing: parsing,
+					characters: allCharacters,
+				}),
 			});
 
 			if (!response.ok) throw new Error("Failed to save changes");
-			setScriptBreakdown(updated);
+			setScriptBreakdown(updatedBreakdown);
+			setSceneBreakdowns(updatedSceneBreakdowns);
 			alert("Changes saved successfully!");
 		} catch (e) {
 			console.error(e);
 			alert("Failed to save changes. Try again.");
 		}
-	}, [parsing, editingScene, scriptBreakdown]);
+	}, [parsing, editingScene, scriptBreakdown, sceneBreakdowns, editingCharacterIds, allCharacters, editingSceneIndex, id]);
 
 	/* ---------- props columns: explicit list ---------- */
 	const propsHeaderNames = useMemo(() => {
@@ -328,41 +505,25 @@ const ScriptBreakdownNew = () => {
 	const renderSceneEditor = () => {
 		if (!editingScene) return null;
 		return (
-			<div style={styles.sceneEditor}>
-				<div style={styles.sceneHeader}>
-					<div style={styles.sceneNavigation}>
-						<button
-							style={{
-								...styles.navBtn,
-								opacity: editingSceneIndex === 0 ? 0.5 : 1,
-								cursor: editingSceneIndex === 0 ? "not-allowed" : "pointer",
-							}}
-							onClick={handlePreviousScene}
-							disabled={editingSceneIndex === 0}
-						>
+			<div className="sbn-scene-editor">
+				<div className="sbn-scene-header">
+					<div className="sbn-scene-navigation">
+						<button className="sbn-nav-btn" onClick={handlePreviousScene} disabled={editingSceneIndex === 0}>
 							‹ Previous
 						</button>
-						<h3 style={styles.sceneTitle}>
+						<h3 className="sbn-scene-title">
 							Scene {editingScene["Scene Number"] || editingSceneIndex + 1}
-							<span style={styles.sceneCounter}>
+							<span className="sbn-scene-counter">
 								({editingSceneIndex + 1} of {scriptBreakdown.length})
 							</span>
 						</h3>
-						<button
-							style={{
-								...styles.navBtn,
-								opacity: editingSceneIndex === scriptBreakdown.length - 1 ? 0.5 : 1,
-								cursor: editingSceneIndex === scriptBreakdown.length - 1 ? "not-allowed" : "pointer",
-							}}
-							onClick={handleNextScene}
-							disabled={editingSceneIndex === scriptBreakdown.length - 1}
-						>
+						<button className="sbn-nav-btn" onClick={handleNextScene} disabled={editingSceneIndex === scriptBreakdown.length - 1}>
 							Next ›
 						</button>
 					</div>
 
 					<button
-						style={styles.closeBtn}
+						className="sbn-close-btn"
 						onClick={() => {
 							setViewMode("table");
 							setEditingScene(null);
@@ -372,13 +533,28 @@ const ScriptBreakdownNew = () => {
 					</button>
 				</div>
 
-				<div style={styles.sceneContent}>
+				<div className="sbn-scene-content">
 					{Object.entries(editingScene).map(([key, value]) => {
 						const isProps = propsKeys.includes(key);
+						const isCharacters = key.toLowerCase() === "characters";
 						return (
-							<div key={key} style={styles.fieldGroup}>
-								<label style={styles.fieldLabel}>{key}:</label>
-								{isProps ? (
+							<div key={key} className="sbn-field-group">
+								<label className="sbn-field-label">{key}:</label>
+								{isCharacters ? (
+									<CharacterTagInput
+										selectedIds={editingCharacterIds}
+										allCharacters={allCharacters}
+										onChange={(newIds) => {
+											setEditingCharacterIds(newIds);
+											// Also update the scene's characters display text
+											const charNames = newIds
+												.map((id) => allCharacters.find((c) => c.id === id)?.name)
+												.filter(Boolean)
+												.join(", ");
+											setEditingScene((prev) => ({ ...prev, [key]: charNames }));
+										}}
+									/>
+								) : isProps ? (
 									<TagInput
 										value={value || ""}
 										onChange={(csv) => {
@@ -387,7 +563,7 @@ const ScriptBreakdownNew = () => {
 									/>
 								) : (
 									<textarea
-										style={styles.fieldInput}
+										className="sbn-field-input"
 										value={value || ""}
 										onChange={(e) => {
 											setEditingScene({ ...editingScene, [key]: e.target.value });
@@ -399,12 +575,12 @@ const ScriptBreakdownNew = () => {
 						);
 					})}
 
-					<div style={styles.sceneActions}>
-						<button style={styles.saveBtn} onClick={handleSaveSceneChanges}>
+					<div className="sbn-scene-actions">
+						<button className="sbn-scene-save-btn" onClick={handleSaveSceneChanges}>
 							Save Changes
 						</button>
 						<button
-							style={styles.cancelBtn}
+							className="sbn-cancel-btn"
 							onClick={() => {
 								setEditingScene(null);
 								setViewMode("table");
@@ -421,10 +597,19 @@ const ScriptBreakdownNew = () => {
 	/* ---------- Table render:
        - Table cells show plain text; props columns are plain CSV strings in table
        - Clicking a row opens the scene editor (where TagInput is available)
+       - Only show columns up to "Other Props"
   */
 	const renderTableContent = () => {
 		if (scriptBreakdown.length === 0) return null;
-		const headers = Object.keys(scriptBreakdown[0] || {});
+		const allHeaders = Object.keys(scriptBreakdown[0] || {});
+
+		// Define the columns to show (up to Other Props)
+		const visibleColumns = ["Scene Number", "Int./Ext.", "Location", "Time", "Page Eighths", "Synopsis", "Characters", "Action Props", "Other Props"];
+
+		// Filter headers to only show visible columns that exist in data
+		const headers = visibleColumns
+			.filter((col) => allHeaders.some((h) => h.toLowerCase() === col.toLowerCase()))
+			.map((col) => allHeaders.find((h) => h.toLowerCase() === col.toLowerCase()) || col);
 
 		const filtered = scriptBreakdown.filter((row) => {
 			if (!filterText) return true;
@@ -436,51 +621,55 @@ const ScriptBreakdownNew = () => {
 			);
 		});
 
+		// Check if value is N/A or empty for badge display
+		const isNAValue = (val) => {
+			if (!val) return true;
+			const trimmed = String(val).trim().toLowerCase();
+			return trimmed === "" || trimmed === "n/a" || trimmed === "na";
+		};
+
 		return (
-			<>
-				<div style={styles.tableToolbar}>
-					<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-						<input
-							placeholder="Search scenes (Scene No., Location, Synopsis...)"
-							value={filterText}
-							onChange={(e) => setFilterText(e.target.value)}
-							style={styles.searchInput}
-						/>
-						<div style={{ color: "#6b7280", fontSize: 13 }}>{filtered.length} rows</div>
-					</div>
-					<div style={{ color: "#6b7280", fontSize: 13 }}>Tip: Click a row to edit a scene (props editable inside editor)</div>
-				</div>
+			<div className="sbn-table-wrapper">
+				<div className="sbn-table-container" ref={tableWrapRef}>
+					{showLeftShadow && <div className="sbn-left-shadow" />}
+					{showRightShadow && <div className="sbn-right-shadow" />}
 
-				<div style={styles.tableContainer} ref={tableWrapRef}>
-					{showLeftShadow && <div style={styles.leftShadow} />}
-					{showRightShadow && <div style={styles.rightShadow} />}
-
-					<table style={styles.table}>
-						<thead>
-							<tr>
+					<table className="sbn-table">
+						<thead className="sbn-thead">
+							<tr className="sbn-header-row">
 								{headers.map((h, i) => (
-									<th key={i} style={styles.tableHeader}>
+									<th key={i} className="sbn-header-cell">
 										{h}
 									</th>
 								))}
 							</tr>
 						</thead>
-						<tbody>
+						<tbody className="sbn-tbody">
 							{filtered.map((row, rIdx) => (
 								<tr
 									key={rIdx}
-									style={styles.tableRowClickable}
+									className="sbn-data-row"
 									onClick={() => {
-										// open scene editor when row clicked
-										const idx = scriptBreakdown.indexOf(row);
-										openSceneEditorAt(idx === -1 ? rIdx : idx);
+										// Find the matching scene in sceneBreakdowns by scene number
+										const sceneNum = row["Scene Number"];
+										const jsonIdx = sceneBreakdowns.findIndex((s) => s.scene_number === sceneNum);
+										openSceneEditorAt(jsonIdx === -1 ? rIdx : jsonIdx);
 									}}
 								>
 									{headers.map((header, cIdx) => {
 										const cellValue = row[header] ?? "";
+										const isSceneNumber = header.toLowerCase().includes("scene") && header.toLowerCase().includes("number");
+										const isPropColumn = propsKeys.includes(header);
+
 										return (
-											<td key={cIdx} style={styles.tableCell}>
-												{cellValue}
+											<td key={cIdx} className="sbn-data-cell">
+												{isSceneNumber ? (
+													<span className="sbn-cell-scene-number">{cellValue}</span>
+												) : isPropColumn && isNAValue(cellValue) ? (
+													<span className="sbn-na-badge">N/A</span>
+												) : (
+													<span className="sbn-cell-text">{cellValue}</span>
+												)}
 											</td>
 										);
 									})}
@@ -489,11 +678,11 @@ const ScriptBreakdownNew = () => {
 						</tbody>
 					</table>
 				</div>
-			</>
+			</div>
 		);
 	};
 
-	function renderScreenplay(content, styles) {
+	function renderScreenplay(content) {
 		const lines = content.split(/\r?\n/);
 		let lastType = "action";
 
@@ -505,7 +694,7 @@ const ScriptBreakdownNew = () => {
 			if (/^(INT\.|EXT\.|INT\/EXT\.)/i.test(trimmed)) {
 				lastType = "heading";
 				return (
-					<div key={i} style={styles.sceneHeading}>
+					<div key={i} className="sbn-scene-heading">
 						{trimmed.toUpperCase()}
 					</div>
 				);
@@ -515,7 +704,7 @@ const ScriptBreakdownNew = () => {
 			if (/^[A-Z0-9 .,'()\-]+:?\s*$/.test(trimmed) && trimmed === trimmed.toUpperCase()) {
 				lastType = "character";
 				return (
-					<div key={i} style={styles.characterName}>
+					<div key={i} className="sbn-character-name">
 						{trimmed.replace(/:$/, "")}
 					</div>
 				);
@@ -525,7 +714,7 @@ const ScriptBreakdownNew = () => {
 			if (lastType === "character") {
 				lastType = "dialogue";
 				return (
-					<div key={i} style={styles.dialogueBlock}>
+					<div key={i} className="sbn-dialogue-block">
 						{trimmed}
 					</div>
 				);
@@ -535,7 +724,7 @@ const ScriptBreakdownNew = () => {
 			if (/^\(.*\)$/.test(trimmed)) {
 				lastType = "parenthetical";
 				return (
-					<div key={i} style={styles.parenthetical}>
+					<div key={i} className="sbn-parenthetical">
 						{trimmed}
 					</div>
 				);
@@ -545,7 +734,7 @@ const ScriptBreakdownNew = () => {
 			if (/^(CUT TO:|FADE OUT\.|FADE IN:|DISSOLVE TO:)/i.test(trimmed)) {
 				lastType = "transition";
 				return (
-					<div key={i} style={styles.transitionText}>
+					<div key={i} className="sbn-transition-text">
 						{trimmed.toUpperCase()}
 					</div>
 				);
@@ -554,7 +743,7 @@ const ScriptBreakdownNew = () => {
 			// 📝 Action / description
 			lastType = "action";
 			return (
-				<div key={i} style={styles.actionText}>
+				<div key={i} className="sbn-action-text">
 					{trimmed}
 				</div>
 			);
@@ -575,8 +764,8 @@ const ScriptBreakdownNew = () => {
 		};
 
 		return (
-			<div style={styles.overlay}>
-				<div style={styles.modal}>
+			<div className="sbn-overlay">
+				<div className="sbn-modal">
 					{/* Editable Title */}
 					<input
 						type="text"
@@ -588,12 +777,12 @@ const ScriptBreakdownNew = () => {
 							})
 						}
 						placeholder="Scene Title"
-						style={styles.sceneHeadingInput}
+						className="sbn-scene-heading-input"
 					/>
 
 					{/* Editable Content */}
 					<textarea
-						style={styles.textArea}
+						className="sbn-text-area"
 						value={editingSceneParsing.content}
 						onChange={(e) =>
 							setEditingSceneParsing({
@@ -605,11 +794,11 @@ const ScriptBreakdownNew = () => {
 					/>
 
 					{/* Buttons */}
-					<div style={styles.buttonRow}>
-						<button style={styles.saveBtn} onClick={handleSave}>
+					<div className="sbn-button-row">
+						<button className="sbn-save-btn" onClick={handleSave}>
 							Save
 						</button>
-						<button style={styles.closeBtnM} onClick={() => setEditParsing(false)}>
+						<button className="sbn-close-btn-m" onClick={() => setEditParsing(false)}>
 							Close
 						</button>
 					</div>
@@ -619,516 +808,129 @@ const ScriptBreakdownNew = () => {
 	};
 
 	return (
-		<div style={styles.pageContainer}>
-			<ProjectHeader />
-
-			<div style={styles.header}>
-				<div style={styles.headerLeft}>
-					<h2 style={styles.pageTitle}>Script Breakdown</h2>
-					{allScripts.length > 0 && (
-						<select
-							style={styles.scriptDropdown}
-							value={selectedScript?.name || ""}
-							onChange={(e) => {
-								const script = allScripts.find((s) => s.name === e.target.value);
-								if (script) handleScriptSelect(script);
-							}}
-						>
-							{allScripts.map((script) => (
-								<option key={script.name} value={script.name}>
-									{script.name} (Version {script.version})
-									{script.version === Math.max(...allScripts.map((s) => s.version)) ? " - Latest" : ""}
-								</option>
-							))}
-						</select>
-					)}
-				</div>
-
-				<div style={styles.headerRight}>
-					{hasBreakdown && isLatestScript() && (
-						<button
-							style={styles.editBtn}
-							onClick={() => {
-								handleStartSceneEditor();
-							}}
-						>
-							Edit Breakdown
-						</button>
-					)}
-				</div>
-			</div>
-
+		<div className="sbn-page-container">
 			{editParsing && EditParsingModal()}
 
-			<div style={styles.mainContent}>
-				<div style={styles.contentWrapper}>
-					{viewMode === "scene" ? (
-						<div style={styles.editLayout}>
-							<div style={styles.leftPane}>{renderSceneEditor()}</div>
-							<div style={styles.rightPane}>
-								<div style={styles.pdfHeader}>
-									<h3 style={styles.pdfTitle}>Script Preview</h3>
-									<button
-										style={styles.editBtn}
-										onClick={() => {
-											setEditParsing(true);
-										}}
-									>
-										edit
-									</button>
-								</div>
-
-								{
-									<div style={styles.screenplayContainer}>
-										{/* Scene Heading (title of the scene) */}
-										<div style={styles.sceneHeading}>{editingSceneParsing.heading?.toUpperCase() || "UNTITLED SCENE"}</div>
-
-										{editingSceneParsing.content ? (
-											renderScreenplay(editingSceneParsing.content, styles)
-										) : (
-											<p style={styles.actionText}>No content available.</p>
-										)}
-									</div>
-								}
+			<div className="sbn-main-content">
+				{viewMode === "scene" ? (
+					<div className="sbn-edit-layout">
+						<div className="sbn-left-pane">{renderSceneEditor()}</div>
+						<div className="sbn-right-pane">
+							<div className="sbn-pdf-header">
+								<h3 className="sbn-pdf-title">Script Preview</h3>
+								<button
+									className="sbn-edit-parsing-btn"
+									onClick={() => {
+										setEditParsing(true);
+									}}
+								>
+									edit
+								</button>
 							</div>
-						</div>
-					) : (
-						<div style={styles.contentArea}>
-							{isLoading ? (
-								<div style={styles.loadingContainer}>
-									<div style={styles.spinner} />
-									<div style={styles.message}>Loading breakdown...</div>
-								</div>
-							) : error ? (
-								<div style={styles.errorContainer}>
-									<div style={styles.errorMessage}>⚠️ {error}</div>
-									{!hasBreakdown && allScripts.length > 0 && (
-										<div style={styles.actionHint}>
-											<p>To generate a breakdown:</p>
-											<ol>
-												<li>Go to Scripts page</li>
-												<li>Upload a script if you haven't already</li>
-												<li>Click "Generate Breakdown" on your script</li>
-												<li>Return here to view the breakdown</li>
-											</ol>
-										</div>
+
+							{
+								<div className="sbn-screenplay-container">
+									{/* Scene Heading (title of the scene) */}
+									<div className="sbn-scene-heading">{editingSceneParsing.heading?.toUpperCase() || "UNTITLED SCENE"}</div>
+
+									{editingSceneParsing.content ? (
+										renderScreenplay(editingSceneParsing.content)
+									) : (
+										<p className="sbn-action-text">No content available.</p>
 									)}
 								</div>
-							) : scriptBreakdown.length === 0 ? (
-								<div style={styles.emptyContainer}>
-									<div style={styles.message}>No breakdown data available</div>
-								</div>
-							) : (
-								renderTableContent()
-							)}
+							}
 						</div>
-					)}
-				</div>
+					</div>
+				) : (
+					<div className="sbn-content-area">
+						{/* Top Tabs Row */}
+						<div className="sbn-top-bar">
+							<div className="sbn-tabs-group">
+								<button
+									className={`sbn-tab-btn ${activeTab === "master" ? "sbn-tab-active" : ""}`}
+									onClick={() => setActiveTab("master")}
+								>
+									Master Breakdown
+								</button>
+								<button
+									className={`sbn-tab-btn ${activeTab === "generated" ? "sbn-tab-active" : ""}`}
+									onClick={() => setActiveTab("generated")}
+								>
+									Generated Breakdown
+								</button>
+							</div>
+						</div>
+
+						{/* Search and Filter Row */}
+						<div className="sbn-toolbar-row">
+							<div className="sbn-toolbar-left">
+								<div className="sbn-search-box">
+									<PiMagnifyingGlass className="sbn-search-icon" />
+									<input
+										type="text"
+										placeholder="Search Scenes (Scene No., Location, Synopsis...)"
+										value={filterText}
+										onChange={(e) => setFilterText(e.target.value)}
+										className="sbn-search-input"
+									/>
+								</div>
+								<button className="sbn-filter-btn">
+									<PiSlidersHorizontal className="sbn-filter-icon" />
+									<span>Filter</span>
+								</button>
+							</div>
+							<div className="sbn-toolbar-right">
+								<button className="sbn-sync-btn">
+									<span className="sbn-sync-symbol">⟳</span>
+									<span>Sync Latest Scripts</span>
+								</button>
+							</div>
+						</div>
+
+						{/* Action Buttons Row */}
+						<div className="sbn-actions-row">
+							<button className="sbn-action-btn">Add Scene</button>
+							<button className="sbn-action-btn">Remove Scene</button>
+							<button className="sbn-action-btn">Add Element</button>
+							<button className="sbn-action-btn">Remove Element</button>
+							<button className="sbn-action-btn">Split Scene</button>
+							<button className="sbn-action-btn">Merge Scene</button>
+						</div>
+
+						{/* Table Content */}
+						{isLoading ? (
+							<div className="sbn-loading-container">
+								<div className="sbn-spinner" />
+								<div className="sbn-message">Loading breakdown...</div>
+							</div>
+						) : error ? (
+							<div className="sbn-error-container">
+								<div className="sbn-error-message">⚠️ {error}</div>
+								{!hasBreakdown && allScripts.length > 0 && (
+									<div className="sbn-action-hint">
+										<p>To generate a breakdown:</p>
+										<ol>
+											<li>Go to Scripts page</li>
+											<li>Upload a script if you haven't already</li>
+											<li>Click "Generate Breakdown" on your script</li>
+											<li>Return here to view the breakdown</li>
+										</ol>
+									</div>
+								)}
+							</div>
+						) : scriptBreakdown.length === 0 ? (
+							<div className="sbn-empty-container">
+								<div className="sbn-message">No breakdown data available</div>
+							</div>
+						) : (
+							renderTableContent()
+						)}
+					</div>
+				)}
 			</div>
 		</div>
 	);
 };
-
-/* -------- styles -------- */
-const styles = {
-	overlay: {
-		position: "fixed",
-		top: 0,
-		left: 0,
-		width: "100vw",
-		height: "100vh",
-		background: "rgba(0,0,0,0.6)",
-		display: "flex",
-		justifyContent: "center",
-		alignItems: "center",
-		zIndex: 1000,
-		padding: "20px",
-	},
-
-	modal: {
-		background: "#fff",
-		padding: "20px",
-		borderRadius: "10px",
-		width: "600px",
-		maxHeight: "80vh",
-		overflowY: "auto",
-		overflowX: "hidden",
-		padding: "20px",
-		display: "flex",
-		flexDirection: "column",
-		justifyContent: "center",
-		alignItems: "center",
-		boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-	},
-
-	sceneHeadingInput: {
-		fontSize: "20px",
-		fontWeight: "bold",
-		marginBottom: "15px",
-		padding: "10px",
-		border: "1px solid #ccc",
-		borderRadius: "5px",
-		width: "80%",
-	},
-
-	textArea: {
-		width: "70vh",
-		height: "60vh",
-		resize: "none",
-		padding: "10px",
-		borderRadius: "5px",
-		border: "1px solid #ccc",
-		fontFamily: "monospace",
-		fontSize: "14px",
-		lineHeight: "1.5",
-		whiteSpace: "pre-wrap",
-		overflowY: "auto",
-	},
-
-	buttonRow: {
-		display: "flex",
-		justifyContent: "flex-end",
-		marginTop: "15px",
-		gap: "10px",
-	},
-
-	saveBtn: {
-		background: "#28a745",
-		color: "#fff",
-		border: "none",
-		padding: "8px 16px",
-		borderRadius: "5px",
-		cursor: "pointer",
-		fontWeight: "500",
-	},
-
-	closeBtnM: {
-		background: "#dc3545",
-		color: "#fff",
-		border: "none",
-		padding: "8px 16px",
-		borderRadius: "5px",
-		cursor: "pointer",
-		fontWeight: "500",
-	},
-	pageContainer: {
-		display: "flex",
-		flexDirection: "column",
-		minHeight: "100vh",
-		background: "linear-gradient(135deg, #f5f7fa, #c3cfe2)",
-		fontFamily: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
-		color: "#0f1724",
-	},
-	header: {
-		display: "flex",
-		justifyContent: "space-between",
-		alignItems: "center",
-		padding: "1rem 1.5rem",
-		background: "rgba(255,255,255,0.9)",
-		borderBottom: "1px solid rgba(230,230,230,0.9)",
-	},
-	headerLeft: { display: "flex", alignItems: "center", gap: 12 },
-	headerRight: { display: "flex", gap: 8, alignItems: "center" },
-	pageTitle: {
-		margin: 0,
-		fontSize: 20,
-		fontWeight: 700,
-		color: "#172023",
-	},
-	scriptDropdown: {
-		padding: "0.45rem 0.75rem",
-		border: "1px solid #e6edf3",
-		borderRadius: 8,
-		background: "#fff",
-		fontSize: 13,
-		minWidth: 220,
-	},
-	editBtn: {
-		padding: "0.5rem 0.9rem",
-		background: "linear-gradient(135deg,#6c5ce7,#00b894)",
-		color: "#fff",
-		border: "none",
-		borderRadius: 8,
-		cursor: "pointer",
-		fontSize: 13,
-		marginLeft: 450,
-	},
-
-	mainContent: { display: "flex", flexGrow: 1, minHeight: "calc(100vh - 80px)" },
-	contentWrapper: { flexGrow: 1, display: "flex", flexDirection: "column", padding: 16 },
-	contentArea: { flexGrow: 1, paddingTop: 8 },
-	loadingContainer: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 12 },
-	spinner: {
-		width: 40,
-		height: 40,
-		border: "4px solid rgba(108,92,231,0.15)",
-		borderTop: "4px solid #6c5ce7",
-		borderRadius: "50%",
-		animation: "spin 1s linear infinite",
-	},
-	message: { fontSize: 15, color: "#555" },
-	errorContainer: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 12 },
-	errorMessage: { fontSize: 15, color: "#b91c1c", padding: 12, background: "rgba(220,53,69,0.06)", borderRadius: 8 },
-	actionHint: { marginTop: 8, background: "rgba(108,92,231,0.06)", padding: 12, borderRadius: 8 },
-	emptyContainer: { height: "60vh", display: "flex", alignItems: "center", justifyContent: "center" },
-
-	/* Editor layout */
-	editLayout: { display: "flex", height: "calc(100vh - 160px)" },
-	leftPane: { width: "50%", padding: 16, overflowY: "auto" },
-	rightPane: { width: "50%", display: "flex", flexDirection: "column", borderLeft: "1px solid #eef2f7" },
-	pdfHeader: { padding: 8, borderBottom: "1px solid #eef2f7", display: "flex", flexDirection: "row" },
-	pdfTitle: { margin: 0, fontSize: 14, fontWeight: 600 },
-	pdfViewer: { width: "100%", height: "100%", border: "none", flexGrow: 1 },
-	pdfPlaceholder: { flexGrow: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "rows" },
-
-	sceneEditor: { background: "#fff", borderRadius: 8, padding: 16, boxShadow: "0 6px 18px rgba(8,15,35,0.06)" },
-	sceneHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-	sceneNavigation: { display: "flex", alignItems: "center", gap: 12 },
-	navBtn: {
-		padding: "0.4rem 0.8rem",
-		background: "rgba(108,92,231,0.06)",
-		border: "1px solid rgba(108,92,231,0.12)",
-		borderRadius: 8,
-		color: "#6c5ce7",
-		cursor: "pointer",
-	},
-	sceneTitle: { margin: 0, fontSize: 16, fontWeight: 700 },
-	sceneCounter: { display: "block", fontSize: 12, fontWeight: 500, color: "#6b7280" },
-	closeBtn: {
-		borderRadius: 999,
-		width: 34,
-		height: 34,
-		border: "1px solid rgba(220,53,69,0.14)",
-		background: "rgba(220,53,69,0.06)",
-		color: "#dc3545",
-		cursor: "pointer",
-	},
-
-	sceneContent: { display: "flex", flexDirection: "column", gap: 12 },
-	fieldGroup: { display: "flex", flexDirection: "column", gap: 6 },
-	fieldLabel: { fontSize: 13, fontWeight: 600, color: "#0f1724" },
-	fieldInput: {
-		padding: "0.6rem",
-		borderRadius: 8,
-		border: "1px solid #e6edf3",
-		fontSize: 14,
-		minHeight: 44,
-		resize: "vertical",
-	},
-	sceneActions: { display: "flex", gap: 10, marginTop: 12 },
-	saveBtn: {
-		padding: "0.6rem 1.0rem",
-		borderRadius: 8,
-		border: "none",
-		background: "linear-gradient(135deg,#00b894,#6c5ce7)",
-		color: "#fff",
-		cursor: "pointer",
-	},
-	cancelBtn: {
-		padding: "0.6rem 1.0rem",
-		borderRadius: 8,
-		border: "1px solid rgba(220,53,69,0.16)",
-		background: "#fff",
-		color: "#dc3545",
-		cursor: "pointer",
-	},
-
-	/* Table area & improvements */
-	tableToolbar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-	searchInput: { padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #e6edf3", width: 420 },
-
-	tableContainer: {
-		position: "relative",
-		background: "rgba(255,255,255,0.98)",
-		borderRadius: 10,
-		padding: 12,
-		overflowX: "auto",
-		overflowY: "auto",
-		maxHeight: "70vh",
-		maxWidth: "165vh",
-		boxShadow: "0 6px 22px rgba(12,18,34,0.04)",
-		border: "1px solid rgba(230,230,230,0.9)",
-	},
-
-	leftShadow: {
-		position: "absolute",
-		left: 0,
-		top: 0,
-		bottom: 0,
-		width: 24,
-		pointerEvents: "none",
-		background: "linear-gradient(90deg, rgba(0,0,0,0.06), rgba(0,0,0,0))",
-		borderRadius: "10px 0 0 10px",
-	},
-	rightShadow: {
-		position: "absolute",
-		right: 0,
-		top: 0,
-		bottom: 0,
-		width: 24,
-		pointerEvents: "none",
-		background: "linear-gradient(270deg, rgba(0,0,0,0.06), rgba(0,0,0,0))",
-		borderRadius: "0 10px 10px 0",
-	},
-
-	table: { width: "100%", borderCollapse: "collapse", minWidth: 800 },
-	tableHeader: {
-		position: "sticky",
-		top: 0,
-		background: "linear-gradient(135deg, rgba(108,92,231,0.04), rgba(0,184,148,0.02))",
-		padding: "12px 14px",
-		textAlign: "left",
-		fontWeight: 700,
-		fontSize: 13,
-		borderBottom: "1px solid rgba(236,240,241,0.8)",
-		color: "#0f1724",
-	},
-	tableRowClickable: {
-		cursor: "pointer",
-		transition: "background-color 150ms ease",
-		borderBottom: "1px solid rgba(240,240,240,0.9)",
-	},
-	tableCell: {
-		padding: "12px 14px",
-		fontSize: 14,
-		color: "#1f2937",
-		verticalAlign: "top",
-	},
-
-	cellText: { marginBottom: 8, color: "#1f2937", fontSize: 14 },
-	inlineInput: {
-		width: "100%",
-		padding: "8px 10px",
-		borderRadius: 8,
-		border: "1px solid #e6edf3",
-		fontSize: 13,
-		background: "#fbfdff",
-	},
-
-	// tiny responsiveness
-	"@media small": { tableContainer: { padding: 8 } },
-
-	/* -------- Screenplay display styles -------- */
-	screenplayContainer: {
-		display: "flex",
-		flexDirection: "column",
-		alignItems: "center",
-		justifyContent: "flex-start",
-		background: "#fff",
-		padding: "32px 64px",
-		maxWidth: "8.5in",
-		margin: "0 auto",
-		boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
-		borderRadius: 8,
-		fontFamily: "'Courier New', Courier, monospace",
-		fontSize: 14,
-		lineHeight: 1.35,
-		color: "#111",
-		overflowY: "auto",
-	},
-
-	sceneHeading: {
-		fontWeight: 700,
-		textTransform: "uppercase",
-		letterSpacing: "0.06em",
-		margin: "6px 0 10px 0",
-	},
-
-	actionText: {
-		textAlign: "left",
-		whiteSpace: "pre-wrap",
-		margin: "0 0 10px 0",
-	},
-
-	characterName: {
-		textAlign: "center",
-		textTransform: "uppercase",
-		letterSpacing: "0.06em",
-		margin: "14px 0 2px 0",
-	},
-
-	dialogueBlock: {
-		width: "60%",
-		margin: "0 auto 8px",
-		textAlign: "left",
-		whiteSpace: "pre-wrap",
-	},
-
-	parenthetical: {
-		fontSize: 11,
-		margin: "0 0 4px 28px",
-		display: "block",
-	},
-
-	transitionText: {
-		textAlign: "right",
-		textTransform: "uppercase",
-		margin: "14px 0",
-		fontWeight: 700,
-	},
-
-	/* subtle responsiveness */
-	"@media (max-width: 720px)": {
-		screenplayContainer: {
-			padding: 16,
-			fontSize: 13,
-		},
-		dialogueBlock: {
-			width: "80%",
-		},
-	},
-};
-
-/* local UI for TagInput used in scene editor */
-const localUI = {
-	tagWrap: {
-		display: "flex",
-		alignItems: "center",
-		gap: 8,
-		flexWrap: "wrap",
-		padding: 8,
-		borderRadius: 8,
-		border: "1px solid #e6edf3",
-		minHeight: 44,
-		background: "#fff",
-	},
-	tag: {
-		display: "inline-flex",
-		alignItems: "center",
-		gap: 8,
-		padding: "6px 8px",
-		background: "linear-gradient(180deg,#f3f6f8,#fff)",
-		borderRadius: 999,
-		border: "1px solid #e6edf3",
-		fontSize: 13,
-	},
-	tagX: {
-		border: "none",
-		background: "transparent",
-		cursor: "pointer",
-		color: "#6b7280",
-		fontWeight: 700,
-	},
-	tagInput: {
-		border: "none",
-		outline: "none",
-		minWidth: 140,
-		padding: "6px 4px",
-		fontSize: 14,
-		background: "transparent",
-	},
-};
-
-/* inject spinner keyframes (only once) */
-(function injectKeyframes() {
-	try {
-		const rule = `@keyframes spin { 0% { transform: rotate(0deg) } 100% { transform: rotate(360deg) } }`;
-		const s = document.createElement("style");
-		s.appendChild(document.createTextNode(rule));
-		document.head.appendChild(s);
-	} catch (e) {
-		// ignore
-	}
-})();
 
 export default ScriptBreakdownNew;

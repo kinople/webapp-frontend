@@ -1,20 +1,23 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import ProjectHeader from "../components/ProjectHeader";
-import { getApiUrl, fetchWithAuth } from "../utils/api";
-import ProgressBar from "../components/ProgressBarForBreakdown";
+import { useSelector } from "react-redux";
+import { getApiUrl } from "../utils/api";
+import "../css/Script.css";
+
+// Local assets
+import dropdownArrowImg from "../assets/dropdown-arrow.svg";
+import leftArrowImg from "../assets/left-arrow.svg";
+import rightArrowImg from "../assets/right-arrow.svg";
 
 const Script = () => {
 	const { user, id } = useParams();
 	const navigate = useNavigate();
-	const [selectedFile, setSelectedFile] = useState(null); // Keep track of the file *before* upload starts
+	const sidebarCollapsed = useSelector((state) => state.ui.navbarCollapsed);
 	const [isUploading, setIsUploading] = useState(false);
 	const [isGeneratingBreakdown, setIsGeneratingBreakdown] = useState(false);
 	const [uploadStatus, setUploadStatus] = useState("");
-	// Add state to store uploaded scripts (example)
 	const [uploadedScripts, setUploadedScripts] = useState([]);
 
-	// Create a ref for the hidden file input
 	const fileInputRef = useRef(null);
 
 	const [script_list, setScriptList] = useState([]);
@@ -23,10 +26,14 @@ const Script = () => {
 	const [newFileName, setNewFileName] = useState("");
 	const [showFileNameModal, setShowFileNameModal] = useState(false);
 	const [tempFile, setTempFile] = useState(null);
-	const [selectedModel, setSelectedModel] = useState("gpt-4.1-2025-04-14"); // Update default model
-	const [isDeleting, setIsDeleting] = useState(false);
+	const [selectedModel, setSelectedModel] = useState("gpt-4.1-2025-04-14");
 	const [progress, setProgress] = useState(0);
 	const [breakdownMessage, setBreakdownMessage] = useState("");
+	const [activeDropdown, setActiveDropdown] = useState(null);
+	const [tabScrollIndex, setTabScrollIndex] = useState(0);
+
+	// Show more tabs when sidebar is collapsed
+	const VISIBLE_TABS = sidebarCollapsed ? 8 : 7;
 
 	const fetchScripts = async () => {
 		try {
@@ -44,29 +51,37 @@ const Script = () => {
 			}
 
 			const data = await response.json();
-			setScriptList(data); // Update the script list state
-			return data; // Return the data for immediate use if needed
+			setScriptList(data);
+			return data;
 		} catch (error) {
 			console.error("Error fetching scripts:", error);
-			return []; // Return empty array on error
+			return [];
 		}
 	};
 
-	// Use useEffect to fetch scripts only once when component mounts
 	useEffect(() => {
 		fetchScripts();
-	}, []); // Empty dependency array means this runs once on mount
+	}, []);
 
-	// Function to handle the actual file upload logic
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (e) => {
+			if (!e.target.closest(".script-tab-wrapper")) {
+				setActiveDropdown(null);
+			}
+		};
+		document.addEventListener("click", handleClickOutside);
+		return () => document.removeEventListener("click", handleClickOutside);
+	}, []);
+
 	const uploadFile = async (file, fileName) => {
 		if (!file) return;
 
 		try {
-			// Start upload phase
 			setIsUploading(true);
 			setIsGeneratingBreakdown(false);
 			setUploadStatus(`Uploading ${fileName}...`);
-			setSelectedFile(null);
+			setProgress(0);
 
 			const formData = new FormData();
 			formData.append("scriptPdf", file);
@@ -84,16 +99,41 @@ const Script = () => {
 				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
 			}
 
-			const result = await response.json();
+			await response.json();
 			setUploadedScripts((prev) => [...prev, { name: fileName }]);
 			await fetchScripts();
 
 			// Start breakdown generation phase
 			setIsUploading(false);
 			setIsGeneratingBreakdown(true);
-			setUploadStatus("Generating script breakdown...");
+			setBreakdownMessage("Starting breakdown generation...");
+			setProgress(0);
 
-			// Include model in the breakdown request if user is 2
+			// Progress messages at different stages
+			const getProgressMessage = (progress) => {
+				if (progress < 10) return "Reading script from storage....";
+				if (progress < 25) return "Parsing PDF...";
+				if (progress < 50) return "Extracting scenes...";
+				if (progress < 75) return "Generating breakdown...";
+				if (progress < 95) return "Processing scenes and elements...";
+				return "Finalizing breakdown...";
+			};
+
+			// Animate progress from 0% to 95% over 10 minutes (600 seconds)
+			const totalDuration = 600000; // 10 minutes in milliseconds
+			const targetProgress = 95;
+			const updateInterval = 1000; // Update every second
+			const progressIncrement = targetProgress / (totalDuration / updateInterval);
+
+			let currentProgress = 0;
+			const progressInterval = setInterval(() => {
+				if (currentProgress < targetProgress) {
+					currentProgress = Math.min(currentProgress + progressIncrement, targetProgress);
+					setProgress(Math.round(currentProgress));
+					setBreakdownMessage(getProgressMessage(currentProgress));
+				}
+			}, updateInterval);
+
 			const breakdownUrl =
 				user === "2"
 					? getApiUrl(`/api/${id}/generate-breakdown/${fileName}?model=${selectedModel}`)
@@ -104,169 +144,25 @@ const Script = () => {
 				mode: "cors",
 			});
 
+			// Stop the progress animation
+			clearInterval(progressInterval);
+
 			if (!breakdownResponse.ok) {
-				alert("Error in generating Breakdown , try again");
 				throw new Error("Failed to generate script breakdown");
 			}
-			alert("Breakdown Generated Successfully");
 
-			setUploadStatus("Breakdown generated successfully! Redirecting...");
-
-			// Small delay before navigation to show success message
-			setTimeout(() => {
-				navigate(`/${user}/${id}/script-breakdown`);
-			}, 1000);
+			setProgress(100);
+			setBreakdownMessage("Breakdown completed!");
 		} catch (error) {
 			console.error("Upload/Breakdown error:", error);
-            alert("Error in generating Breakdown , try again");
+			alert("Error in generating Breakdown, try again");
 			setUploadStatus(`Error: ${error.message}`);
+			setShowFileNameModal(false);
 			setTimeout(() => setUploadStatus(""), 5000);
 		} finally {
 			setIsUploading(false);
-			setIsGeneratingBreakdown(false);
-			setShowFileNameModal(false);
-			setNewFileName("");
-			setTempFile(null);
-			setSelectedModel("gpt-4.1-2025-04-14"); // Reset model selection
 		}
 	};
-
-	// const uploadFileWithProgress = async (file, fileName) => {
-	// 	if (!file) return;
-
-	// 	let eventSource = null;
-
-	// 	try {
-	// 		// Start upload phase
-	// 		setIsUploading(true);
-	// 		setIsGeneratingBreakdown(false);
-	// 		setProgress(0);
-	// 		setBreakdownMessage("");
-	// 		setUploadStatus(`Uploading ${fileName}...`);
-	// 		setSelectedFile(null);
-
-	// 		const formData = new FormData();
-	// 		formData.append("scriptPdf", file);
-	// 		formData.append("fileName", fileName);
-
-	// 		const response = await fetch(getApiUrl(`/api/${id}/upload-script`), {
-	// 			method: "POST",
-	// 			body: formData,
-	// 			credentials: "include",
-	// 			mode: "cors",
-	// 		});
-
-	// 		if (!response.ok) {
-	// 			const errorData = await response.json().catch(() => ({ message: "Upload failed" }));
-	// 			throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-	// 		}
-
-	// 		const result = await response.json();
-	// 		setUploadedScripts((prev) => [...prev, { name: fileName }]);
-	// 		await fetchScripts();
-
-	// 		// Start breakdown generation phase with SSE
-	// 		setIsUploading(false);
-	// 		setIsGeneratingBreakdown(true);
-	// 		setProgress(0);
-	// 		setUploadStatus("Initializing breakdown generation...");
-
-	// 		// Include model in the breakdown request if user is 2
-	// 		const breakdownUrl =
-	// 			user === "2"
-	// 				? getApiUrl(`/api/${id}/generate-breakdown-p/${fileName}?model=${selectedModel}`)
-	// 				: getApiUrl(`/api/${id}/generate-breakdown-p/${fileName}`);
-
-	// 		// Use EventSource for real-time progress updates
-	// 		eventSource = new EventSource(breakdownUrl);
-
-	// 		// Handle progress messages
-	// 		eventSource.onmessage = (event) => {
-	// 			// Console log every message from the event
-	// 			console.log("SSE Message received:", event.data);
-
-	// 			try {
-	// 				const data = JSON.parse(event.data);
-
-	// 				// Console log parsed data
-	// 				console.log("Parsed SSE data:", data);
-
-	// 				// Update progress percentage if available
-	// 				if (data.progress !== undefined) {
-	// 					setProgress(data.progress);
-	// 					console.log(`Progress updated: ${data.progress}%`);
-	// 				}
-
-	// 				// Update status message
-	// 				if (data.message) {
-	// 					setBreakdownMessage(data.message);
-	// 					setUploadStatus(data.message);
-	// 					console.log("Status message:", data.message);
-	// 				}
-
-	// 				// Handle different status types
-	// 				if (data.status === "completed") {
-	// 					console.log("Breakdown completed successfully!", data);
-	// 					setProgress(100);
-	// 					setUploadStatus("Breakdown generated successfully! Redirecting...");
-	// 					eventSource.close();
-
-	// 					// Small delay before navigation to show success message
-	// 					setTimeout(() => {
-	// 						navigate(`/${user}/${id}/script-breakdown`);
-	// 					}, 1000);
-	// 				} else if (data.status === "error") {
-	// 					console.error("Breakdown error:", data.message);
-	// 					throw new Error(data.message || "Failed to generate breakdown");
-	// 				}
-	// 			} catch (parseError) {
-	// 				console.error("Error parsing SSE data:", parseError);
-	// 				setUploadStatus(`Error: ${parseError.message}`);
-	// 				if (eventSource) eventSource.close();
-	// 			}
-	// 		};
-
-	// 		// Handle SSE errors
-	// 		eventSource.onerror = (error) => {
-	// 			console.error("SSE connection error:", error);
-	// 			console.error("EventSource readyState:", eventSource?.readyState);
-	// 			if (eventSource) eventSource.close();
-	// 			throw new Error("Connection to server lost during breakdown generation");
-	// 		};
-
-	// 		// Log when connection opens
-	// 		eventSource.onopen = () => {
-	// 			console.log("SSE connection opened successfully");
-	// 		};
-	// 	} catch (error) {
-	// 		console.error("Upload/Breakdown error:", error);
-	// 		setUploadStatus(`Error: ${error.message}`);
-	// 		setProgress(0);
-
-	// 		// Close EventSource if it's still open
-	// 		if (eventSource) {
-	// 			eventSource.close();
-	// 		}
-
-	// 		setTimeout(() => {
-	// 			setUploadStatus("");
-	// 			setProgress(0);
-	// 			setBreakdownMessage("");
-	// 		}, 5000);
-	// 	} finally {
-	// 		// Only reset states if we're not navigating (successful completion)
-	// 		if (!uploadStatus.includes("Redirecting")) {
-	// 			setIsUploading(false);
-	// 			setIsGeneratingBreakdown(false);
-	// 			setShowFileNameModal(false);
-	// 			setNewFileName("");
-	// 			setTempFile(null);
-	// 			setSelectedModel("gpt-4.1-2025-04-14"); // Reset model selection
-	// 		}
-	// 	}
-	// };
-
-	// This function is called when the hidden file input changes
 
 	const handleFileChange = (event) => {
 		const file = event.target.files[0];
@@ -281,23 +177,18 @@ const Script = () => {
 		}
 	};
 
-	// This function is called when the "Import New Draft" button is clicked
 	const handleImportClick = () => {
-		// Trigger the hidden file input
 		if (fileInputRef.current) {
 			fileInputRef.current.click();
 		}
 		setShowFileNameModal(true);
 	};
 
-	const handleDeleteScript = async (scriptName, e) => {
-		e.stopPropagation(); // Prevent triggering script selection
-
+	const handleDeleteScript = async (scriptName) => {
 		if (!window.confirm(`Are you sure you want to delete "${scriptName}"?`)) {
 			return;
 		}
 
-		setIsDeleting(true);
 		try {
 			const response = await fetch(getApiUrl(`/api/${id}/delete-script/${scriptName}`), {
 				method: "DELETE",
@@ -309,21 +200,23 @@ const Script = () => {
 				throw new Error("Failed to delete script");
 			}
 
-			// Clear selected script if it was deleted
 			if (selectedScript === scriptName) {
 				setSelectedScript(null);
 				setPdfUrl(null);
 			}
 
-			// Get fresh script list
-			const newScriptList = await fetchScripts();
-			setScriptList(newScriptList); // Explicitly update with new data
+			await fetchScripts();
+			setActiveDropdown(null);
 		} catch (error) {
 			console.error("Error deleting script:", error);
 			alert("Failed to delete script");
-		} finally {
-			setIsDeleting(false);
 		}
+	};
+
+	const handleArchiveScript = async (scriptName) => {
+		// Implement archive functionality
+		console.log("Archive script:", scriptName);
+		setActiveDropdown(null);
 	};
 
 	const handleScriptClick = async (script) => {
@@ -349,14 +242,27 @@ const Script = () => {
 
 	const handleFileNameSubmit = (e) => {
 		e.preventDefault();
-
 		if (newFileName.trim() && tempFile) {
 			const sanitizedFileName = newFileName.trim().replace(/\s+/g, "-");
 			uploadFile(tempFile, sanitizedFileName);
 		}
 	};
 
-	// Cleanup function to revoke object URL when component unmounts or PDF changes
+	const handleModalClose = () => {
+		setShowFileNameModal(false);
+		setNewFileName("");
+		setTempFile(null);
+		setSelectedModel("gpt-4.1-2025-04-14");
+		setIsGeneratingBreakdown(false);
+		setProgress(0);
+		setBreakdownMessage("");
+	};
+
+	const handleViewBreakdown = () => {
+		handleModalClose();
+		navigate(`/${user}/${id}/script-breakdown`);
+	};
+
 	useEffect(() => {
 		return () => {
 			if (pdfUrl) {
@@ -367,90 +273,161 @@ const Script = () => {
 
 	const isProcessing = isUploading || isGeneratingBreakdown;
 
-	// Spinner component with inline animation
-	const Spinner = () => (
-		<div
-			style={{
-				width: "16px",
-				height: "16px",
-				border: "2px solid #f3f3f3",
-				borderTop: "2px solid #3498db",
-				borderRadius: "50%",
-				animation: "spin 1s linear infinite",
-				display: "inline-block",
-			}}
-		></div>
+	// Get visible tabs based on scroll index
+	const visibleScripts = script_list.slice(tabScrollIndex, tabScrollIndex + VISIBLE_TABS);
+	const canScrollLeft = tabScrollIndex > 0;
+	const canScrollRight = tabScrollIndex + VISIBLE_TABS < script_list.length;
+
+	const handleTabScrollLeft = () => {
+		if (canScrollLeft) {
+			setTabScrollIndex(tabScrollIndex - 1);
+		}
+	};
+
+	const handleTabScrollRight = () => {
+		if (canScrollRight) {
+			setTabScrollIndex(tabScrollIndex + 1);
+		}
+	};
+
+	// SVG Icons
+	const PlusIcon = () => (
+		<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+			<path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+		</svg>
 	);
 
-	// Add the keyframes animation to the document head only once
-	useEffect(() => {
-		const existingStyle = document.getElementById("spinner-animation");
-		if (!existingStyle) {
-			const style = document.createElement("style");
-			style.id = "spinner-animation";
-			style.textContent = `
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-            `;
-			document.head.appendChild(style);
-		}
-	}, []);
+	const XIcon = () => (
+		<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+			<path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+		</svg>
+	);
 
 	return (
-		<div style={styles.pageContainer}>
-			<ProjectHeader />
+		<div className="script-page-container">
+			{/* Divider */}
+			<hr className="script-divider" />
 
-			<div style={styles.header}>
-				<div>
-					<h2 style={styles.pageTitle}>Script</h2>
+			{/* Header */}
+			<div className="script-header">
+				<div className="script-header-left">
+					{/* Left Navigation Arrow */}
+					<button className="script-nav-button" onClick={handleTabScrollLeft} disabled={!canScrollLeft}>
+						<img src={leftArrowImg} alt="Previous" />
+					</button>
+
+					{/* Script Tabs */}
+					<div className="script-tabs-container">
+						{visibleScripts.length > 0 ? (
+							visibleScripts.map((script) => (
+								<div key={script.name} className="script-tab-wrapper">
+									<button
+										className={`script-tab ${selectedScript === script.name ? "active" : ""}`}
+										onClick={() => {
+											handleScriptClick(script.name);
+										}}
+										title={script.name}
+									>
+										<span className="script-tab-name">{script.name}</span>
+
+										<span
+											className="script-tab-arrow"
+											onClick={(e) => {
+												e.stopPropagation(); // prevents button click
+												setActiveDropdown(activeDropdown === script.name ? null : script.name);
+											}}
+										>
+											<img src={dropdownArrowImg} alt="" />
+										</span>
+									</button>
+
+									{/* Dropdown Menu */}
+									{activeDropdown === script.name && (
+										<div className="script-tab-dropdown">
+											<button className="script-tab-dropdown-item" onClick={() => handleArchiveScript(script.name)}>
+												Archive draft
+											</button>
+											<button className="script-tab-dropdown-item" onClick={() => handleDeleteScript(script.name)}>
+												Delete Draft
+											</button>
+										</div>
+									)}
+								</div>
+							))
+						) : (
+							<span className="script-empty-tabs">No scripts uploaded yet</span>
+						)}
+					</div>
+
+					{/* Right Navigation Arrow */}
+					<button className="script-nav-button" onClick={handleTabScrollRight} disabled={!canScrollRight}>
+						<img src={rightArrowImg} alt="Next" />
+					</button>
 				</div>
-				<button onClick={handleImportClick} style={isProcessing ? styles.buttonDisabled : styles.button} disabled={isProcessing}>
-					{isUploading ? "Uploading..." : "Import New Draft"}
+
+				{/* Import New Draft Button */}
+				<button onClick={handleImportClick} className={`script-import-button ${isProcessing ? "disabled" : ""}`} disabled={isProcessing}>
+					<PlusIcon />
+					<span>{isUploading ? "Uploading..." : "Import New Draft"}</span>
 				</button>
 			</div>
 
-			{/* Show upload/processing status */}
-			{/* {(uploadStatus || isProcessing) && (
-				<div style={styles.statusBar}>
-					<div style={styles.statusMessage}>
-						{uploadStatus || (isUploading ? "Uploading..." : "Generating breakdown...")}
-						{isProcessing && <Spinner />}
-					</div>
-				</div>
-			)} */}
+			{/* Hidden File Input */}
+			<input type="file" accept=".pdf" onChange={handleFileChange} className="script-hidden-input" ref={fileInputRef} disabled={isProcessing} />
 
-			<input type="file" accept=".pdf" onChange={handleFileChange} style={{ display: "none" }} ref={fileInputRef} disabled={isProcessing} />
-
-			{/* File Name Modal */}
+			{/* Modal */}
 			{showFileNameModal && (
-				<div style={styles.modalOverlay}>
-					<div style={styles.modal}>
+				<div className="script-modal-overlay">
+					<div className="script-modal">
 						{isGeneratingBreakdown ? (
-							<ProgressBar />
+							/* Progress Bar View */
+							<div className="script-progress-modal">
+								<h3 className="script-progress-title">{breakdownMessage || "Starting breakdown generation..."}</h3>
+								<div className="script-progress-bar-container">
+									<div className="script-progress-bar" style={{ width: `${progress}%` }} />
+								</div>
+								<span className="script-progress-percentage">{progress}%</span>
+								{progress === 100 && (
+									<div className="script-progress-footer">
+										<button className="script-view-breakdown-button" onClick={handleViewBreakdown}>
+											View Breakdown
+										</button>
+									</div>
+								)}
+							</div>
 						) : (
-							<div>
-								<h3 style={styles.modalTitle}>Enter Script Name</h3>
-								<form onSubmit={handleFileNameSubmit}>
-									<input
-										type="text"
-										value={newFileName}
-										onChange={(e) => setNewFileName(e.target.value)}
-										placeholder="Enter script name"
-										style={styles.fileNameInput}
-										autoFocus
-										disabled={isProcessing}
-									/>
+							/* Enter Script Name View */
+							<form onSubmit={handleFileNameSubmit}>
+								<div className="script-modal-content">
+									<h3 className="script-modal-title">Enter Script Name</h3>
+									<div>
+										<input
+											type="text"
+											value={newFileName}
+											onChange={(e) => setNewFileName(e.target.value)}
+											placeholder="Enter Script Name"
+											className="script-filename-input"
+											autoFocus
+											disabled={isProcessing}
+										/>
+										{tempFile && (
+											<div className="script-file-tag">
+												<span className="script-file-tag-name">{tempFile.name}</span>
+												<button type="button" className="script-file-tag-remove" onClick={() => setTempFile(null)}>
+													<XIcon />
+												</button>
+											</div>
+										)}
+									</div>
 
-									{/* Show model selection dropdown only for user ID 2 */}
+									{/* Model Selection (admin only) */}
 									{user === "2" && (
-										<div style={styles.modelSelection}>
-											<label style={styles.modelLabel}>Select LLM Model:</label>
+										<div className="script-model-selection">
+											<label className="script-model-label">Select LLM Model:</label>
 											<select
 												value={selectedModel}
 												onChange={(e) => setSelectedModel(e.target.value)}
-												style={styles.modelSelect}
+												className="script-model-select"
 												disabled={isProcessing}
 											>
 												<option value="gpt-4.1-2025-04-14">GPT-4.1 (2025-04-14)</option>
@@ -461,317 +438,39 @@ const Script = () => {
 										</div>
 									)}
 
-									<div style={styles.modalButtons}>
-										<button
-											type="button"
-											onClick={() => {
-												setShowFileNameModal(false);
-												setNewFileName("");
-												setTempFile(null);
-												setSelectedModel("gpt-4.1-2025-04-14"); // Reset model on cancel
-											}}
-											style={styles.cancelButton}
-											disabled={isProcessing}
-										>
+									<div className="script-modal-buttons">
+										<button type="button" onClick={handleModalClose} className="script-cancel-button" disabled={isProcessing}>
 											Cancel
 										</button>
 										<button
 											type="submit"
-											disabled={!newFileName.trim() || isProcessing}
-											style={!newFileName.trim() || isProcessing ? styles.buttonDisabled : styles.submitButton}
+											disabled={!newFileName.trim() || !tempFile || isProcessing}
+											className={`script-submit-button ${!newFileName.trim() || !tempFile || isProcessing ? "disabled" : ""}`}
 										>
-											{isProcessing ? "Processing..." : "Upload"}
+											Upload
 										</button>
 									</div>
-								</form>
-							</div>
+								</div>
+							</form>
 						)}
 					</div>
 				</div>
 			)}
 
-			<div style={styles.mainContent}>
-				{/* Left sidebar with script list */}
-				<div style={styles.sidebar}>
-					<h3>Drafts</h3>
-					{script_list.length > 0 && (
-						<div style={styles.scriptList}>
-							{script_list.map((script, index) => (
-								<div key={index} style={styles.scriptButtonContainer}>
-									<button
-										style={{
-											...styles.scriptButton,
-											...(selectedScript === script.name ? styles.scriptButtonActive : {}),
-											...(isProcessing ? { opacity: 0.5, cursor: "not-allowed" } : {}),
-										}}
-										onClick={() => !isProcessing && handleScriptClick(script.name)}
-										disabled={isProcessing}
-									>
-										v{script.version} - {script.name}
-									</button>
-									<button
-										style={{
-											...styles.deleteButton,
-											...(isDeleting ? { cursor: "not-allowed", opacity: 0.5 } : {}),
-										}}
-										onClick={(e) => !isDeleting && handleDeleteScript(script.name, e)}
-										disabled={isDeleting}
-										title={isDeleting ? "Deleting..." : "Delete script"}
-									>
-										{isDeleting ? "⏳" : "🗑️"}
-									</button>
-								</div>
-							))}
-						</div>
+			{/* Main Content Area */}
+			<div className="script-main-content">
+				<div className="script-content-viewer">
+					{script_list.length === 0 && !uploadStatus ? (
+						<p className="script-placeholder">Upload scripts to view them here</p>
+					) : !pdfUrl ? (
+						<p className="script-placeholder">Select a script to view it here</p>
+					) : (
+						<iframe src={pdfUrl} className="script-pdf-viewer" title="PDF Viewer" />
 					)}
-				</div>
-
-				{/* Main content area */}
-				<div style={styles.contentArea}>
-					{isProcessing && (
-						<div style={styles.processingOverlay}>
-							<p style={styles.processingText}>{isUploading && "Uploading script..."}</p>
-						</div>
-					)}
-
-					{!isProcessing && script_list.length === 0 && !uploadStatus && <p style={styles.placeholder}>Upload scripts to view them here</p>}
-					{!isProcessing && script_list.length > 0 && !pdfUrl && <p style={styles.placeholder}>Select a script to view it here</p>}
-					{!isProcessing && pdfUrl && <iframe src={pdfUrl} style={styles.pdfViewer} title="PDF Viewer" />}
 				</div>
 			</div>
 		</div>
 	);
-};
-
-const styles = {
-	pageContainer: {
-		display: "flex",
-		flexDirection: "column",
-		minHeight: "calc(100vh - 60px)",
-		backgroundColor: "#fff",
-	},
-	header: {
-		display: "flex",
-		justifyContent: "space-between",
-		alignItems: "center",
-		padding: "1rem 2rem",
-		borderBottom: "1px solid #eee",
-		backgroundColor: "#fff",
-	},
-	mainContent: {
-		display: "flex",
-		flexGrow: 1,
-		height: "calc(100vh - 120px)", // Adjust based on your header height
-	},
-	sidebar: {
-		width: "250px",
-		borderRight: "1px solid #eee",
-		backgroundColor: "#f8f9fa",
-		padding: "1rem",
-		overflowY: "auto",
-	},
-	scriptList: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "0.5rem",
-	},
-	scriptButtonContainer: {
-		display: "flex",
-		gap: "0.5rem",
-		alignItems: "center",
-	},
-	scriptButton: {
-		padding: "0.75rem 1rem",
-		backgroundColor: "#fff",
-		border: "1px solid #e0e0e0",
-		borderRadius: "4px",
-		cursor: "pointer",
-		textAlign: "left",
-		fontSize: "0.9rem",
-		color: "#333",
-		transition: "all 0.2s ease",
-		flexGrow: 1,
-		"&:hover": {
-			backgroundColor: "#f0f0f0",
-			borderColor: "#ccc",
-		},
-	},
-	deleteButton: {
-		padding: "0.25rem 0.5rem",
-		backgroundColor: "#fff",
-		border: "1px solid #e0e0e0",
-		borderRadius: "4px",
-		cursor: "pointer",
-		fontSize: "1.2rem",
-		color: "#666",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		transition: "all 0.2s ease",
-		"&:hover": {
-			backgroundColor: "#fee",
-			borderColor: "#fcc",
-			color: "#d33",
-		},
-	},
-	scriptButtonActive: {
-		backgroundColor: "#e6f3ff",
-		borderColor: "#1a73e8",
-		color: "#1a73e8",
-	},
-	contentArea: {
-		flexGrow: 1,
-		display: "flex",
-		flexDirection: "column",
-		alignItems: "center",
-		justifyContent: "center",
-		padding: "1rem",
-		height: "100%", // Ensure full height
-		position: "relative", // For proper iframe sizing
-	},
-	projectTitle: {
-		fontSize: "1.5rem",
-		fontWeight: "bold",
-		margin: 0,
-		color: "#000",
-	},
-	pageTitle: {
-		fontSize: "1.1rem",
-		fontWeight: "normal",
-		margin: "0.25rem 0 0 0",
-		color: "#555",
-	},
-	button: {
-		padding: "0.6rem 1.2rem",
-		backgroundColor: "#e0e0e0",
-		color: "#333",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
-		cursor: "pointer",
-		transition: "background-color 0.2s ease",
-		fontWeight: "500",
-		minWidth: "150px",
-		textAlign: "center",
-	},
-	buttonDisabled: {
-		padding: "0.6rem 1.2rem",
-		backgroundColor: "#f5f5f5",
-		color: "#aaa",
-		border: "1px solid #ddd",
-		borderRadius: "4px",
-		cursor: "not-allowed",
-		minWidth: "150px",
-		textAlign: "center",
-		fontWeight: "500",
-	},
-	placeholder: {
-		fontSize: "1rem",
-		color: "#aaa",
-	},
-	statusBar: {
-		backgroundColor: "#f8f9fa",
-		borderBottom: "1px solid #eee",
-		padding: "0.75rem 2rem",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	statusMessage: {
-		fontSize: "0.9rem",
-		color: "#333",
-		display: "flex",
-		alignItems: "center",
-		gap: "0.5rem",
-	},
-	processingOverlay: {
-		display: "flex",
-		flexDirection: "column",
-		alignItems: "center",
-		justifyContent: "center",
-		gap: "1rem",
-		padding: "2rem",
-	},
-	processingText: {
-		fontSize: "1rem",
-		color: "#666",
-		margin: 0,
-	},
-	pdfViewer: {
-		width: "100%",
-		height: "100%",
-		border: "none",
-	},
-	modalOverlay: {
-		position: "fixed",
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-		backgroundColor: "rgba(0, 0, 0, 0.5)",
-		display: "flex",
-		justifyContent: "center",
-		alignItems: "center",
-		zIndex: 1000,
-	},
-	modal: {
-		backgroundColor: "white",
-		padding: "2rem",
-		borderRadius: "8px",
-		width: "90%",
-		maxWidth: "400px",
-	},
-	modalTitle: {
-		margin: "0 0 1rem 0",
-		fontSize: "1.2rem",
-		color: "#333",
-	},
-	fileNameInput: {
-		width: "100%",
-		padding: "0.5rem",
-		fontSize: "1rem",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
-		marginBottom: "1rem",
-	},
-	modalButtons: {
-		display: "flex",
-		justifyContent: "flex-end",
-		gap: "1rem",
-	},
-	cancelButton: {
-		padding: "0.5rem 1rem",
-		backgroundColor: "#f5f5f5",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
-		cursor: "pointer",
-	},
-	submitButton: {
-		padding: "0.5rem 1rem",
-		backgroundColor: "#4CAF50",
-		color: "white",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-	},
-	modelSelection: {
-		marginBottom: "1rem",
-	},
-	modelLabel: {
-		display: "block",
-		marginBottom: "0.5rem",
-		fontSize: "0.9rem",
-		color: "#333",
-		fontWeight: "500",
-	},
-	modelSelect: {
-		width: "100%",
-		padding: "0.5rem",
-		fontSize: "1rem",
-		border: "1px solid #ccc",
-		borderRadius: "4px",
-		backgroundColor: "white",
-		cursor: "pointer",
-	},
 };
 
 export default Script;

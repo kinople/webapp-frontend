@@ -1,0 +1,1272 @@
+/* Navbar.css - Styles for Navbar component (Figma Design) */
+
+/* Container */
+.navbar-container {
+	height: 100%;
+	width: 238px;
+	background-color: #fbfbfb;
+	border-right: 2px solid #ebebed;
+	font-family: "Inter", sans-serif;
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 100;
+	display: flex;
+	flex-direction: column;
+	padding: 7px 12px 12px 12px;
+	box-sizing: border-box;
+	transition: width 0.3s ease;
+}
+
+/* Collapsed Navbar */
+.navbar-container.collapsed {
+	width: 60px;
+	padding: 7px 8px 12px 8px;
+}
+
+.navbar-sidebar {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Header Section */
+.navbar-header {
+	display: flex;
+	align-items: center;
+	gap: 11.5px;
+	padding-bottom: 12px;
+	margin-bottom: 16px;
+	border-bottom: 2px solid #ebebed;
+}
+
+.navbar-logo-icon {
+	width: 28px;
+	height: 28.75px;
+	flex-shrink: 0;
+}
+
+.navbar-logo-text {
+	font-size: 23.414px;
+	font-weight: 500;
+	letter-spacing: -0.9366px;
+	line-height: 22.582px;
+	color: black;
+	cursor: pointer;
+}
+
+.navbar-sidebar-toggle {
+	width: 32.75px;
+	height: 28.75px;
+	transform: rotate(180deg) scaleY(-1);
+	cursor: pointer;
+	margin-left: auto;
+	color: grey;
+	transition: transform 0.3s ease;
+}
+
+.navbar-sidebar-toggle:hover {
+	color: #ff4533;
+}
+
+.navbar-sidebar-toggle.collapsed {
+	transform: rotate(0deg) scaleY(-1);
+}
+
+/* Collapsed Header */
+.navbar-container.collapsed .navbar-header {
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding-bottom: 12px;
+}
+
+.navbar-container.collapsed .navbar-logo-icon {
+	width: 24px;
+	height: 24.75px;
+}
+
+.navbar-container.collapsed .navbar-sidebar-toggle {
+	margin-left: 0;
+	width: 28px;
+	height: 24px;
+}
+
+/* New Project Button */
+.navbar-new-project-wrapper {
+	padding-bottom: 14px;
+	margin-bottom: 14px;
+	border-bottom: 2px solid #ebebed;
+}
+
+.navbar-new-project-button {
+	width: auto;
+	height: 30px;
+	background-color: #ff4533;
+	border: 1.078px solid #ca2212;
+	border-radius: 6.469px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 7px 14px;
+	cursor: pointer;
+	position: relative;
+	overflow: hidden;
+	box-shadow: 0px 4.313px 6.469px -1.078px rgba(202, 34, 18, 0.1), 0px 2.156px 4.313px -2.156px rgba(202, 34, 18, 0.1), inset 0px 1.078px 0px 1.078px #ee1500;
+}
+
+.navbar-new-project-button::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
+	pointer-events: none;
+}
+
+.navbar-new-project-button:hover {
+	background-color: #e63d2e;
+}
+
+.navbar-new-project-icon {
+	width: 15.094px;
+	height: 15.094px;
+	color: #f5f5f5;
+	flex-shrink: 0;
+}
+
+.navbar-new-project-text {
+	font-family: "Arial", sans-serif;
+	font-size: 15.094px;
+	font-weight: 400;
+	color: #f5f5f5;
+	line-height: normal;
+	white-space: nowrap;
+}
+
+/* Organization Selector */
+.navbar-org-selector {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	cursor: pointer;
+	margin-bottom: 10px;
+	padding-left: 0px;
+}
+
+.navbar-org-badge {
+	width: 25px;
+	height: 25px;
+	background-color: #ffcd29;
+	border-radius: 15px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.navbar-org-badge-text {
+	font-family: "Inter", sans-serif;
+	font-size: 10.662px;
+	font-weight: 400;
+	line-height: 12.035px;
+	color: black;
+}
+
+.navbar-org-name-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 3.308px;
+	width:100%;
+}
+
+.navbar-org-name {
+	font-family: "Inter", sans-serif;
+	font-size: 13.231px;
+	font-weight: 500;
+	line-height: 21.5px;
+	color: black;
+	width:100%;
+}
+
+.navbar-org-caret {
+	width: 11.577px;
+	height: 11.577px;
+	flex-shrink: 0;
+	color: black;
+}
+
+/* Organization Dropdown */
+.navbar-org-dropdown {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	background-color: white;
+	border-radius: 10px;
+	box-shadow: 0px 3px 22.7px 0px rgba(0, 0, 0, 0.16);
+	z-index: 1000;
+	margin-top: 4px;
+	max-height: 250px;
+	overflow-y: auto;
+	min-width: 160px;
+}
+
+.navbar-org-dropdown-item {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 7px;
+	padding: 6.567px 16px;
+	height: 27px;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	border-top: 0.5px solid #e0e0e0;
+	box-sizing: border-box;
+}
+
+.navbar-org-dropdown-item:first-child {
+	border-top: none;
+}
+
+.navbar-org-dropdown-item:hover {
+	background-color: #f5f5f5;
+}
+
+.navbar-org-dropdown-badge {
+	width: 11.753px;
+	height: 11.753px;
+	background-color: #ffcd29;
+	border-radius: 5.877px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.navbar-org-dropdown-badge-text {
+	font-family: "Inter", sans-serif;
+	font-size: 6.768px;
+	font-weight: 400;
+	line-height: 7.64px;
+	color: black;
+}
+
+.navbar-org-dropdown-name {
+	font-family: "Inter", sans-serif;
+	font-size: 10.951px;
+	font-weight: 500;
+	color: black;
+	text-transform: capitalize;
+	line-height: normal;
+	
+}
+
+/* New Organization Button in Dropdown */
+.navbar-org-dropdown-new {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 3.753px;
+	padding: 6.567px 15px;
+	height: 27px;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	border-top: 1px solid #ff2d18;
+	box-sizing: border-box;
+}
+
+.navbar-org-dropdown-new:hover {
+	background-color: rgba(255, 45, 24, 0.05);
+}
+
+.navbar-org-dropdown-new-icon {
+	width: 10.789px;
+	height: 10.789px;
+	color: #ff2d18;
+	flex-shrink: 0;
+}
+
+.navbar-org-dropdown-new-text {
+	font-family: "Inter", sans-serif;
+	font-size: 10.951px;
+	font-weight: 500;
+	color: #ff2d18;
+	text-transform: capitalize;
+	line-height: normal;
+}
+
+/* Menu Section */
+.navbar-menu-section {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.navbar-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 10px 10px 0;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	border-radius: 6px;
+}
+
+.navbar-menu-item:hover {
+	background-color: rgba(0, 0, 0, 0.05);
+}
+
+.navbar-menu-item.active {
+	background-color: rgba(0, 0, 0, 0.08);
+}
+
+.navbar-menu-icon {
+	width: 24px;
+	height: 24px;
+	color: #444;
+	flex-shrink: 0;
+}
+
+.navbar-menu-text {
+	font-family: "Inter", sans-serif;
+	font-size: 16px;
+	font-weight: 500;
+	color: #444;
+	line-height: normal;
+}
+
+/* Spacer */
+.navbar-spacer {
+	flex: 1;
+}
+
+/* Log Out Section */
+.navbar-logout {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 10px 10px 0;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	margin-top: 14px;
+	padding-top: 14px;
+	border-top: 2px solid #ebebed;
+}
+
+.navbar-logout:hover {
+	background-color: rgba(0, 0, 0, 0.05);
+}
+
+.navbar-logout-icon {
+	width: 24px;
+	height: 24px;
+	color: #444;
+	flex-shrink: 0;
+}
+
+.navbar-logout-text {
+	font-family: "Inter", sans-serif;
+	font-size: 16px;
+	font-weight: 500;
+	color: #444;
+	line-height: normal;
+}
+
+/* Settings Menu Items (for settings pages) */
+.navbar-settings-menu {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 0;
+	margin: 0;
+	list-style: none;
+}
+
+.navbar-settings-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 10px 10px 0;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	border-radius: 6px;
+	font-family: "Inter", sans-serif;
+	font-size: 16px;
+	font-weight: 500;
+	color: #444;
+}
+
+.navbar-settings-menu-item:hover {
+	background-color: rgba(0, 0, 0, 0.05);
+}
+
+.navbar-settings-menu-item.active {
+	background-color: rgba(255, 69, 51, 0.1);
+	color: #ff4533;
+}
+
+/* Back Button (for settings/org navigation) */
+.navbar-back-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 0;
+	cursor: pointer;
+	margin-bottom: 14px;
+}
+
+.navbar-back-icon {
+	width: 20px;
+	height: 20px;
+	color: #444;
+}
+
+.navbar-back-title {
+	font-family: "Inter", sans-serif;
+	font-size: 16px;
+	font-weight: 500;
+	color: #444;
+}
+
+/* Modal Styles (preserved from original) */
+.navbar-modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: rgba(0, 0, 0, 0.5);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	z-index: 1001;
+}
+
+.navbar-modal {
+	background-color: white;
+	border-radius: 8px;
+	width: 90%;
+	max-width: 400px;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 1rem 1.5rem;
+	border-bottom: 1px solid #eee;
+}
+
+.navbar-modal-title {
+	margin: 0;
+	font-size: 1.2rem;
+	color: #333;
+}
+
+.navbar-close-button {
+	background: none;
+	border: none;
+	font-size: 1.5rem;
+	cursor: pointer;
+	color: #666;
+	padding: 0;
+	width: 24px;
+	height: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.navbar-modal-content {
+	padding: 1.5rem;
+}
+
+.navbar-loading {
+	text-align: center;
+	color: #666;
+	padding: 1rem;
+}
+
+.navbar-error {
+	text-align: center;
+	color: #dc3545;
+	padding: 1rem;
+}
+
+.navbar-user-info-modal {
+	margin-bottom: 1.5rem;
+	color: #333;
+}
+
+.navbar-modal-actions {
+	display: flex;
+	gap: 1rem;
+	justify-content: flex-end;
+}
+
+.navbar-logout-button {
+	padding: 0.5rem 1rem;
+	background-color: #ff4533;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.9rem;
+}
+
+.navbar-logout-button:hover {
+	background-color: #e63d2e;
+}
+
+.navbar-button-disabled {
+	padding: 0.5rem 1rem;
+	background-color: #ccc;
+	color: #666;
+	border: none;
+	border-radius: 4px;
+	cursor: not-allowed;
+	font-size: 0.9rem;
+}
+
+/* Organization selector container for dropdown positioning */
+.navbar-org-selector-container {
+	position: relative;
+}
+
+/* ========================================
+   NEW PROJECT MODAL STYLES
+   ======================================== */
+
+.new-project-modal {
+	background-color: white;
+	border-radius: 7.812px;
+	width: 475px;
+	max-width: 90vw;
+	max-height: 90vh;
+	overflow-y: auto;
+	box-shadow: 0px 4px 24px 0px rgba(0, 0, 0, 0.15);
+}
+
+.new-project-content {
+	display: flex;
+	flex-direction: column;
+	gap: 18.749px;
+	padding: 10.94px;
+	align-items: center;
+}
+
+/* Title Section */
+.new-project-title-section {
+	display: flex;
+	align-items: center;
+	width: 100%;
+}
+
+.new-project-title {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 20.738px;
+	line-height: normal;
+	color: black;
+	margin: 0;
+}
+
+/* Form Section */
+.new-project-form {
+	display: flex;
+	flex-direction: column;
+	gap: 12.499px;
+	width: 100%;
+}
+
+.new-project-field {
+	display: flex;
+	flex-direction: column;
+	gap: 9.374px;
+	width: 100%;
+}
+
+.new-project-label {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 13.313px;
+	letter-spacing: -0.2663px;
+	line-height: normal;
+	color: #454449;
+}
+
+.new-project-input {
+	height: 35.154px;
+	padding: 7.812px;
+	background-color: white;
+	border: 0.781px solid #ddd;
+	border-radius: 8.593px;
+	box-shadow: 0px 1.562px 3.125px 0px rgba(0, 0, 0, 0.04);
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 11.718px;
+	letter-spacing: -0.2344px;
+	color: #333;
+	box-sizing: border-box;
+}
+
+.new-project-input::placeholder {
+	color: #98999d;
+}
+
+.new-project-input:focus {
+	outline: none;
+	border-color: #ff4533;
+}
+
+.new-project-select-wrapper {
+	position: relative;
+	width: 100%;
+}
+
+.new-project-select {
+	width: 100%;
+	height: 35.154px;
+	padding: 7.812px;
+	background-color: white;
+	border: 0.781px solid #ddd;
+	border-radius: 8.593px;
+	box-shadow: 0px 1.562px 3.125px 0px rgba(0, 0, 0, 0.04);
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 11.718px;
+	letter-spacing: -0.2344px;
+	color: #333;
+	appearance: none;
+	cursor: pointer;
+	box-sizing: border-box;
+}
+
+.new-project-select:invalid,
+.new-project-select option[value=""] {
+	color: #98999d;
+}
+
+.new-project-select:focus {
+	outline: none;
+	border-color: #ff4533;
+}
+
+/* Team Members Section */
+.new-project-team-section {
+	display: flex;
+	flex-direction: column;
+	gap: 11.718px;
+	width: 100%;
+}
+
+.new-project-team-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+}
+
+.new-project-add-member-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 3.125px;
+	width: auto;
+	height: 27.283px;
+	padding: 6.25px 10.937px;
+	background-color: transparent;
+	border: 0.686px solid #ff2d18;
+	border-radius: 4.118px;
+	cursor: pointer;
+	transition: background-color 0.2s;
+}
+
+.new-project-add-member-btn:hover {
+	background-color: rgba(255, 45, 24, 0.05);
+}
+
+.new-project-add-member-icon {
+	width: 9.433px;
+	height: 9.433px;
+	color: #ff2d18;
+}
+
+.new-project-add-member-btn span {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 10.981px;
+	line-height: normal;
+	color: #ff2d18;
+	text-transform: capitalize;
+}
+
+/* Members Box */
+.new-project-members-box {
+	display: flex;
+	flex-direction: column;
+	gap: 12.499px;
+	padding: 7.812px 25.78px;
+	background-color: #f7f7f7;
+	border: 0.781px solid #ddd;
+	border-radius: 11.718px;
+	box-shadow: 0px 1.562px 3.125px 0px rgba(0, 0, 0, 0.04);
+	min-height: 211.705px;
+	box-sizing: border-box;
+}
+
+.new-project-members-title {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 13.313px;
+	letter-spacing: -0.2663px;
+	line-height: normal;
+	color: #454449;
+	margin: 0;
+}
+
+/* Add All Checkbox */
+.new-project-add-all {
+	display: flex;
+	align-items: center;
+	gap: 7.127px;
+	cursor: pointer;
+}
+
+.new-project-checkbox {
+	width: 14.902px;
+	height: 14.902px;
+	border: 0.648px solid #ff2d18;
+	border-radius: 2.592px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 10px;
+	color: #ff2d18;
+}
+
+.new-project-checkbox.checked {
+	background-color: #ff2d18;
+	color: white;
+}
+
+.new-project-add-all-text {
+	font-family: "Inter", sans-serif;
+	font-weight: 400;
+	font-size: 11.191px;
+	line-height: normal;
+	color: #ff2d18;
+	text-transform: capitalize;
+}
+
+/* Member Row */
+.new-project-member-row {
+	display: flex;
+	align-items: center;
+	gap: 7.107px;
+}
+
+.new-project-member-icon-box {
+	width: 31.981px;
+	height: 31.981px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: white;
+	border: 0.711px solid #ddd;
+	border-radius: 7.818px;
+	box-shadow: 0px 1.421px 2.843px 0px rgba(0, 0, 0, 0.04);
+	flex-shrink: 0;
+}
+
+.new-project-member-icon {
+	width: 17.057px;
+	height: 16.346px;
+	color: #767676;
+}
+
+.new-project-member-email-box {
+	flex: 1;
+	height: 31.981px;
+	display: flex;
+	align-items: center;
+	padding: 7.107px;
+	background-color: white;
+	border: 0.711px solid #ddd;
+	border-radius: 7.818px;
+	box-shadow: 0px 1.421px 2.843px 0px rgba(0, 0, 0, 0.04);
+	box-sizing: border-box;
+}
+
+.new-project-member-email {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 10.66px;
+	letter-spacing: -0.2132px;
+	line-height: normal;
+	color: #767676;
+}
+
+.new-project-member-roles {
+	display: flex;
+	align-items: center;
+	gap: 7.107px;
+	height: 27.717px;
+	padding: 6.396px;
+	background-color: white;
+	border: 0.711px solid #eeeef2;
+	border-radius: 8.528px;
+	cursor: pointer;
+	box-sizing: border-box;
+}
+
+.new-project-member-roles-text {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 11.371px;
+	line-height: normal;
+	color: #98999d;
+}
+
+.new-project-member-roles-caret {
+	width: 14.925px;
+	height: 14.925px;
+	color: #98999d;
+}
+
+.new-project-member-remove {
+	width: 16.347px;
+	height: 16.347px;
+	color: #767676;
+	cursor: pointer;
+	flex-shrink: 0;
+	transition: color 0.2s;
+}
+
+.new-project-member-remove:hover {
+	color: #ff2d18;
+}
+
+/* Action Buttons */
+.new-project-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 7.031px;
+	width: 100%;
+}
+
+.new-project-cancel-btn {
+	width: 92.197px;
+	height: 27.283px;
+	background-color: transparent;
+	border: 0.686px solid #ff2d18;
+	border-radius: 4.118px;
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 10.981px;
+	line-height: normal;
+	color: #ff2d18;
+	text-transform: capitalize;
+	cursor: pointer;
+	transition: background-color 0.2s;
+}
+
+.new-project-cancel-btn:hover {
+	background-color: rgba(255, 45, 24, 0.05);
+}
+
+.new-project-create-btn {
+	width: 89.838px;
+	height: 28.904px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 4.687px 9.374px;
+	background-color: #ff4533;
+	border: 0.735px solid #ca2212;
+	border-radius: 4.412px;
+	box-shadow: 0px 2.942px 4.412px -0.735px rgba(202, 34, 18, 0.1), 0px 1.471px 2.942px -1.471px rgba(202, 34, 18, 0.1), inset 0px 0.735px 0px 0.735px #ee1500;
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 10.295px;
+	line-height: normal;
+	color: #f5f5f5;
+	cursor: pointer;
+	position: relative;
+	overflow: hidden;
+	transition: opacity 0.2s;
+}
+
+.new-project-create-btn::before {
+	content: "";
+	position: absolute;
+	inset: 0 0.2px 0.22px 0;
+	background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0));
+	pointer-events: none;
+}
+
+.new-project-create-btn:hover {
+	opacity: 0.9;
+}
+
+.new-project-create-btn.disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.new-project-create-btn.disabled:hover {
+	opacity: 0.6;
+}
+
+/* Error Message */
+.new-project-error {
+	width: 100%;
+	padding: 8px 12px;
+	background-color: #fee;
+	border: 1px solid #fcc;
+	border-radius: 6px;
+	font-family: "Inter", sans-serif;
+	font-size: 12px;
+	color: #c00;
+	text-align: center;
+	box-sizing: border-box;
+}
+
+/* ========================================
+   NEW ORGANIZATION MODAL STYLES
+   ======================================== */
+
+.new-org-modal {
+	background-color: white;
+	border-radius: 7.812px;
+	width: 475px;
+	max-width: 90vw;
+	max-height: 90vh;
+	overflow-y: auto;
+	box-shadow: 0px 4px 24px 0px rgba(0, 0, 0, 0.15);
+}
+
+.new-org-content {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 10.94px;
+	align-items: center;
+}
+
+/* Title Section */
+.new-org-title-section {
+	display: flex;
+	align-items: center;
+	width: 100%;
+}
+
+.new-org-title {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 20.738px;
+	line-height: normal;
+	color: black;
+	margin: 0;
+}
+
+/* Form Section */
+.new-org-form {
+	display: flex;
+	flex-direction: column;
+	gap: 18.749px;
+	width: 100%;
+}
+
+.new-org-field {
+	display: flex;
+	flex-direction: column;
+	gap: 9.374px;
+	width: 100%;
+}
+
+.new-org-label {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 13.313px;
+	letter-spacing: -0.2663px;
+	line-height: normal;
+	color: #454449;
+}
+
+.new-org-input {
+	height: 35.154px;
+	padding: 7.812px;
+	background-color: white;
+	border: 0.781px solid #ddd;
+	border-radius: 8.593px;
+	box-shadow: 0px 1.562px 3.125px 0px rgba(0, 0, 0, 0.04);
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 11.718px;
+	letter-spacing: -0.2344px;
+	color: #333;
+	box-sizing: border-box;
+}
+
+.new-org-input::placeholder {
+	color: #98999d;
+}
+
+.new-org-input:focus {
+	outline: none;
+	border-color: #ff4533;
+}
+
+/* Members Section */
+.new-org-members-section {
+	display: flex;
+	flex-direction: column;
+	gap: 11.718px;
+	width: 100%;
+}
+
+.new-org-members-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+}
+
+.new-org-add-member-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 3.125px;
+	width: auto;
+	height: 27.283px;
+	padding: 6.25px 10.937px;
+	background-color: transparent;
+	border: 0.686px solid #ff2d18;
+	border-radius: 4.118px;
+	cursor: pointer;
+	transition: background-color 0.2s;
+}
+
+.new-org-add-member-btn:hover {
+	background-color: rgba(255, 45, 24, 0.05);
+}
+
+.new-org-add-member-icon {
+	width: 9.433px;
+	height: 9.433px;
+	color: #ff2d18;
+}
+
+.new-org-add-member-btn span {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 10.981px;
+	line-height: normal;
+	color: #ff2d18;
+	text-transform: capitalize;
+}
+
+/* Members Box */
+.new-org-members-box {
+	display: flex;
+	flex-direction: column;
+	gap: 12.499px;
+	padding: 7.812px 25.78px;
+	background-color: #f7f7f7;
+	border: 0.781px solid #ddd;
+	border-radius: 11.718px;
+	box-shadow: 0px 1.562px 3.125px 0px rgba(0, 0, 0, 0.04);
+	min-height: 181px;
+	box-sizing: border-box;
+}
+
+.new-org-members-title {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 13.313px;
+	letter-spacing: -0.2663px;
+	line-height: normal;
+	color: #454449;
+	margin: 0;
+}
+
+/* Member Row */
+.new-org-member-row {
+	display: flex;
+	align-items: center;
+	gap: 7.107px;
+}
+
+.new-org-member-icon-box {
+	width: 31.981px;
+	height: 31.981px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: white;
+	border: 0.711px solid #ddd;
+	border-radius: 7.818px;
+	box-shadow: 0px 1.421px 2.843px 0px rgba(0, 0, 0, 0.04);
+	flex-shrink: 0;
+}
+
+.new-org-member-icon {
+	width: 17.057px;
+	height: 16.346px;
+	color: #767676;
+}
+
+.new-org-member-email-box {
+	flex: 1;
+	height: 31.981px;
+	display: flex;
+	align-items: center;
+	padding: 7.107px;
+	background-color: white;
+	border: 0.711px solid #ddd;
+	border-radius: 7.818px;
+	box-shadow: 0px 1.421px 2.843px 0px rgba(0, 0, 0, 0.04);
+	box-sizing: border-box;
+}
+
+.new-org-member-email {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 10.66px;
+	letter-spacing: -0.2132px;
+	line-height: normal;
+	color: #767676;
+}
+
+.new-org-member-roles {
+	display: flex;
+	align-items: center;
+	gap: 7.107px;
+	height: 27.717px;
+	padding: 6.396px;
+	background-color: white;
+	border: 0.711px solid #eeeef2;
+	border-radius: 8.528px;
+	cursor: pointer;
+	box-sizing: border-box;
+}
+
+.new-org-member-roles-text {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 11.371px;
+	line-height: normal;
+	color: #98999d;
+}
+
+.new-org-member-roles-caret {
+	width: 14.925px;
+	height: 14.925px;
+	color: #98999d;
+}
+
+.new-org-member-remove {
+	width: 16.347px;
+	height: 16.347px;
+	color: #767676;
+	cursor: pointer;
+	flex-shrink: 0;
+	transition: color 0.2s;
+}
+
+.new-org-member-remove:hover {
+	color: #ff2d18;
+}
+
+/* Action Buttons */
+.new-org-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 7.031px;
+	width: 100%;
+}
+
+.new-org-cancel-btn {
+	width: 92.197px;
+	height: 27.283px;
+	background-color: transparent;
+	border: 0.686px solid #ff2d18;
+	border-radius: 4.118px;
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 10.981px;
+	line-height: normal;
+	color: #ff2d18;
+	text-transform: capitalize;
+	cursor: pointer;
+	transition: background-color 0.2s;
+}
+
+.new-org-cancel-btn:hover {
+	background-color: rgba(255, 45, 24, 0.05);
+}
+
+.new-org-create-btn {
+	width: 89.838px;
+	height: 28.904px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 4.687px 9.374px;
+	background-color: #ff4533;
+	border: 0.735px solid #ca2212;
+	border-radius: 4.412px;
+	box-shadow: 0px 2.942px 4.412px -0.735px rgba(202, 34, 18, 0.1), 0px 1.471px 2.942px -1.471px rgba(202, 34, 18, 0.1), inset 0px 0.735px 0px 0.735px #ee1500;
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 10.295px;
+	line-height: normal;
+	color: #f5f5f5;
+	cursor: pointer;
+	position: relative;
+	overflow: hidden;
+	transition: opacity 0.2s;
+}
+
+.new-org-create-btn::before {
+	content: "";
+	position: absolute;
+	inset: 0 0.2px 0.22px 0;
+	background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0));
+	pointer-events: none;
+}
+
+.new-org-create-btn:hover {
+	opacity: 0.9;
+}
+
+.new-org-create-btn.disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.new-org-create-btn.disabled:hover {
+	opacity: 0.6;
+}
+
+/* Error Message */
+.new-org-error {
+	width: 100%;
+	padding: 8px 12px;
+	background-color: #fee;
+	border: 1px solid #fcc;
+	border-radius: 6px;
+	font-family: "Inter", sans-serif;
+	font-size: 12px;
+	color: #c00;
+	text-align: center;
+	box-sizing: border-box;
+}

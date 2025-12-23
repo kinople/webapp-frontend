@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import ProjectHeader from "../components/ProjectHeader";
 import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
+import "../css/CastListNew.css";
 
 /*
   CastList (updated layout)
@@ -20,77 +21,73 @@ const AddActorOptionModal = ({ onClose, onSubmit, optionForm, setOptionForm }) =
 	};
 
 	return (
-		<div style={styles.modalOverlay}>
-			<div style={styles.modalContent}>
-				<h3 style={styles.modalTitle}>Add Actor Option</h3>
-				<form onSubmit={handleSubmit} style={styles.form}>
-					<div style={styles.formGroup}>
-						<label style={styles.label}>Artist Name:</label>
+		<div className="modalOverlay">
+			<div className="modalContent">
+				<h3 className="modalTitle">Add Actor Option</h3>
+				<form onSubmit={handleSubmit} className="form">
+					<div className="formGroup">
+						<label className="label">Artist Name:</label>
 						<input
 							type="text"
 							value={optionForm.actorName}
 							onChange={(e) => setOptionForm((p) => ({ ...p, actorName: e.target.value }))}
-							style={styles.input}
+							className="input"
 							required
 						/>
 					</div>
 
-					<div style={styles.formGroup}>
-						<label style={styles.label}>Media (links):</label>
+					<div className="formGroup">
+						<label className="label">Media (links):</label>
 						<input
 							type="text"
 							value={optionForm.media}
 							onChange={(e) => setOptionForm((p) => ({ ...p, media: e.target.value }))}
-							style={styles.input}
+							className="input"
 							placeholder="Comma separated links (optional)"
 						/>
 					</div>
 
-					<div style={styles.formGroup}>
-						<label style={styles.label}>Contact Details:</label>
+					<div className="formGroup">
+						<label className="label">Contact Details:</label>
 						<textarea
 							value={optionForm.contact}
 							onChange={(e) => setOptionForm((p) => ({ ...p, contact: e.target.value }))}
-							style={{ ...styles.input, minHeight: "60px" }}
+							className="input"
 							placeholder="Phone / email / other contact info"
 						/>
 					</div>
 
-					<div style={styles.formGroup}>
-						<label style={styles.label}>Dates / Availability:</label>
+					<div className="formGroup">
+						<label className="label">Dates / Availability:</label>
 						<input
 							type="text"
 							value={optionForm.dates}
 							onChange={(e) => setOptionForm((p) => ({ ...p, dates: e.target.value }))}
-							style={styles.input}
+							className="input"
 							placeholder="e.g. 2025-08-01 to 2025-08-10"
 						/>
 					</div>
 
-					<div style={styles.formGroup}>
-						<label style={styles.label}>Details:</label>
+					<div className="formGroup">
+						<label className="label">Details:</label>
 						<textarea
 							value={optionForm.details}
 							onChange={(e) => setOptionForm((p) => ({ ...p, details: e.target.value }))}
-							style={{ ...styles.input, minHeight: "60px" }}
+							className="input"
 							placeholder="Short description / role notes"
 						/>
 					</div>
 
-					<div style={styles.formGroup}>
-						<label style={styles.label}>Notes:</label>
-						<textarea
-							value={optionForm.notes}
-							onChange={(e) => setOptionForm((p) => ({ ...p, notes: e.target.value }))}
-							style={{ ...styles.input, minHeight: "60px" }}
-						/>
+					<div className="formGroup">
+						<label className="label">Notes:</label>
+						<textarea value={optionForm.notes} onChange={(e) => setOptionForm((p) => ({ ...p, notes: e.target.value }))} className="input" />
 					</div>
 
-					<div style={styles.formButtons}>
-						<button type="submit" style={styles.submitButton}>
+					<div className="formButtons">
+						<button type="submit" className="submitButton">
 							Add Option
 						</button>
-						<button type="button" onClick={onClose} style={styles.cancelButton}>
+						<button type="button" onClick={onClose} className="cancelButton">
 							Cancel
 						</button>
 					</div>
@@ -191,6 +188,7 @@ const CastListNew = () => {
 				const data = await res.json();
 				CalculateScenceChars(data);
 				setCastData(data);
+				console.log("cast-list ------------ ", data);
 				if (Array.isArray(data?.cast_list)) setExpandedOptions(new Set(data.cast_list.map((_, i) => i)));
 			} catch (e) {
 				setError(e.message);
@@ -358,21 +356,21 @@ const CastListNew = () => {
 	};
 
 	return (
-		<div style={styles.page}>
+		<div className="page">
 			<ProjectHeader />
 
-			<div style={styles.contentArea}>
+			<div className="contentArea">
 				{isLoading ? (
-					<div style={styles.message}>Loading cast list…</div>
+					<div className="message">Loading cast list…</div>
 				) : error ? (
-					<div style={styles.errorMessage}>{error}</div>
+					<div className="errorMessage">{error}</div>
 				) : !castData || !(Array.isArray(castData.cast_list) && castData.cast_list.length) ? (
-					<div style={styles.message}>No cast members found</div>
+					<div className="message">No cast members found</div>
 				) : (
 					<>
-						<div style={styles.scriptInfo}>
-							<h2 style={styles.heading}>Cast List – {castData.project_name}</h2>
-							<p style={styles.subheading}>Total Characters: {castData.total_characters ?? castData.cast_list.length}</p>
+						<div className="scriptInfo">
+							<h2 className="heading">Cast List – {castData.project_name}</h2>
+							<p className="subheading">Total Characters: {castData.total_characters ?? castData.cast_list.length}</p>
 						</div>
 
 						{castData.cast_list.map((member, idx) => {
@@ -380,30 +378,30 @@ const CastListNew = () => {
 							const lgArray = Array.from(sceneAnalysis.locationGroupIds);
 
 							return (
-								<div key={idx} style={styles.card}>
+								<div key={idx} className="card">
 									{/* Left grey framed panel */}
-									<div style={styles.leftPanel}>
-										<div style={styles.leftTop}>
-											<div style={styles.indexBadge}>{idx + 1}</div>
-											<div style={styles.leftTitle}>{member.character}</div>
+									<div className="leftPanel">
+										<div className="leftTop">
+											<div className="indexBadge">{idx + 1}</div>
+											<div className="leftTitle">{member.character}</div>
 										</div>
-										<div style={styles.leftSection}>
+										<div className="leftSection">
 											<div style={{ fontSize: 13, color: "#374151", marginBottom: 6 }}>No. of scenes</div>
 											<div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-												<div style={styles.countBox}>{sceneAnalysis.total}</div>
+												<div className="countBox">{sceneAnalysis.total}</div>
 
 												<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-													<div style={styles.smallCount}>
-														<div style={styles.smallLabel}>Int.</div>
-														<div style={styles.smallNumber}>{sceneAnalysis.intCount}</div>
+													<div className="smallCount">
+														<div className="smallLabel">Int.</div>
+														<div className="smallNumber">{sceneAnalysis.intCount}</div>
 													</div>
-													<div style={styles.smallCount}>
-														<div style={styles.smallLabel}>Ext.</div>
-														<div style={styles.smallNumber}>{sceneAnalysis.extCount}</div>
+													<div className="smallCount">
+														<div className="smallLabel">Ext.</div>
+														<div className="smallNumber">{sceneAnalysis.extCount}</div>
 													</div>
-													<div style={styles.smallCount}>
-														<div style={styles.smallLabel}>Int./Ext.</div>
-														<div style={styles.smallNumber}>
+													<div className="smallCount">
+														<div className="smallLabel">Int./Ext.</div>
+														<div className="smallNumber">
 															{Math.max(
 																0,
 																sceneAnalysis.total - (sceneAnalysis.intCount + sceneAnalysis.extCount)
@@ -413,7 +411,7 @@ const CastListNew = () => {
 												</div>
 											</div>
 										</div>
-										<div style={styles.leftSection}>
+										<div className="leftSection">
 											<div style={{ fontSize: 13, color: "#374151", marginBottom: 6 }}>Location Groups</div>
 											<div
 												style={{
@@ -427,7 +425,7 @@ const CastListNew = () => {
 											>
 												{lgArray.length ? (
 													lgArray.map((g, i) => (
-														<div key={i} style={styles.lgBadge}>
+														<div key={i} className="lgBadge">
 															{g}
 														</div>
 													))
@@ -436,9 +434,9 @@ const CastListNew = () => {
 												)}
 											</div>
 										</div>
-										<div style={styles.viewButtons}>
+										<div className="viewButtons">
 											<button
-												style={{ ...styles.viewBtn, ...(expandedOptions.has(idx) ? styles.viewBtnActive : {}) }}
+												className={`viewBtn ${expandedOptions.has(idx) ? "viewBtnActive" : ""}`}
 												onClick={() => {
 													setExpandedOptions((p) => {
 														const n = new Set(p);
@@ -457,7 +455,7 @@ const CastListNew = () => {
 											</button>
 
 											<button
-												style={{ ...styles.viewBtn, ...(expandedScenes.has(idx) ? styles.viewBtnActive : {}) }}
+												className={`viewBtn ${expandedScenes.has(idx) ? "viewBtnActive" : ""}`}
 												onClick={() => {
 													setExpandedScenes((p) => {
 														const n = new Set(p);
@@ -478,14 +476,14 @@ const CastListNew = () => {
 									</div>
 
 									{/* Right panel */}
-									<div style={styles.rightPanel}>
+									<div className="rightPanel">
 										{!expandedScenes.has(idx) ? (
 											<>
 												{/* Option controls */}
 												{expandedOptions.has(idx) && (
-													<div style={styles.optionButtons}>
+													<div className="optionButtons">
 														<button
-															style={styles.newBtn}
+															className="newBtn"
 															onClick={() => {
 																setSelectedCharacterIndex(idx);
 																setShowAddOptionModal(true);
@@ -503,11 +501,7 @@ const CastListNew = () => {
 														</button>
 
 														<button
-															style={{
-																...styles.removeBtn,
-																backgroundColor: isSelectingMode.has(idx) ? "#6c757d" : "#f3f4f6",
-																color: isSelectingMode.has(idx) ? "white" : "black",
-															}}
+															className={`removeBtn ${isSelectingMode.has(idx) ? "selecting" : "notSelecting"}`}
 															onClick={() => {
 																if (!isSelectingMode.has(idx)) {
 																	// Enter selection mode
@@ -558,7 +552,7 @@ const CastListNew = () => {
 
 														{isSelectingMode.has(idx) && (
 															<button
-																style={styles.removeBtn}
+																className="removeBtn"
 																onClick={() => {
 																	// Clear selections for this character and exit selecting mode
 																	setSelectedOptions((prev) => {
@@ -584,18 +578,18 @@ const CastListNew = () => {
 												)}
 
 												{/* Updated Options Table */}
-												<table style={styles.table}>
+												<table className="table">
 													<thead>
 														<tr>
-															{isSelectingMode.has(idx) && <th style={styles.th}>Select</th>}
-															<th style={styles.th}>S.No</th>
-															<th style={styles.th}>Actor Name</th>
-															<th style={styles.th}>Media</th>
-															<th style={styles.th}>Contact</th>
-															<th style={styles.th}>Details</th>
-															<th style={styles.th}>Notes</th>
-															<th style={styles.th}>Dates</th>
-															<th style={styles.th}>Lock Location</th>
+															{isSelectingMode.has(idx) && <th className="th">Select</th>}
+															<th className="th">S.No</th>
+															<th className="th">Actor Name</th>
+															<th className="th">Media</th>
+															<th className="th">Contact</th>
+															<th className="th">Details</th>
+															<th className="th">Notes</th>
+															<th className="th">Dates</th>
+															<th className="th">Lock Location</th>
 														</tr>
 													</thead>
 
@@ -657,9 +651,9 @@ const CastListNew = () => {
 																]);
 
 																return (
-																	<tr key={optId} style={styles.tr}>
+																	<tr key={optId} className="tr">
 																		{isSelectingMode.has(idx) && (
-																			<td style={styles.td}>
+																			<td className="td">
 																				<input
 																					type="checkbox"
 																					checked={selectedOptions.has(key)}
@@ -677,20 +671,18 @@ const CastListNew = () => {
 																				/>
 																			</td>
 																		)}
-																		<td style={styles.td}>{i + 1}</td>
-																		<td style={styles.td}>{ActorName}</td>
-																		<td style={styles.td}>{media}</td>
-																		<td style={styles.td}>{contact}</td>
-																		<td style={styles.td}>{details}</td>
-																		<td style={styles.td}>{notes}</td>
-																		<td style={styles.td}>{dates}</td>
-																		<td style={styles.td}>
+																		<td className="td">{i + 1}</td>
+																		<td className="td">{ActorName}</td>
+																		<td className="td">{media}</td>
+																		<td className="td">{contact}</td>
+																		<td className="td">{details}</td>
+																		<td className="td">{notes}</td>
+																		<td className="td">{dates}</td>
+																		<td className="td">
 																			<button
-																				style={{
-																					...styles.lockBtn,
-																					...(locked ? styles.lockedBtn : {}),
-																					opacity: otherLocked && !locked ? 0.5 : 1,
-																				}}
+																				className={`lockBtn ${locked ? "locked" : ""} ${
+																					otherLocked && !locked ? "disabled" : ""
+																				}`}
 																				onClick={() => toggleLockOption(idx, optId)}
 																				disabled={otherLocked && !locked}
 																			>
@@ -702,7 +694,7 @@ const CastListNew = () => {
 															})
 														) : (
 															<tr>
-																<td colSpan={isSelectingMode.has(idx) ? 9 : 8} style={styles.emptyRow}>
+																<td colSpan={isSelectingMode.has(idx) ? 9 : 8} className="emptyRow">
 																	No options added
 																</td>
 															</tr>
@@ -713,15 +705,15 @@ const CastListNew = () => {
 										) : (
 											// Scenes listing - updated table columns
 											<div>
-												<table style={styles.table}>
+												<table className="table">
 													<thead>
 														<tr>
-															<th style={styles.th}>Scene No</th>
-															<th style={styles.th}>Int./Ext.</th>
-															<th style={styles.th}>Location</th>
-															<th style={styles.th}>Time </th>
-															<th style={styles.th}>Synopsis</th>
-															<th style={styles.th}>Characters</th>
+															<th className="th">Scene No</th>
+															<th className="th">Int./Ext.</th>
+															<th className="th">Location</th>
+															<th className="th">Time </th>
+															<th className="th">Synopsis</th>
+															<th className="th">Characters</th>
 														</tr>
 													</thead>
 													<tbody>
@@ -735,19 +727,19 @@ const CastListNew = () => {
 																const characters = sceneChars[s].join(" , ");
 
 																return (
-																	<tr key={i} style={styles.tr}>
-																		<td style={styles.td}>{sceneNo === "-" ? i + 1 : sceneNo}</td>
-																		<td style={styles.td}>{intExt}</td>
-																		<td style={styles.td}>{location}</td>
-																		<td style={styles.td}>{time}</td>
-																		<td style={styles.td}>{synopsis}</td>
-																		<td style={styles.td}>{characters}</td>
+																	<tr key={i} className="tr">
+																		<td className="td">{sceneNo === "-" ? i + 1 : sceneNo}</td>
+																		<td className="td">{intExt}</td>
+																		<td className="td">{location}</td>
+																		<td className="td">{time}</td>
+																		<td className="td">{synopsis}</td>
+																		<td className="td">{characters}</td>
 																	</tr>
 																);
 															})
 														) : (
 															<tr>
-																<td colSpan={6} style={styles.emptyRow}>
+																<td colSpan={6} className="emptyRow">
 																	No scenes listed
 																</td>
 															</tr>
@@ -766,12 +758,12 @@ const CastListNew = () => {
 
 			{/* Scenes Modal */}
 			{showScenesModal && (
-				<div style={styles.modalOverlay}>
-					<div style={styles.modalContent}>
-						<h3 style={styles.modalTitle}>Scenes for {selectedCharacter}</h3>
+				<div className="modalOverlay">
+					<div className="modalContent">
+						<h3 className="modalTitle">Scenes for {selectedCharacter}</h3>
 						<div style={{ maxHeight: "50vh", overflowY: "auto", marginBottom: 12 }}>
 							{(selectedCharacterScenes || []).length === 0 ? (
-								<div style={styles.emptyRow}>No scenes</div>
+								<div className="emptyRow">No scenes</div>
 							) : (
 								selectedCharacterScenes.map((s, i) => (
 									<div key={i} style={{ marginBottom: 12, paddingBottom: 8, borderBottom: "1px dashed rgba(0,0,0,0.06)" }}>
@@ -781,7 +773,7 @@ const CastListNew = () => {
 							)}
 						</div>
 						<div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-							<button style={styles.cancelButton} onClick={() => setShowScenesModal(false)}>
+							<button className="cancelButton" onClick={() => setShowScenesModal(false)}>
 								Close
 							</button>
 						</div>
@@ -800,202 +792,6 @@ const CastListNew = () => {
 			)}
 		</div>
 	);
-};
-
-/* -------------------- styles -------------------- */
-const styles = {
-	page: {
-		minHeight: "100vh",
-		background: "linear-gradient(135deg, #f5f7fa, #c3cfe2)",
-		fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',
-		padding: "2rem",
-		color: "#0f1724",
-	},
-	contentArea: { display: "flex", flexDirection: "column", gap: "2rem" },
-	heading: { fontSize: "2rem", color: "#2C3440", margin: 0 },
-	subheading: { fontSize: "1.2rem", color: "#2C3440", margin: 0 },
-
-	scriptInfo: {
-		textAlign: "center",
-		padding: "1rem",
-		backgroundColor: "rgba(255,255,255,0.6)",
-		backdropFilter: "blur(8px)",
-		borderRadius: "12px",
-		border: "1px solid rgba(255,255,255,0.8)",
-		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-	},
-
-	card: {
-		display: "flex",
-		borderRadius: "12px",
-		overflow: "hidden",
-		background: "rgba(255,255,255,0.6)",
-		backdropFilter: "blur(8px)",
-		border: "1px solid rgba(230,230,230,0.9)",
-		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-	},
-
-	/* left grey framed panel */
-	leftPanel: {
-		width: "300px",
-		padding: "1rem",
-		background: "#f3f4f6",
-		borderRight: "1px solid rgba(0,0,0,0.04)",
-		display: "flex",
-		flexDirection: "column",
-		gap: "12px",
-	},
-	leftTop: { display: "flex", alignItems: "center", gap: 12 },
-	indexBadge: {
-		width: 36,
-		height: 36,
-		borderRadius: "50%",
-		background: "#fff",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		fontWeight: 700,
-		color: "#111827",
-		boxShadow: "0 2px 6px rgba(2,6,23,0.06)",
-	},
-	leftTitle: { fontSize: 16, fontWeight: 700, color: "#0f1724" },
-
-	leftSection: { display: "flex", flexDirection: "column" },
-	countBox: {
-		minWidth: 52,
-		padding: "8px 10px",
-		borderRadius: 8,
-		background: "#fff",
-		border: "1px solid #e6edf3",
-		fontWeight: 700,
-		textAlign: "center",
-		color: "#0f1724",
-	},
-	smallCount: {
-		display: "flex",
-		flexDirection: "column",
-		gap: 4,
-		alignItems: "center",
-		minWidth: 56,
-	},
-	smallLabel: { fontSize: 12, color: "#6b7280" },
-	smallNumber: { fontWeight: 700, color: "#111827" },
-
-	lgBadge: {
-		display: "inline-flex",
-		alignItems: "center",
-		justifyContent: "center",
-		padding: "6px 10px",
-		borderRadius: 999,
-		background: "#fff",
-		border: "1px solid #e6edf3",
-		fontSize: 13,
-		color: "#0f1724",
-	},
-
-	viewButtons: { display: "flex", gap: 8, marginTop: 6 },
-	viewBtn: {
-		flex: 1,
-		padding: "0.6rem",
-		borderRadius: 8,
-		border: "1px solid #e6edf3",
-		background: "#fff",
-		cursor: "pointer",
-		fontWeight: 700,
-	},
-	viewBtnActive: {
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		color: "#fff",
-		border: "none",
-	},
-
-	/* right panel */
-	rightPanel: { flex: 1, padding: "1rem" },
-
-	optionButtons: { display: "flex", gap: "0.5rem", marginBottom: "1rem" },
-	newBtn: {
-		padding: "0.6rem 1.0rem",
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		color: "#fff",
-		border: "none",
-		borderRadius: "6px",
-		cursor: "pointer",
-	},
-	removeBtn: {
-		padding: "0.6rem 1.0rem",
-		background: "#f3f4f6",
-		border: "1px solid #e6e9ef",
-		borderRadius: "6px",
-		cursor: "pointer",
-	},
-
-	table: {
-		width: "100%",
-		borderCollapse: "collapse",
-		background: "#fff",
-		borderRadius: "8px",
-		overflow: "hidden",
-	},
-	th: {
-		textAlign: "left",
-		padding: "0.75rem",
-		background: "rgba(0,0,0,0.03)",
-		fontSize: 13,
-		color: "#334155",
-	},
-	tr: { borderBottom: "1px solid rgba(0,0,0,0.06)" },
-	td: { padding: "0.75rem", verticalAlign: "top", fontSize: 14 },
-	emptyRow: { textAlign: "center", color: "#666", padding: "1rem" },
-
-	lockBtn: {
-		padding: "0.35rem 0.7rem",
-		border: "1px solid #d1d5db",
-		borderRadius: "6px",
-		cursor: "pointer",
-		background: "#fff",
-	},
-	lockedBtn: { background: "linear-gradient(135deg, #6c5ce7, #00b894)", color: "#fff", border: "none" },
-
-	message: { textAlign: "center", padding: "2rem", color: "#666" },
-	errorMessage: { textAlign: "center", padding: "2rem", color: "#dc3545" },
-
-	modalOverlay: {
-		position: "fixed",
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-		backgroundColor: "rgba(0,0,0,0.5)",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		zIndex: 1000,
-		padding: 16,
-	},
-	modalContent: {
-		background: "rgba(255,255,255,0.98)",
-		backdropFilter: "blur(6px)",
-		borderRadius: "12px",
-		padding: "1.25rem",
-		width: "100%",
-		maxWidth: "760px",
-		boxShadow: "0 10px 30px rgba(2,6,23,0.12)",
-	},
-	modalTitle: { margin: 0, marginBottom: "0.75rem", color: "#2C3440", fontSize: 18 },
-	form: { display: "flex", flexDirection: "column", gap: "0.75rem" },
-	formGroup: { display: "flex", flexDirection: "column", gap: "0.35rem" },
-	label: { fontWeight: "600", color: "#2C3440", fontSize: 13 },
-	input: { padding: "0.6rem", borderRadius: "8px", border: "1px solid #e6edf3", fontSize: "0.95rem", background: "#fff" },
-	formButtons: { display: "flex", gap: "0.75rem", justifyContent: "flex-end", marginTop: 6 },
-	submitButton: {
-		padding: "0.6rem 1.0rem",
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		color: "#fff",
-		border: "none",
-		borderRadius: "8px",
-		cursor: "pointer",
-	},
-	cancelButton: { padding: "0.55rem 0.9rem", background: "#f3f4f6", border: "1px solid #e6e9ef", borderRadius: "8px", cursor: "pointer" },
 };
 
 export default CastListNew;

@@ -1,57 +1,52 @@
 import React, { useState, useEffect } from "react";
 import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import {
-	FaChevronLeft,
-	FaHome,
-	FaFileAlt,
-	FaLayerGroup,
-	FaUsers,
-	FaMapMarkerAlt,
-	FaCalendarAlt,
-	FaClipboardList,
-	FaChartBar,
-	FaCog,
-	FaSignOutAlt,
-} from "react-icons/fa";
+	PiHouseLine,
+	PiScroll,
+	PiStack,
+	PiUsersThree,
+	PiMapPinLine,
+	PiCalendarDots,
+	PiGear,
+	PiUser,
+	PiSignOut,
+	PiCaretDown,
+	PiArrowLeft,
+	PiSidebarSimple,
+	PiSliders,
+	PiCurrencyCircleDollar,
+} from "react-icons/pi";
 import { fetchWithAuth, getApiUrl } from "../utils/api";
-import { use } from "react";
+import { removeToken } from "../utils/auth";
+import { toggleNavbar } from "../redux/reducers/uiSlice";
+import { setCurrentOrganization } from "../redux/reducers/organizationSlice";
+import logoIcon from "../assets/logo-icon.svg";
+import "../css/Sidebar.css";
 
 const Sidebar = () => {
 	const { user, id } = useParams();
 	const location = useLocation();
 	const navigate = useNavigate();
-	const [IsInSettings, setIsInSettings] = useState(false);
-	const [UserDetails, setUserDetails] = useState("");
+	const dispatch = useDispatch();
+	const navbarCollapsed = useSelector((state) => state.ui.navbarCollapsed);
+	const projectName = useSelector((state) => state.project.projectName);
+	const currentOrganization = useSelector((state) => state.organization.currentOrganization);
+
+	const [userDetails, setUserDetails] = useState(null);
+	const [loggingOut, setLoggingOut] = useState(false);
+
+	// Check if we're on the settings page to show settings navigation
+	const isOnSettingsPage = location.pathname === `/${user}/${id}/settings`;
+
 	const mainNavItems = [
-		["Dashboard", <FaHome />, `/${user}/${id}`],
-		["Scripts", <FaFileAlt />, `/${user}/${id}/script`],
-		["Breakdown", <FaLayerGroup />, `/${user}/${id}/script-breakdown`],
-		["Cast List", <FaUsers />, `/${user}/${id}/cast-list`],
-		["Locations", <FaMapMarkerAlt />, `/${user}/${id}/locations`],
-		["Scheduling", <FaCalendarAlt />, `/${user}/${id}/scheduling/1`],
-		["Call Sheets", <FaClipboardList />, `/${user}/${id}/call-sheets`],
-		["Daily Reports", <FaChartBar />, `/${user}/${id}/dpr`],
+		{ label: "Dashboard", icon: PiHouseLine, path: `/${user}/${id}` },
+		{ label: "Scripts", icon: PiScroll, path: `/${user}/${id}/script` },
+		{ label: "Breakdown", icon: PiStack, path: `/${user}/${id}/script-breakdown` },
+		{ label: "Cast List", icon: PiUsersThree, path: `/${user}/${id}/cast-list` },
+		{ label: "Locations", icon: PiMapPinLine, path: `/${user}/${id}/locations` },
+		{ label: "Scheduling", icon: PiCalendarDots, path: `/${user}/${id}/scheduling/1` },
 	];
-
-	const bottomNavItems = [
-		["Settings", <FaCog />, `/${user}/${id}/settings`],
-		["Logout", <FaSignOutAlt />, `/`],
-	];
-
-	const settingsNavItems = [
-		["General", <FaCog />, `general`],
-		["Project Members", <FaUsers />, `members`],
-		["Billing and Usage", <FaClipboardList />, `billing`],
-	];
-
-	const handleKinopleClick = () => {
-		// Navigate back to user's home workspace
-		navigate(`/${user}`);
-	};
-
-	const handleSettingClick = () => {
-		setIsInSettings(!IsInSettings);
-	};
 
 	useEffect(() => {
 		if (user) {
@@ -59,18 +54,8 @@ const Sidebar = () => {
 		}
 	}, [user]);
 
-	useEffect(() => {
-		if (location.pathname.split("/").includes("settings")) {
-			setIsInSettings(true);
-		} else {
-			setIsInSettings(false);
-		}
-		//setIsInSettings()
-	}, [location.pathname]);
-
 	const fetchUserDetails = async () => {
 		try {
-			//setError(null);
 			const response = await fetchWithAuth(getApiUrl(`/api/user/${user}`), {
 				method: "GET",
 				credentials: "include",
@@ -84,182 +69,225 @@ const Sidebar = () => {
 			}
 
 			const data = await response.json();
-			//console.log("user data :::::::::::::::::::::;", data);
 			setUserDetails(data);
 		} catch (err) {
-			//setError(err.message);
 			console.error("Error fetching user details:", err);
-		} finally {
-			//setLoading(false);
 		}
 	};
+
+	const handleToggleSidebar = () => {
+		dispatch(toggleNavbar());
+	};
+
+	const handleSettingsClick = () => {
+		navigate(`/${user}/${id}/settings`, { state: { section: "general" } });
+	};
+
+	const handleSettingsSubItemClick = (section) => {
+		navigate(`/${user}/${id}/settings`, { state: { section } });
+	};
+
+	const handleBackFromSettings = () => {
+		navigate(`/${user}/${id}`);
+	};
+
+	const handleLogoClick = () => {
+		navigate(`/${user}`);
+	};
+
+	const handleLogout = async () => {
+		try {
+			setLoggingOut(true);
+			await fetchWithAuth(getApiUrl("/api/logout"), {
+				method: "POST",
+			});
+			removeToken();
+			navigate("/");
+		} catch (error) {
+			console.error("Logout error:", error);
+			removeToken();
+			navigate("/");
+		} finally {
+			setLoggingOut(false);
+		}
+	};
+
+	const getWorkspaceBadgeLetter = () => {
+		if (currentOrganization.name === "Personal") {
+			return userDetails?.email?.charAt(0).toUpperCase() || user?.charAt(0).toUpperCase() || "P";
+		}
+		return currentOrganization.name?.charAt(0).toUpperCase() || "O";
+	};
+
+	const getWorkspaceName = () => {
+		if (currentOrganization.name === "Personal") {
+			if (userDetails?.email) {
+				const username = userDetails.email.split("@")[0];
+				return `${username}'s workspace`;
+			}
+			return user ? `${user}'s workspace` : "Personal workspace";
+		}
+		// Show organization name (truncate if too long)
+		const orgName = currentOrganization.name;
+		return orgName.length > 18 ? orgName.substring(0, 18) + "..." : orgName;
+	};
+
+	// Check if a nav item is active - special handling for scripts-related paths
+	const isNavItemActive = (itemPath) => {
+		const currentPath = location.pathname;
+
+		// Dashboard
+		if (itemPath === `/${user}/${id}` && currentPath === itemPath) return true;
+
+		// Scripts
+		if (itemPath === `/${user}/${id}/script` && (currentPath === itemPath || currentPath.startsWith(`${itemPath}/`))) {
+			return true;
+		}
+
+		// Script Breakdown
+		if (itemPath === `/${user}/${id}/script-breakdown` && (currentPath === itemPath || currentPath.startsWith(`${itemPath}/`))) {
+			return true;
+		}
+
+		// Cast List
+		if (itemPath === `/${user}/${id}/cast-list` && (currentPath === itemPath || currentPath.startsWith(`${itemPath}/`))) {
+			return true;
+		}
+
+		// Locations
+		if (itemPath === `/${user}/${id}/locations` && (currentPath === itemPath || currentPath.startsWith(`${itemPath}/`))) {
+			return true;
+		}
+
+		// Scheduling (allow for scheduling, scheduling/1, scheduling/whatever)
+		if (
+			itemPath === `/${user}/${id}/scheduling/1` &&
+			(currentPath === `/${user}/${id}/scheduling` || currentPath.startsWith(`/${user}/${id}/scheduling/`))
+		) {
+			return true;
+		}
+
+		return false;
+	};
+
+	// Check if a settings sub-item is active
+	const isSettingsSubItemActive = (section) => {
+		if (!isOnSettingsPage) return false;
+		const currentSection = location.state?.section || "general";
+		return currentSection === section;
+	};
+
 	return (
-		<>
-			<style>{`
-
-			.workspaceLabel {
-        font-size: 15px;
-        color: #FFFFFF;
-        font-weight: 500;
-    }
-    .workspaceActive {
-        background-color: #4B9CD3;
-        padding: 1rem;
-        color: white;
-    }
-        .sidebar {
-          height: 100vh;
-          width: 240px;
-          background-color: #2C3440;
-          box-shadow: 2px 0 8px rgba(0,0,0,0.1);
-          border-left: none;
-          font-family: 'Inter', sans-serif;
-          position: fixed;
-          top: 0;
-          left: 0;
-          z-index: 100;
-          display: flex;
-          flex-direction: column;
-        }
-
-        .sidebar-header {
-          padding: 1rem;
-          border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-
-        .sidebar-logo {
-          font-size: 1.5rem;
-          font-weight: bold;
-          color: white;
-          text-decoration: none;
-          cursor: pointer;
-        }
-
-        .sidebar-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          padding-top: 24px;
-        }
-
-        .nav-list {
-          list-style: none;
-          padding: 0 16px;
-          margin: 0;
-        }
-
-        .nav-item {
-          margin-bottom: 12px;
-        }
-
-        .nav-link {
-          display: flex;
-          align-items: center;
-          padding: 10px 12px;
-          border-radius: 8px;
-          color: #FFFFFF;
-          text-decoration: none;
-          font-size: 15px;
-          font-weight: 500;
-          transition: background-color 0.2s ease-in-out;
-        }
-
-        .nav-link:hover {
-          background-color: #4B9CD3;
-          color: white;
-        }
-
-        .nav-link.active {
-          background-color: #4B9CD3;
-          color: white;
-        }
-
-        .icon-wrapper {
-          margin-right: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .nav-bottom {
-          margin-top: auto;
-          padding-bottom: 24px;
-        }
-      `}</style>
-
-			<div className="sidebar">
-				{/* Header Section with Kinople logo */}
+		<div className={`sidebar-container${navbarCollapsed ? " collapsed" : ""}`}>
+			<nav className="sidebar-nav">
+				{/* Header Section */}
 				<div className="sidebar-header">
-					<div className="sidebar-logo" onClick={handleKinopleClick}>
-						Kinople
-					</div>
-				</div>
-
-				<div className="workspaceActive">
-					<div className="workspaceLabel">
-						{UserDetails?.email ? `${UserDetails.email}'s Workspace` : user ? `${user}'s Workspace` : "User's Workspace"}
-					</div>
-				</div>
-
-				{/* Main Content */}
-				<div className="sidebar-content">
-					{IsInSettings ? (
-						<ul className="nav-list">
-							{settingsNavItems.map(([label, Icon, path], idx) => {
-								const isActive = (location.state?.section || "general") === path;
-								return (
-									<li className="nav-item" key={idx}>
-										<Link
-											to={`/${user}/${id}/settings`}
-											state={{ section: path }}
-											className={`nav-link${isActive ? " active" : ""}`}
-										>
-											{" "}
-											<span className="icon-wrapper">{Icon}</span>
-											{label}
-										</Link>
-									</li>
-								);
-							})}
-						</ul>
-					) : (
-						<ul className="nav-list">
-							{mainNavItems.map(([label, Icon, path], idx) => {
-								const isActive = location.pathname === path;
-								return (
-									<li className="nav-item" key={idx}>
-										<Link to={path} className={`nav-link${isActive ? " active" : ""}`}>
-											<span className="icon-wrapper">{Icon}</span>
-											{label}
-										</Link>
-									</li>
-								);
-							})}
-						</ul>
+					<img src={logoIcon} alt="Kinople" className="sidebar-logo-icon" onClick={handleLogoClick} />
+					{!navbarCollapsed && (
+						<span className="sidebar-logo-text" onClick={handleLogoClick}>
+							Kinople
+						</span>
 					)}
-
-					<ul className="nav-list nav-bottom">
-						<li className="nav-item">
-							<Link
-								onClick={handleSettingClick}
-								to={!IsInSettings ? `/${user}/${id}/settings` : `/${user}/${id}`}
-								className={`nav-link${location.pathname === `/${user}/${id}/settings` ? " active" : ""}`}
-							>
-								<span className="icon-wrapper">{IsInSettings ? <FaChevronLeft /> : <FaCog />}</span>
-								Settings
-							</Link>
-						</li>
-
-						<li className="nav-item">
-							<Link to={`/`} className={`nav-link${location.pathname === `/` ? " active" : ""}`}>
-								<span className="icon-wrapper">{<FaSignOutAlt />}</span>
-								Logout
-							</Link>
-						</li>
-					</ul>
+					<PiSidebarSimple className={`sidebar-toggle${navbarCollapsed ? " collapsed" : ""}`} onClick={handleToggleSidebar} />
 				</div>
-			</div>
-		</>
+
+				{/* Project Name Button */}
+				{!navbarCollapsed && (
+					<div className="sidebar-project-wrapper">
+						<div className="sidebar-project-button">
+							<span className="sidebar-project-name">{projectName || "Project"}</span>
+						</div>
+					</div>
+				)}
+
+				{/* Workspace Selector */}
+				{!navbarCollapsed && (
+					<div className="sidebar-workspace-selector">
+						<div className="sidebar-workspace-badge">
+							<span className="sidebar-workspace-badge-text">{getWorkspaceBadgeLetter()}</span>
+						</div>
+						<div className="sidebar-workspace-name-wrapper">
+							<span className="sidebar-workspace-name">{getWorkspaceName()}</span>
+							<PiCaretDown className="sidebar-workspace-caret" />
+						</div>
+					</div>
+				)}
+
+				{/* Settings & Profile Menu */}
+				{!navbarCollapsed && !isOnSettingsPage && (
+					<div className="sidebar-menu-section">
+						<div className="sidebar-menu-item" onClick={handleSettingsClick}>
+							<PiGear className="sidebar-menu-icon" />
+							<span className="sidebar-menu-text">Project Settings</span>
+						</div>
+						<Link to={`/${user}/settings`} className="sidebar-menu-item">
+							<PiUser className="sidebar-menu-icon" />
+							<span className="sidebar-menu-text">Profile</span>
+						</Link>
+					</div>
+				)}
+
+				{/* Main Navigation - Show settings options when on settings page */}
+				<div className="sidebar-main-nav">
+					{isOnSettingsPage ? (
+						<>
+							{/* Back button */}
+							{!navbarCollapsed && (
+								<div className="sidebar-back-button" onClick={handleBackFromSettings}>
+									<PiArrowLeft className="sidebar-nav-icon" />
+									<span className="sidebar-nav-text">Back to Project</span>
+								</div>
+							)}
+
+							{/* Settings Navigation Items */}
+							<div
+								className={`sidebar-nav-item${isSettingsSubItemActive("general") ? " active" : ""}`}
+								onClick={() => handleSettingsSubItemClick("general")}
+							>
+								<PiSliders className="sidebar-nav-icon" />
+								{!navbarCollapsed && <span className="sidebar-nav-text">General</span>}
+							</div>
+							<div
+								className={`sidebar-nav-item${isSettingsSubItemActive("members") ? " active" : ""}`}
+								onClick={() => handleSettingsSubItemClick("members")}
+							>
+								<PiUsersThree className="sidebar-nav-icon" />
+								{!navbarCollapsed && <span className="sidebar-nav-text">Project Members</span>}
+							</div>
+							<div
+								className={`sidebar-nav-item${isSettingsSubItemActive("billing") ? " active" : ""}`}
+								onClick={() => handleSettingsSubItemClick("billing")}
+							>
+								<PiCurrencyCircleDollar className="sidebar-nav-icon" />
+								{!navbarCollapsed && <span className="sidebar-nav-text">Billing and Usage</span>}
+							</div>
+						</>
+					) : (
+						mainNavItems.map((item) => {
+							const Icon = item.icon;
+							const isActive = isNavItemActive(item.path);
+							return (
+								<Link key={item.label} to={item.path} className={`sidebar-nav-item${isActive ? " active" : ""}`}>
+									<Icon className="sidebar-nav-icon" />
+									{!navbarCollapsed && <span className="sidebar-nav-text">{item.label}</span>}
+								</Link>
+							);
+						})
+					)}
+				</div>
+
+				{/* Spacer */}
+				<div className="sidebar-spacer"></div>
+
+				{/* Log Out */}
+				{!navbarCollapsed && (
+					<div className="sidebar-logout" onClick={handleLogout}>
+						<PiSignOut className="sidebar-logout-icon" />
+						<span className="sidebar-logout-text">{loggingOut ? "Logging out..." : "Log Out"}</span>
+					</div>
+				)}
+			</nav>
+		</div>
 	);
 };
 

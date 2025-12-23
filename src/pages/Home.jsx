@@ -1,17 +1,28 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
+import { useSelector } from "react-redux";
 import { getApiUrl, fetchWithAuth } from "../utils/api";
+import { PiUsers, PiFolder, PiMonitorPlay, PiCalendarBlank, PiCaretDown, PiCaretUp, PiCaretLeft, PiCaretRight } from "react-icons/pi";
+import "../css/Home.css";
 
 const Home = () => {
 	const [currentProjects, setCurrentProjects] = useState([]);
-	const previousProjects = []; // still empty for now
 	const { user } = useParams();
 	const navigate = useNavigate();
 	const location = useLocation();
+	const navbarCollapsed = useSelector((state) => state.ui.navbarCollapsed);
 
-	// Get organization info from navigation state
-	const organizationId = location.state?.organizationId || null;
-	const organizationName = location.state?.organizationName || "Personal";
+	// Get organization info from Redux store
+	const currentOrganization = useSelector((state) => state.organization.currentOrganization);
+	const organizationId = currentOrganization.id;
+	const organizationName = currentOrganization.name;
+
+	// Get refreshKey from navigation state (for triggering re-fetch after project creation)
+	const refreshKey = location.state?.refreshKey || null;
+
+	// Pagination state (dummy)
+	const [resultsPerPage, setResultsPerPage] = useState(16);
+	const [currentPage, setCurrentPage] = useState(1);
 
 	useEffect(() => {
 		if (!user) return;
@@ -33,133 +44,99 @@ const Home = () => {
 				setCurrentProjects([]);
 			}
 		})();
-	}, [user, organizationId]);
+	}, [user, organizationId, refreshKey]);
+
+	// Use real projects if available, otherwise show demo
+	const displayProjects = currentProjects;
+
+	const totalResults = displayProjects.length;
+	const totalPages = Math.ceil(totalResults / resultsPerPage) || 1;
 
 	return (
-		<div style={styles.page}>
-			<div style={styles.header}>
-				<h1 style={styles.heading}>{organizationName === "Personal" ? "Your Projects" : `${organizationName} 's projects`}</h1>
-				<button
-					style={styles.newBtn}
-					onClick={() =>
-						navigate(`/${user}/create-project`, {
-							state: {
-								organizationId,
-								organizationName,
-							},
-						})
-					}
-				>
-					+ New Project
-				</button>
+		<div className={`home-page${navbarCollapsed ? " navbar-collapsed" : ""}`}>
+			<div className="home-main-content">
+				{/* Header Section */}
+				<div className="home-header">
+					<h1 className="home-title">Projects</h1>
+					<button className="home-sort-btn">
+						<PiCalendarBlank className="home-sort-icon" />
+						<span className="home-sort-text">Sort by</span>
+						<PiCaretDown className="home-sort-caret" />
+					</button>
+				</div>
+
+				{/* Projects Grid */}
+				<div className="home-projects-container">
+					<div className="home-projects-grid">
+						{displayProjects.length === 0 && <div className="home-empty">No projects found</div>}
+						{displayProjects.map((project) => (
+							<Link key={project.id} to={`/${user}/${project.id}`} className="home-project-card">
+								<div className="home-card-content">
+									<div className="home-card-info">
+										<h3 className="home-card-title">{project.projectName || project.name}</h3>
+										<p className="home-card-type">Type: {project.type || project.projectType || "Film"}</p>
+									</div>
+									<div className="home-card-stats">
+										<div className="home-stat-item">
+											<PiUsers className="home-stat-icon" />
+											<span className="home-stat-text">{project.members || 2} members</span>
+										</div>
+										<div className="home-stat-item">
+											<PiFolder className="home-stat-icon" />
+											<span className="home-stat-text">{project.scripts || 2} Scripts</span>
+										</div>
+										{(project.type === "Episodic" || project.projectType === "Episodic") && (
+											<div className="home-stat-item">
+												<PiMonitorPlay className="home-stat-icon" />
+												<span className="home-stat-text">{project.episodes || 12} Episodes</span>
+											</div>
+										)}
+									</div>
+								</div>
+							</Link>
+						))}
+					</div>
+				</div>
+
+				{/* Footer / Pagination Section */}
+				<div className="home-footer">
+					<div className="home-footer-divider"></div>
+					<div className="home-footer-content">
+						{/* Left side - Results per page */}
+						<div className="home-footer-left">
+							<div className="home-results-selector">
+								<span className="home-results-count">{resultsPerPage}</span>
+								<PiCaretUp className="home-results-caret" />
+							</div>
+							<span className="home-results-text">Results: 1 - {Math.min(resultsPerPage, totalResults)}</span>
+						</div>
+
+						{/* Right side - Pagination */}
+						<div className="home-footer-right">
+							<button className="home-page-btn home-page-btn-disabled">
+								<PiCaretLeft className="home-page-icon" />
+								<span>Previous</span>
+							</button>
+
+							<div className="home-page-numbers">
+								<div className="home-page-number active">1</div>
+								<span className="home-page-number-text">2</span>
+								<span className="home-page-number-text">3</span>
+								<span className="home-page-number-text">4</span>
+								<span className="home-page-number-text">...</span>
+								<span className="home-page-number-text">8</span>
+							</div>
+
+							<button className="home-page-btn">
+								<span>Next</span>
+								<PiCaretRight className="home-page-icon" />
+							</button>
+						</div>
+					</div>
+				</div>
 			</div>
-
-			<section style={styles.section}>
-				<h2 style={styles.subheading}>Current</h2>
-				<div style={styles.grid}>
-					{currentProjects.length ? (
-						currentProjects.map((p) => (
-							<Link key={p.id} to={`/${user}/${p.id}`} style={styles.card}>
-								<h3 style={styles.cardTitle}>{p.projectName}</h3>
-								<p style={styles.cardDesc}>In Progress</p>
-							</Link>
-						))
-					) : (
-						<p style={styles.empty}>No active projects yet.</p>
-					)}
-				</div>
-			</section>
-
-			<section style={styles.section}>
-				<h2 style={styles.subheading}>Previous</h2>
-				<div style={styles.grid}>
-					{previousProjects.length ? (
-						previousProjects.map((p) => (
-							<Link key={p.id} to={`/project/${p.id}`} style={styles.card}>
-								<h3 style={styles.cardTitle}>{p.name}</h3>
-								<p style={styles.cardDesc}>Completed</p>
-							</Link>
-						))
-					) : (
-						<p style={styles.empty}>You haven’t completed any yet.</p>
-					)}
-				</div>
-			</section>
 		</div>
 	);
-};
-
-const styles = {
-	page: {
-		minHeight: "100vh",
-		padding: "2rem",
-		paddingLeft: "270px", // Add space for sidebar (250px + 20px margin)
-		background: "linear-gradient(135deg, #f5f7fa, #c3cfe2)",
-		fontFamily: "sans-serif",
-	},
-	header: {
-		display: "flex",
-		justifyContent: "space-between",
-		alignItems: "center",
-		marginBottom: "1.5rem",
-	},
-	heading: {
-		margin: 0,
-		fontSize: "2rem",
-		color: "#2C3440",
-	},
-	newBtn: {
-		padding: "0.6rem 1.2rem",
-		fontSize: "1rem",
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		color: "#fff",
-		border: "none",
-		borderRadius: "6px",
-		cursor: "pointer",
-		boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-		transition: "transform 0.2s",
-	},
-	section: {
-		marginBottom: "2rem",
-	},
-	subheading: {
-		margin: "0 0 0.5rem 0",
-		fontSize: "1.2rem",
-		color: "#2C3440",
-	},
-	grid: {
-		display: "grid",
-		gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))",
-		gap: "1rem",
-	},
-	card: {
-		display: "block",
-		padding: "1.2rem",
-		background: "rgba(255,255,255,0.6)",
-		backdropFilter: "blur(8px)",
-		border: "1px solid rgba(255,255,255,0.8)",
-		borderRadius: "12px",
-		textDecoration: "none",
-		color: "#2C3440",
-		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-		transition: "transform 0.2s, box-shadow 0.2s",
-	},
-	cardTitle: {
-		margin: "0 0 0.5rem 0",
-		fontSize: "1.1rem",
-		fontWeight: "600",
-	},
-	cardDesc: {
-		margin: 0,
-		fontSize: "0.9rem",
-		color: "#555",
-	},
-	empty: {
-		gridColumn: "1 / -1",
-		color: "#666",
-		textAlign: "center",
-		padding: "1rem 0",
-	},
 };
 
 export default Home;
