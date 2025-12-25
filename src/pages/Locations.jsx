@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import ProjectHeader from "../components/ProjectHeader";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
 import "../css/Locations.css";
@@ -22,44 +21,44 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 	);
 
 	return (
-		<div className="overlay">
-			<div className="content">
-				<h3>Add Location Option</h3>
-				<form onSubmit={handleSubmit} className="form">
-					<div className="formGroup">
-						<label>Location Name:</label>
+		<div className="loc-modal-overlay">
+			<div className="loc-modal">
+				<h3 className="loc-modal-title">Add Location Option</h3>
+				<form onSubmit={handleSubmit} className="loc-form">
+					<div className="loc-form-group">
+						<label className="loc-label">Location Name:</label>
 						<input
 							type="text"
 							value={optionForm.locationName || ""}
 							onChange={(e) => handleInputChange("locationName", e.target.value)}
-							className="input"
+							className="loc-input"
 							required
 							autoFocus
 						/>
 					</div>
-					<div className="formGroup">
-						<label>Address:</label>
+					<div className="loc-form-group">
+						<label className="loc-label">Address:</label>
 						<input
 							type="text"
 							value={optionForm.address || ""}
 							onChange={(e) => handleInputChange("address", e.target.value)}
-							className="input"
+							className="loc-input"
 						/>
 					</div>
-					<div className="formGroup">
-						<label>Notes:</label>
+					<div className="loc-form-group">
+						<label className="loc-label">Notes:</label>
 						<textarea
 							value={optionForm.notes || ""}
 							onChange={(e) => handleInputChange("notes", e.target.value)}
-							className="textarea"
+							className="loc-textarea"
 							placeholder=""
 						/>
 					</div>
-					<div className="formButtons">
-						<button type="submit" className="submitButton">
+					<div className="loc-modal-buttons">
+						<button type="submit" className="loc-submit-btn">
 							Add Option
 						</button>
-						<button type="button" onClick={onClose} className="cancelButton">
+						<button type="button" onClick={onClose} className="loc-cancel-btn">
 							Cancel
 						</button>
 					</div>
@@ -86,6 +85,7 @@ const Locations = () => {
 	const [selectedOptions, setSelectedOptions] = useState(new Set());
 	const [isSelectingMode, setIsSelectingMode] = useState(new Set()); // Track which locations are in selecting mode
 	const [lockedOptions, setLockedOptions] = useState(new Set()); // Track locked options
+	const [collapsedCards, setCollapsedCards] = useState(new Set()); // Track collapsed cards
 
 	// Memoize the option form setter to prevent unnecessary re-renders
 	const memoizedSetOptionForm = useCallback((updater) => {
@@ -258,279 +258,339 @@ const Locations = () => {
 	};
 
 	return (
-		<div className="pageContainer">
-			<ProjectHeader />
-			<div className="mainContent">
-				<div className="contentArea">
+		<div className="loc-page-container">
+			<div className="loc-main-content">
+				<div className="loc-content-area">
 					{isLoading ? (
-						<div className="message">Loading locations...</div>
+						<div className="loc-loading-container">
+							<div className="loc-spinner" />
+							<div className="loc-message">Loading locations...</div>
+						</div>
 					) : error ? (
-						<div className="errorMessage">{error}</div>
+						<div className="loc-error-container">
+							<div className="loc-error-message">⚠️ {error}</div>
+						</div>
 					) : !locationData || locationData.locations.length === 0 ? (
-						<div className="message">No locations found</div>
+						<div className="loc-empty-container">
+							<div className="loc-message">No locations found</div>
+						</div>
 					) : (
 						<>
-							<div className="scriptInfo">
-								<h2>Locations - {locationData.project_name}</h2>
-								<p>Total Locations: {locationData.total_locations}</p>
+							<div className="loc-header-info">
+								<h2 className="loc-heading">Locations - {locationData.project_name}</h2>
+								<p className="loc-subheading">Total Locations: {locationData.total_locations}</p>
 							</div>
 
-							<div className="actionButtons">
-								<button className="AddLocationbutton">Add Location</button>
-								<button className="button">Remove Location</button>
+							<div className="loc-action-buttons">
+								<button className="loc-action-btn loc-action-btn-primary">Add Location</button>
+								<button className="loc-action-btn">Remove Location</button>
 							</div>
 
-							{locationData.locations.map((location, index) => (
-								<div key={index} className="locationContainer">
-									<div className="leftPanel">
-										<div className="locationHeader">
-											<span className="locationNumber">{index + 1}</span>
-											<span className="locationName">{location.location}</span>
-										</div>
-
-										<div className="locationStats">
-											<div className="sceneCount">
-												No. of Scenes
-												<span className="sceneCountNumber">{location.scene_count}</span>
+							{locationData.locations.map((location, index) => {
+								const isCollapsed = collapsedCards.has(index);
+								return (
+									<div key={index} className={`loc-card ${isCollapsed ? "loc-card-collapsed" : ""}`}>
+										<div className={`loc-left-panel ${isCollapsed ? "loc-left-panel-collapsed" : ""}`}>
+											<div className="loc-left-top">
+												<span className="loc-index-badge">{index + 1}</span>
+												<span className="loc-left-title">{location.location}</span>
+												<button
+													className="loc-collapse-btn"
+													onClick={() => {
+														setCollapsedCards((prev) => {
+															const next = new Set(prev);
+															if (next.has(index)) next.delete(index);
+															else next.add(index);
+															return next;
+														});
+													}}
+													title={isCollapsed ? "Expand" : "Collapse"}
+												>
+													{isCollapsed ? "▼" : "▲"}
+												</button>
 											</div>
-											<div className="locationInfo">
-												<div>Int./Ext.: {location.int_ext_types?.join(", ") || "-"}</div>
-												<div>Times: {location.times?.join(", ") || "-"}</div>
-											</div>
-										</div>
 
-										<div className="viewButtons">
-											<button
-												className={`viewButton ${expandedOptions.has(index) ? "activeViewButton" : "inactiveViewButton"}`}
-												onClick={() => {
-													setExpandedOptions((prev) => new Set(prev).add(index));
-													setExpandedScenes((prev) => {
-														const next = new Set(prev);
-														next.delete(index);
-														return next;
-													});
-												}}
-											>
-												View Options
-											</button>
-											<button
-												className={`viewButton ${expandedScenes.has(index) ? "activeViewButton" : "inactiveViewButton"}`}
-												onClick={() => {
-													setExpandedScenes((prev) => new Set(prev).add(index));
-													setExpandedOptions((prev) => {
-														const next = new Set(prev);
-														next.delete(index);
-														return next;
-													});
-												}}
-											>
-												View Scenes
-											</button>
-										</div>
-									</div>
-
-									<div className="rightPanel">
-										{!expandedScenes.has(index) ? (
-											// Show location options table
-											<>
-												{expandedOptions.has(index) && (
-													<div className="optionButtons">
-														<button
-															className="AddLocationbutton"
-															onClick={() => {
-																setSelectedLocationIndex(index);
-																setShowAddOptionModal(true);
-															}}
-														>
-															Add Option
-														</button>
-
-														<button
-															className={`button ${isSelectingMode.has(index) ? "selecting" : "notSelecting"}`}
-															onClick={() => {
-																if (!isSelectingMode.has(index)) {
-																	// Enter selection mode
-																	setIsSelectingMode((prev) => new Set(prev).add(index));
-																} else {
-																	// In selection mode - remove selected options
-																	const selectedForLocation = Array.from(selectedOptions)
-																		.filter((key) => key.startsWith(`${index}-`))
-																		.map((key) => key.split("-")[1]);
-
-																	if (selectedForLocation.length === 0) {
-																		alert("Please select options to remove");
-																		return;
-																	}
-
-																	if (
-																		confirm(
-																			`Are you sure you want to remove ${selectedForLocation.length} selected option(s)?`
-																		)
-																	) {
-																		selectedForLocation.forEach((optionId) => {
-																			removeLocationOption(index, optionId);
-																		});
-																		// Clear selections and exit selecting mode
-																		setSelectedOptions((prev) => {
-																			const next = new Set(prev);
-																			selectedForLocation.forEach((optionId) => {
-																				next.delete(`${index}-${optionId}`);
-																			});
-																			return next;
-																		});
-																		setIsSelectingMode((prev) => {
-																			const next = new Set(prev);
-																			next.delete(index);
-																			return next;
-																		});
-																	}
-																}
-															}}
-														>
-															{!isSelectingMode.has(index)
-																? "Remove Option"
-																: `Remove Selected (${
-																		Array.from(selectedOptions).filter((key) =>
-																			key.startsWith(`${index}-`)
-																		).length
-																  })`}
-														</button>
-
-														{isSelectingMode.has(index) && (
-															<button
-																className="button"
-																onClick={() => {
-																	// Clear selections for this location and exit selecting mode
-																	setSelectedOptions((prev) => {
-																		const next = new Set();
-																		prev.forEach((key) => {
-																			if (!key.startsWith(`${index}-`)) {
-																				next.add(key);
-																			}
-																		});
-																		return next;
-																	});
-																	setIsSelectingMode((prev) => {
-																		const next = new Set(prev);
-																		next.delete(index);
-																		return next;
-																	});
-																}}
-															>
-																Cancel
-															</button>
-														)}
+											{!isCollapsed && (
+												<>
+													<div className="loc-left-section">
+														<div className="loc-section-label">No. of Scenes</div>
+														<div className="loc-stats-row">
+															<div className="loc-count-box">{location.scene_count}</div>
+														</div>
 													</div>
-												)}
-												<table className="table">
-													<thead>
-														<tr>
-															{isSelectingMode.has(index) && <th>Select</th>}
-															<th>Location Name</th>
-															<th>Address</th>
-															<th>Notes</th>
-															<th>Lock</th>
-														</tr>
-													</thead>
-													<tbody>
-														{location.location_options && Object.keys(location.location_options).length > 0 ? (
-															Object.entries(location.location_options).map(([optionId, option], optionIndex) => {
-																const optionKey = `${index}-${optionId}`;
-																const isLocked = lockedOptions.has(optionKey);
-																const hasAnyLocked = Array.from(lockedOptions).some((key) =>
-																	key.startsWith(`${index}-`)
-																);
 
-																return (
-																	<tr key={optionIndex} className="tableRow">
-																		{isSelectingMode.has(index) && (
-																			<td>
-																				<input
-																					type="checkbox"
-																					checked={selectedOptions.has(optionKey)}
-																					onChange={(e) => {
-																						setSelectedOptions((prev) => {
-																							const next = new Set(prev);
-																							if (e.target.checked) {
-																								next.add(optionKey);
-																							} else {
-																								next.delete(optionKey);
+													<div className="loc-left-section">
+														<div className="loc-section-label">Details</div>
+														<div className="loc-info-box">
+															<div className="loc-info-row">
+																<span className="loc-info-label">Int./Ext.:</span>
+																<span className="loc-info-value">
+																	{location.int_ext_types?.join(", ") || "-"}
+																</span>
+															</div>
+															<div className="loc-info-row">
+																<span className="loc-info-label">Times:</span>
+																<span className="loc-info-value">{location.times?.join(", ") || "-"}</span>
+															</div>
+														</div>
+													</div>
+
+													<div className="loc-view-buttons">
+														<button
+															className={`loc-view-btn ${expandedOptions.has(index) ? "loc-view-btn-active" : ""}`}
+															onClick={() => {
+																setExpandedOptions((prev) => new Set(prev).add(index));
+																setExpandedScenes((prev) => {
+																	const next = new Set(prev);
+																	next.delete(index);
+																	return next;
+																});
+															}}
+														>
+															View Options
+														</button>
+														<button
+															className={`loc-view-btn ${expandedScenes.has(index) ? "loc-view-btn-active" : ""}`}
+															onClick={() => {
+																setExpandedScenes((prev) => new Set(prev).add(index));
+																setExpandedOptions((prev) => {
+																	const next = new Set(prev);
+																	next.delete(index);
+																	return next;
+																});
+															}}
+														>
+															View Scenes
+														</button>
+													</div>
+												</>
+											)}
+										</div>
+
+										{!isCollapsed && (
+											<div className="loc-right-panel">
+												{!expandedScenes.has(index) ? (
+													// Show location options table
+													<>
+														{expandedOptions.has(index) && (
+															<div className="loc-option-buttons">
+																<button
+																	className="loc-action-btn loc-action-btn-primary"
+																	onClick={() => {
+																		setSelectedLocationIndex(index);
+																		setShowAddOptionModal(true);
+																	}}
+																>
+																	+ Add Option
+																</button>
+
+																<button
+																	className={`loc-action-btn ${
+																		isSelectingMode.has(index) ? "loc-selecting" : ""
+																	}`}
+																	onClick={() => {
+																		if (!isSelectingMode.has(index)) {
+																			// Enter selection mode
+																			setIsSelectingMode((prev) => new Set(prev).add(index));
+																		} else {
+																			// In selection mode - remove selected options
+																			const selectedForLocation = Array.from(selectedOptions)
+																				.filter((key) => key.startsWith(`${index}-`))
+																				.map((key) => key.split("-")[1]);
+
+																			if (selectedForLocation.length === 0) {
+																				alert("Please select options to remove");
+																				return;
+																			}
+
+																			if (
+																				confirm(
+																					`Are you sure you want to remove ${selectedForLocation.length} selected option(s)?`
+																				)
+																			) {
+																				selectedForLocation.forEach((optionId) => {
+																					removeLocationOption(index, optionId);
+																				});
+																				// Clear selections and exit selecting mode
+																				setSelectedOptions((prev) => {
+																					const next = new Set(prev);
+																					selectedForLocation.forEach((optionId) => {
+																						next.delete(`${index}-${optionId}`);
+																					});
+																					return next;
+																				});
+																				setIsSelectingMode((prev) => {
+																					const next = new Set(prev);
+																					next.delete(index);
+																					return next;
+																				});
+																			}
+																		}
+																	}}
+																>
+																	{!isSelectingMode.has(index)
+																		? "– Remove Option"
+																		: `Remove Selected (${
+																				Array.from(selectedOptions).filter((key) =>
+																					key.startsWith(`${index}-`)
+																				).length
+																		  })`}
+																</button>
+
+																{isSelectingMode.has(index) && (
+																	<button
+																		className="loc-action-btn"
+																		onClick={() => {
+																			// Clear selections for this location and exit selecting mode
+																			setSelectedOptions((prev) => {
+																				const next = new Set();
+																				prev.forEach((key) => {
+																					if (!key.startsWith(`${index}-`)) {
+																						next.add(key);
+																					}
+																				});
+																				return next;
+																			});
+																			setIsSelectingMode((prev) => {
+																				const next = new Set(prev);
+																				next.delete(index);
+																				return next;
+																			});
+																		}}
+																	>
+																		Cancel
+																	</button>
+																)}
+															</div>
+														)}
+														<table className="loc-table">
+															<thead className="loc-thead">
+																<tr className="loc-header-row">
+																	{isSelectingMode.has(index) && <th className="loc-header-cell">Select</th>}
+																	<th className="loc-header-cell">Location Name</th>
+																	<th className="loc-header-cell">Address</th>
+																	<th className="loc-header-cell">Notes</th>
+																	<th className="loc-header-cell">Lock</th>
+																</tr>
+															</thead>
+															<tbody className="loc-tbody">
+																{location.location_options &&
+																Object.keys(location.location_options).length > 0 ? (
+																	Object.entries(location.location_options).map(
+																		([optionId, option], optionIndex) => {
+																			const optionKey = `${index}-${optionId}`;
+																			const isLocked = lockedOptions.has(optionKey);
+																			const hasAnyLocked = Array.from(lockedOptions).some((key) =>
+																				key.startsWith(`${index}-`)
+																			);
+
+																			return (
+																				<tr key={optionIndex} className="loc-data-row">
+																					{isSelectingMode.has(index) && (
+																						<td className="loc-data-cell">
+																							<input
+																								type="checkbox"
+																								checked={selectedOptions.has(optionKey)}
+																								onChange={(e) => {
+																									setSelectedOptions((prev) => {
+																										const next = new Set(prev);
+																										if (e.target.checked) {
+																											next.add(optionKey);
+																										} else {
+																											next.delete(optionKey);
+																										}
+																										return next;
+																									});
+																								}}
+																							/>
+																						</td>
+																					)}
+																					<td className="loc-data-cell">
+																						{option.locationName ||
+																							option.location_name ||
+																							"-"}
+																					</td>
+																					<td className="loc-data-cell">
+																						{option.address || "-"}
+																					</td>
+																					<td className="loc-data-cell">
+																						{option.notes || "-"}
+																					</td>
+																					<td className="loc-data-cell">
+																						<button
+																							onClick={() =>
+																								toggleLockOption(index, optionId)
 																							}
-																							return next;
-																						});
-																					}}
-																				/>
-																			</td>
-																		)}
-																		<td>{option.locationName || option.location_name || "-"}</td>
-																		<td>{option.address || "-"}</td>
-																		<td>{option.notes || "-"}</td>
-																		<td>
-																			<button
-																				onClick={() => toggleLockOption(index, optionId)}
-																				className={`lockButton ${isLocked ? "lockedButton" : ""} ${
-																					!isLocked && hasAnyLocked ? "disabled" : ""
-																				}`}
-																				disabled={!isLocked && hasAnyLocked}
-																				title={
-																					isLocked
-																						? "Click to unlock"
-																						: hasAnyLocked
-																						? "Another option is locked"
-																						: "Click to lock"
-																				}
-																			>
-																				{isLocked ? "Locked" : "Lock"}
-																			</button>
+																							className={`loc-lock-btn ${
+																								isLocked ? "loc-locked" : ""
+																							} ${
+																								!isLocked && hasAnyLocked
+																									? "loc-disabled"
+																									: ""
+																							}`}
+																							disabled={!isLocked && hasAnyLocked}
+																							title={
+																								isLocked
+																									? "Click to unlock"
+																									: hasAnyLocked
+																									? "Another option is locked"
+																									: "Click to lock"
+																							}
+																						>
+																							{isLocked ? "🔒 Locked" : "🔓 Lock"}
+																						</button>
+																					</td>
+																				</tr>
+																			);
+																		}
+																	)
+																) : (
+																	<tr className="loc-data-row">
+																		<td
+																			colSpan={isSelectingMode.has(index) ? "5" : "5"}
+																			className="loc-empty-row"
+																		>
+																			No location options added yet
 																		</td>
 																	</tr>
-																);
-															})
-														) : (
-															<tr className="tableRow">
-																<td
-																	colSpan={isSelectingMode.has(index) ? "5" : "5"}
-																	style={{ textAlign: "center", fontStyle: "italic", color: "#666" }}
-																>
-																	No location options added yet
-																</td>
+																)}
+															</tbody>
+														</table>
+													</>
+												) : (
+													// Show scenes table - simplified without breakdown data
+													<table className="loc-table">
+														<thead className="loc-thead">
+															<tr className="loc-header-row">
+																<th className="loc-header-cell">Scene No.</th>
+																<th className="loc-header-cell">Int./Ext.</th>
+																<th className="loc-header-cell">Time</th>
 															</tr>
-														)}
-													</tbody>
-												</table>
-											</>
-										) : (
-											// Show scenes table - simplified without breakdown data
-											<table className="table">
-												<thead>
-													<tr>
-														<th>Scene No.</th>
-														<th>Int./Ext.</th>
-														<th>Time</th>
-													</tr>
-												</thead>
-												<tbody>
-													{location.scenes && location.scenes.length > 0 ? (
-														location.scenes.map((scene, sceneIndex) => (
-															<tr key={sceneIndex} className="tableRow">
-																<td>{scene.scene_number}</td>
-																<td>{scene.int_ext}</td>
-																<td>{scene.time}</td>
-															</tr>
-														))
-													) : (
-														<tr className="tableRow">
-															<td colSpan="3" style={{ textAlign: "center", fontStyle: "italic", color: "#666" }}>
-																No scenes available
-															</td>
-														</tr>
-													)}
-												</tbody>
-											</table>
+														</thead>
+														<tbody className="loc-tbody">
+															{location.scenes && location.scenes.length > 0 ? (
+																location.scenes.map((scene, sceneIndex) => (
+																	<tr key={sceneIndex} className="loc-data-row">
+																		<td className="loc-data-cell">{scene.scene_number}</td>
+																		<td className="loc-data-cell">{scene.int_ext}</td>
+																		<td className="loc-data-cell">{scene.time}</td>
+																	</tr>
+																))
+															) : (
+																<tr className="loc-data-row">
+																	<td colSpan="3" className="loc-empty-row">
+																		No scenes available
+																	</td>
+																</tr>
+															)}
+														</tbody>
+													</table>
+												)}
+											</div>
 										)}
 									</div>
-								</div>
-							))}
+								);
+							})}
 						</>
 					)}
 				</div>
@@ -547,649 +607,6 @@ const Locations = () => {
 			)}
 		</div>
 	);
-};
-
-const styles = {
-	// Page-level styles (from CastListNew for modern look)
-	page: {
-		minHeight: "100vh",
-		background: "linear-gradient(135deg, #f5f7fa, #c3cfe2)",
-		fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',
-		padding: "2rem",
-		color: "#0f1724",
-	},
-	pageContainer: {
-		display: "flex",
-		flexDirection: "column",
-		minHeight: "100vh",
-		backgroundColor: "#fff",
-	},
-	mainContent: {
-		padding: "20px",
-	},
-	contentArea: { display: "flex", flexDirection: "column", gap: "2rem" },
-	heading: { fontSize: "2rem", color: "#2C3440", margin: 0 },
-	subheading: { fontSize: "1.2rem", color: "#2C3440", margin: 0 },
-
-	scriptInfo: {
-		textAlign: "center",
-		padding: "1rem",
-		backgroundColor: "rgba(255,255,255,0.6)",
-		backdropFilter: "blur(8px)",
-		borderRadius: "12px",
-		border: "1px solid rgba(255,255,255,0.8)",
-		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-	},
-
-	card: {
-		display: "flex",
-		borderRadius: "12px",
-		overflow: "hidden",
-		background: "rgba(255,255,255,0.6)",
-		backdropFilter: "blur(8px)",
-		border: "1px solid rgba(230,230,230,0.9)",
-		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-	},
-
-	// Action buttons
-	actionButtons: {
-		display: "flex",
-		gap: "10px",
-		justifyContent: "center",
-		marginBottom: "20px",
-	},
-	button: {
-		padding: "8px 16px",
-		backgroundColor: "#e0e0e0",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-	},
-	AddLocationbutton: {
-		padding: "8px 16px",
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		border: "none",
-		borderRadius: "4px",
-		color: "white",
-		cursor: "pointer",
-	},
-
-	// Location containers
-	locationGroupContainer: {
-		display: "flex",
-		borderRadius: "12px",
-		overflow: "hidden",
-		background: "rgba(255,255,255,0.6)",
-		backdropFilter: "blur(8px)",
-		border: "1px solid rgba(230,230,230,0.9)",
-		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-		minHeight: "fit-content",
-		maxHeight: "400px",
-	},
-	locationContainer: {
-		display: "flex",
-		borderRadius: "12px",
-		overflow: "hidden",
-		background: "rgba(255,255,255,0.6)",
-		backdropFilter: "blur(8px)",
-		border: "1px solid rgba(230,230,230,0.9)",
-		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-		minHeight: "fit-content",
-		maxHeight: "400px",
-	},
-	ungroupedContainer: {
-		display: "flex",
-		borderRadius: "12px",
-		overflow: "hidden",
-		background: "rgba(255,255,255,0.6)",
-		backdropFilter: "blur(8px)",
-		border: "1px solid rgba(230,230,230,0.9)",
-		boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-	},
-
-	/* Left grey framed panel */
-	leftPanel: {
-		width: "300px",
-		padding: "1rem",
-		background: "#f3f4f6",
-		borderRight: "1px solid rgba(0,0,0,0.04)",
-		display: "flex",
-		flexDirection: "column",
-		gap: "12px",
-		overflow: "auto",
-		minHeight: "fit-content",
-	},
-	leftTop: { display: "flex", alignItems: "center", gap: 12 },
-	indexBadge: {
-		width: 36,
-		height: 36,
-		borderRadius: "50%",
-		background: "#fff",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		fontWeight: 700,
-		color: "#111827",
-		boxShadow: "0 2px 6px rgba(2,6,23,0.06)",
-	},
-	leftTitle: { fontSize: 16, fontWeight: 700, color: "#0f1724" },
-	leftSection: { display: "flex", flexDirection: "column" },
-
-	// Group/Location header styles
-	groupHeader: {
-		display: "flex",
-		alignItems: "center",
-		gap: "10px",
-	},
-	locationHeader: {
-		display: "flex",
-		alignItems: "center",
-		gap: "10px",
-	},
-	groupNumber: {
-		backgroundColor: "#fff",
-		borderRadius: "50%",
-		width: "36px",
-		height: "36px",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		fontWeight: 700,
-		color: "#111827",
-		boxShadow: "0 2px 6px rgba(2,6,23,0.06)",
-		fontSize: "14px",
-	},
-	locationNumber: {
-		backgroundColor: "#fff",
-		borderRadius: "50%",
-		width: "36px",
-		height: "36px",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		fontWeight: 700,
-		color: "#111827",
-		boxShadow: "0 2px 6px rgba(2,6,23,0.06)",
-		fontSize: "14px",
-	},
-	groupName: {
-		fontWeight: 700,
-		color: "#0f1724",
-		fontSize: 16,
-	},
-	locationName: {
-		fontWeight: 700,
-		color: "#0f1724",
-		fontSize: 16,
-	},
-	ungroupedTitle: {
-		margin: 0,
-		fontWeight: 700,
-		color: "#0f1724",
-		fontSize: 16,
-	},
-
-	// Scene stats and counts
-	sceneStats: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "10px",
-	},
-	locationStats: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "10px",
-	},
-	locationInfo: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "5px",
-		fontSize: "0.9em",
-		color: "#666",
-	},
-	countBox: {
-		minWidth: 52,
-		padding: "8px 10px",
-		borderRadius: 8,
-		background: "#fff",
-		border: "1px solid #e6edf3",
-		fontWeight: 700,
-		textAlign: "center",
-		color: "#0f1724",
-	},
-	smallCount: {
-		display: "flex",
-		flexDirection: "column",
-		gap: 4,
-		alignItems: "center",
-		minWidth: 56,
-	},
-	smallLabel: { fontSize: 12, color: "#6b7280" },
-	smallNumber: { fontWeight: 700, color: "#111827" },
-	sceneCountNumber: {
-		display: "inline-block",
-		padding: "8px 10px",
-		backgroundColor: "#fff",
-		border: "1px solid #e6edf3",
-		borderRadius: "8px",
-		fontSize: "14px",
-		minWidth: "52px",
-		textAlign: "center",
-		fontWeight: 700,
-		color: "#0f1724",
-		marginLeft: "8px",
-	},
-
-	lgBadge: {
-		display: "inline-flex",
-		alignItems: "center",
-		justifyContent: "center",
-		padding: "6px 10px",
-		borderRadius: 999,
-		background: "#fff",
-		border: "1px solid #e6edf3",
-		fontSize: 13,
-		color: "#0f1724",
-	},
-
-	// Checkbox styles
-	checkboxGroup: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "5px",
-	},
-	checkbox: {
-		cursor: "default",
-	},
-
-	// Input styles
-	numberInput: {
-		width: "40px",
-		textAlign: "center",
-		padding: "4px",
-		borderRadius: "4px",
-		border: "1px solid #e6edf3",
-	},
-
-	// View buttons
-	viewButtons: { display: "flex", gap: 8, marginTop: 6 },
-	viewBtn: {
-		flex: 1,
-		padding: "0.6rem",
-		borderRadius: 8,
-		border: "1px solid #e6edf3",
-		background: "#fff",
-		cursor: "pointer",
-		fontWeight: 700,
-		transition: "all 0.3s ease",
-	},
-	viewBtnActive: {
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		color: "#fff",
-		border: "none",
-	},
-	viewButton: {
-		flex: 1,
-		padding: "0.6rem",
-		borderRadius: 8,
-		border: "1px solid #e6edf3",
-		background: "#fff",
-		cursor: "pointer",
-		fontWeight: 700,
-		transition: "all 0.3s ease",
-	},
-	activeViewButton: {
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		color: "#fff",
-		border: "none",
-	},
-	inactiveViewButton: {
-		backgroundColor: "#f3f4f6",
-		color: "#666",
-		border: "1px solid #e6e9ef",
-	},
-
-	/* Right panel */
-	rightPanel: {
-		flex: 1,
-		padding: "1rem",
-		backgroundColor: "#fff",
-		overflow: "auto",
-		minHeight: "fit-content",
-	},
-
-	optionButtons: { display: "flex", gap: "0.5rem", marginBottom: "1rem" },
-	newBtn: {
-		padding: "0.6rem 1.0rem",
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		color: "#fff",
-		border: "none",
-		borderRadius: "6px",
-		cursor: "pointer",
-	},
-	removeBtn: {
-		padding: "0.6rem 1.0rem",
-		background: "#f3f4f6",
-		border: "1px solid #e6e9ef",
-		borderRadius: "6px",
-		cursor: "pointer",
-	},
-
-	// Table styles
-	table: {
-		width: "100%",
-		borderCollapse: "collapse",
-		background: "#fff",
-		borderRadius: "8px",
-		overflow: "hidden",
-		border: "1px solid #e0e0e0",
-	},
-	th: {
-		textAlign: "left",
-		padding: "0.75rem",
-		background: "rgba(0,0,0,0.03)",
-		fontSize: 13,
-		color: "#334155",
-		position: "sticky",
-		top: 0,
-		zIndex: 1,
-		borderBottom: "2px solid #ddd",
-		fontWeight: "bold",
-	},
-	tr: { borderBottom: "1px solid rgba(0,0,0,0.06)" },
-	td: {
-		padding: "0.75rem",
-		verticalAlign: "top",
-		fontSize: 14,
-		textAlign: "left",
-		borderBottom: "1px solid #e0e0e0",
-	},
-	tableRow: {
-		backgroundColor: "#fff",
-		"&:hover": {
-			backgroundColor: "#f5f5f5",
-		},
-	},
-	optionRow: {
-		backgroundColor: "#fafafa",
-		"& td": {
-			color: "#666",
-			fontSize: "0.95em",
-			paddingLeft: "32px",
-		},
-		"&:hover": {
-			backgroundColor: "#f5f5f5",
-		},
-	},
-	datesRow: {
-		backgroundColor: "#f8f8f8",
-		borderBottom: "1px solid #e0e0e0",
-	},
-	datesCell: {
-		padding: "8px 32px",
-		color: "#666",
-		fontSize: "0.9em",
-		fontStyle: "italic",
-	},
-	emptyRow: { textAlign: "center", color: "#666", padding: "1rem" },
-
-	// Button styles
-	iconButton: {
-		background: "none",
-		border: "none",
-		cursor: "pointer",
-		fontSize: "16px",
-		padding: "4px 8px",
-		borderRadius: "4px",
-		transition: "background-color 0.2s",
-		"&:hover": {
-			backgroundColor: "#f0f0f0",
-		},
-	},
-	scenesButton: {
-		padding: "0.6rem",
-		backgroundColor: "#f3f4f6",
-		border: "1px solid #e6e9ef",
-		borderRadius: "8px",
-		cursor: "pointer",
-		fontSize: "0.9em",
-		color: "#0f1724",
-		fontWeight: 600,
-		"&:hover": {
-			backgroundColor: "#e5e7eb",
-		},
-	},
-	lockBtn: {
-		padding: "0.35rem 0.7rem",
-		border: "1px solid #d1d5db",
-		borderRadius: "6px",
-		cursor: "pointer",
-		background: "#fff",
-		fontSize: "0.9em",
-		transition: "all 0.2s",
-	},
-	lockedBtn: {
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		color: "#fff",
-		border: "none",
-	},
-	lockButton: {
-		padding: "0.35rem 0.7rem",
-		backgroundColor: "#fff",
-		border: "1px solid #d1d5db",
-		borderRadius: "6px",
-		cursor: "pointer",
-		fontSize: "0.9em",
-		transition: "all 0.2s",
-		"&:hover": {
-			backgroundColor: "#f0f0f0",
-			borderColor: "#999",
-		},
-	},
-	lockedButton: {
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		color: "white",
-		border: "none",
-		"&:hover": {
-			background: "linear-gradient(135deg, #5f4fd1, #00a67d)",
-		},
-	},
-	removeButton: {
-		padding: "4px 8px",
-		backgroundColor: "#dc3545",
-		color: "white",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-		fontSize: "12px",
-		"&:hover": {
-			backgroundColor: "#c82333",
-		},
-	},
-	removeButtonContainer: {
-		display: "flex",
-		justifyContent: "center",
-		padding: "16px",
-		borderTop: "1px solid #e0e0e0",
-	},
-
-	// Message styles
-	message: { textAlign: "center", padding: "2rem", color: "#666" },
-	errorMessage: { textAlign: "center", padding: "2rem", color: "#dc3545" },
-
-	// Modal styles
-	modalOverlay: {
-		position: "fixed",
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-		backgroundColor: "rgba(0,0,0,0.5)",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		zIndex: 1000,
-		padding: 16,
-	},
-	modalContent: {
-		background: "rgba(255,255,255,0.98)",
-		backdropFilter: "blur(6px)",
-		borderRadius: "12px",
-		padding: "1.25rem",
-		width: "100%",
-		maxWidth: "760px",
-		maxHeight: "80vh",
-		boxShadow: "0 10px 30px rgba(2,6,23,0.12)",
-		display: "flex",
-		flexDirection: "column",
-		gap: "15px",
-	},
-	modalTitle: { margin: 0, marginBottom: "0.75rem", color: "#2C3440", fontSize: 18 },
-	closeButton: {
-		padding: "0.55rem 0.9rem",
-		background: "#f3f4f6",
-		border: "1px solid #e6e9ef",
-		borderRadius: "8px",
-		cursor: "pointer",
-		alignSelf: "flex-end",
-	},
-
-	// Form styles
-	form: { display: "flex", flexDirection: "column", gap: "0.75rem" },
-	formGroup: { display: "flex", flexDirection: "column", gap: "0.35rem" },
-	label: { fontWeight: "600", color: "#2C3440", fontSize: 13 },
-	input: {
-		padding: "0.6rem",
-		borderRadius: "8px",
-		border: "1px solid #e6edf3",
-		fontSize: "0.95rem",
-		background: "#fff",
-	},
-	select: {
-		padding: "0.6rem",
-		borderRadius: "8px",
-		border: "1px solid #e6edf3",
-		backgroundColor: "#fff",
-		fontSize: "0.95rem",
-		width: "100%",
-		maxWidth: "200px",
-	},
-	formButtons: { display: "flex", gap: "0.75rem", justifyContent: "flex-end", marginTop: 6 },
-	submitButton: {
-		padding: "0.6rem 1.0rem",
-		background: "linear-gradient(135deg, #6c5ce7, #00b894)",
-		color: "#fff",
-		border: "none",
-		borderRadius: "8px",
-		cursor: "pointer",
-	},
-	cancelButton: {
-		padding: "0.55rem 0.9rem",
-		background: "#f3f4f6",
-		border: "1px solid #e6e9ef",
-		borderRadius: "8px",
-		cursor: "pointer",
-	},
-
-	// Scenes list styles
-	scenesList: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "8px",
-		maxHeight: "400px",
-		overflowY: "auto",
-		padding: "10px",
-		backgroundColor: "#f5f5f5",
-		borderRadius: "8px",
-	},
-	sceneItem: {
-		padding: "8px",
-		backgroundColor: "#fff",
-		borderRadius: "6px",
-		boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
-	},
-
-	// Date picker styles
-	datePickerContainer: {
-		position: "fixed",
-		zIndex: 5000,
-		backgroundColor: "white",
-		boxShadow: "0 10px 30px rgba(2,6,23,0.12)",
-		borderRadius: "12px",
-		padding: "12px",
-		minWidth: "300px",
-		transform: "translateX(-50%)",
-		bottom: "calc(100% - 200px)",
-	},
-	datePickerSection: {
-		display: "flex",
-		justifyContent: "center",
-	},
-	dateDisplay: {
-		backgroundColor: "#fff",
-		borderRadius: "8px",
-		"& .react-datepicker": {
-			border: "none",
-			boxShadow: "none",
-		},
-		"& .react-datepicker__day--highlighted": {
-			backgroundColor: "#6c5ce7",
-			color: "white",
-		},
-		"& .react-datepicker__day--keyboard-selected": {
-			backgroundColor: "transparent",
-			color: "inherit",
-		},
-		"& .react-datepicker__day:hover": {
-			backgroundColor: "transparent",
-			cursor: "default",
-		},
-	},
-	selectedDates: {
-		display: "flex",
-		flexWrap: "wrap",
-		gap: "8px",
-		marginTop: "8px",
-	},
-	dateTag: {
-		display: "flex",
-		alignItems: "center",
-		backgroundColor: "#f3f4f6",
-		padding: "6px 10px",
-		borderRadius: "6px",
-		fontSize: "13px",
-		border: "1px solid #e6edf3",
-	},
-	removeDate: {
-		background: "none",
-		border: "none",
-		marginLeft: "6px",
-		cursor: "pointer",
-		padding: "0 4px",
-		fontSize: "16px",
-		color: "#666",
-		"&:hover": {
-			color: "#dc3545",
-		},
-	},
-	flexibleText: {
-		fontStyle: "italic",
-		color: "#666",
-		fontSize: "0.9em",
-	},
-	dateToggleContainer: {
-		marginBottom: "15px",
-	},
-	dateToggleLabel: {
-		display: "flex",
-		alignItems: "center",
-		gap: "8px",
-		cursor: "pointer",
-		fontSize: "0.95rem",
-	},
-	dateToggleCheckbox: {
-		cursor: "pointer",
-	},
 };
 
 export default Locations;

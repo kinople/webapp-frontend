@@ -92,12 +92,13 @@ export default function Chatbot({ scheduleData, scheduleDays, scenes, id, fetchS
 							</div>
 						</div>
 					))}
-				</div>
-				{isSendingMessage && (
+					{isSendingMessage && (
 					<div className="message-container assistant-message loader-container">
 						<Loader />
 					</div>
 				)}
+				</div>
+				
 				<div className="chat-input-container">
 					<input
 						type="text"

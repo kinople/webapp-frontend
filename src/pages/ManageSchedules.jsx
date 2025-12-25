@@ -40,66 +40,64 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 	};
 
 	return (
-		<tr ref={setNodeRef} style={style} className="tr-style" {...attributes} {...listeners}>
-			<td className="td-style">{scene.scene_number}</td>
+		<tr ref={setNodeRef} style={style} className="sched-data-row" {...attributes} {...listeners}>
+			<td className="sched-data-cell">{scene.scene_number}</td>
 
-			<td className="td-style">{scene.int_ext || "N/A"}</td>
-			<td className="td-style location-synopsis-column">
+			<td className="sched-data-cell">{scene.int_ext || "N/A"}</td>
+			<td className="sched-data-cell sched-location-synopsis-column">
 				{scene.location_name} <br /> <br />
 				Synopsis: {scene.synopsis || "N/A"}
 			</td>
 
-			{<td className="td-style">{formatPageEights(scene.page_eighths) || "N/A"}</td>}
+			<td className="sched-data-cell">{formatPageEights(scene.page_eighths) || "N/A"}</td>
 
-			<td className="td-style">{(scene.character_names || []).map((name) => characterNameToIdMap[name.toUpperCase()] || name).join(", ")}</td>
-			{
-				<td className="td-style">
-					<input
-						type="number"
-						className="hours-input"
-						placeholder="HH"
-						value={sceneHours[scene.scene_number]?.hours ?? ""}
-						onChange={(e) => {
-							const newSceneHours = { ...sceneHours };
-							if (!newSceneHours[scene.scene_number]) {
-								newSceneHours[scene.scene_number] = { hours: "", minutes: "" };
-							}
-							const value = parseInt(e.target.value);
-							console.log(value);
-							if (value < 0) {
-								alert("Cannot have negative values for hours");
-								return;
-							}
-							newSceneHours[scene.scene_number].hours = value;
-							setSceneHours(newSceneHours);
-						}}
-					/>
-					<span>
-						:
-						<br />
-					</span>
-					<input
-						type="number"
-						className="hours-input"
-						placeholder="MM"
-						value={sceneHours[scene.scene_number]?.minutes ?? ""}
-						onChange={(e) => {
-							const newSceneHours = { ...sceneHours };
-							if (!newSceneHours[scene.scene_number]) {
-								newSceneHours[scene.scene_number] = { hours: "", minutes: "" };
-							}
-							const value = parseInt(e.target.value);
-							console.log(value);
-							if (value < 0 || value > 60) {
-								alert("Enter a acceptable value for minutes");
-								return;
-							}
-							newSceneHours[scene.scene_number].minutes = value;
-							setSceneHours(newSceneHours);
-						}}
-					/>
-				</td>
-			}
+			<td className="sched-data-cell">{(scene.character_names || []).map((name) => characterNameToIdMap[name.toUpperCase()] || name).join(", ")}</td>
+			<td className="sched-data-cell">
+				<input
+					type="number"
+					className="sched-hours-input"
+					placeholder="HH"
+					value={sceneHours[scene.scene_number]?.hours ?? ""}
+					onChange={(e) => {
+						const newSceneHours = { ...sceneHours };
+						if (!newSceneHours[scene.scene_number]) {
+							newSceneHours[scene.scene_number] = { hours: "", minutes: "" };
+						}
+						const value = parseInt(e.target.value);
+						console.log(value);
+						if (value < 0) {
+							alert("Cannot have negative values for hours");
+							return;
+						}
+						newSceneHours[scene.scene_number].hours = value;
+						setSceneHours(newSceneHours);
+					}}
+				/>
+				<span>
+					:
+					<br />
+				</span>
+				<input
+					type="number"
+					className="sched-hours-input"
+					placeholder="MM"
+					value={sceneHours[scene.scene_number]?.minutes ?? ""}
+					onChange={(e) => {
+						const newSceneHours = { ...sceneHours };
+						if (!newSceneHours[scene.scene_number]) {
+							newSceneHours[scene.scene_number] = { hours: "", minutes: "" };
+						}
+						const value = parseInt(e.target.value);
+						console.log(value);
+						if (value < 0 || value > 60) {
+							alert("Enter a acceptable value for minutes");
+							return;
+						}
+						newSceneHours[scene.scene_number].minutes = value;
+						setSceneHours(newSceneHours);
+					}}
+				/>
+			</td>
 		</tr>
 	);
 };
@@ -114,15 +112,15 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 	const d = day.date.split("-");
 
 	return (
-		<div ref={setNodeRef} className={`schedule-column ${drop ? "schedule-column-drop" : "schedule-column-no-drop"}`}>
-			<div className="schedule-column-header">
+		<div ref={setNodeRef} className={`sched-day-card ${!drop ? "sched-day-card-collapsed" : ""}`}>
+			<div className="sched-day-header">
 				<h4>{d[2] + "-" + d[1] + "-" + d[0]}</h4>
 				<button
 					onClick={() => {
 						setDrop(!drop);
 					}}
 				>
-					{drop ? "^" : "v"}
+					{drop ? "▲" : "▼"}
 				</button>
 				{isEditing && (
 					<button
@@ -130,7 +128,7 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 							setScheduleDays((prev) => prev.filter((d) => d.id !== day.id));
 						}}
 						disabled={day.scenes.length > 0}
-						className="remove-button"
+						className="sched-remove-day-btn"
 					>
 						Remove
 					</button>
@@ -138,22 +136,18 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 			</div>
 			{drop && (
 				<SortableContext items={day.scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-					<table className="table-style">
-						<thead>
-							<tr style={{ backgroundColor: "#e0e0e0" }}>
-								<th className="th-style">Scene</th>
+					<table className="sched-table">
+						<thead className="sched-thead">
+							<tr className="sched-header-row">
+								<th className="sched-header-cell">Scene</th>
 
-								<th className="th-style">Int./Ext.</th>
-								<th className="th-style location-synopsis-column">Location/synopsis</th>
-								<th className="th-style">Pgs</th>
+								<th className="sched-header-cell">Int./Ext.</th>
+								<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
+								<th className="sched-header-cell">Pgs</th>
 
-								<th className="th-style">Characters</th>
+								<th className="sched-header-cell">Characters</th>
 
-								{
-									<th className="th-style" style={{ margin: "100px" }}>
-										Est. Hours
-									</th>
-								}
+								<th className="sched-header-cell">Est. Hours</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -259,16 +253,16 @@ const ManageSchedules = () => {
 
 		return (
 			<div
-				className="conflicts-modal-overlay"
+				className="sched-conflicts-modal-overlay"
 				onClick={() => {
 					setShowConflictModal(false);
 				}}
 			>
-				<div className="conflicts-modal" onClick={(e) => e.stopPropagation()}>
-					<div className="conflicts-modal-header">
-						<h2 className="conflicts-modal-heading">Conflicts in the Schedule</h2>
+				<div className="sched-conflicts-modal" onClick={(e) => e.stopPropagation()}>
+					<div className="sched-conflicts-modal-header">
+						<h2 className="sched-conflicts-modal-heading">Conflicts in the Schedule</h2>
 						<button
-							className="conflicts-modal-close-button"
+							className="sched-conflicts-modal-close-button"
 							onClick={() => {
 								setShowConflictModal(false);
 							}}
@@ -277,22 +271,22 @@ const ManageSchedules = () => {
 						</button>
 					</div>
 
-					<div className="conflicts-modal-content">
+					<div className="sched-conflicts-modal-content">
 						{conflicts.length > 0 ? (
 							<>
-								<p className="conflicts-count">
+								<p className="sched-conflicts-count">
 									Found {conflicts.length} scene
 									{conflicts.length !== 1 ? "s" : ""} with conflicts
 								</p>
 
 								{conflicts.map((sceneConflict, index) => (
-									<div key={index} className="conflict-scene-container">
-										<div className="conflict-scene-header">
+									<div key={index} className="sched-conflict-scene-container">
+										<div className="sched-conflict-scene-header">
 											Scene {sceneConflict.scene_number} scheduled on – {sceneConflict.date}
 										</div>
 
 										{sceneConflict.conflicts.map((msg, i) => (
-											<div key={i} className="conflict-item">
+											<div key={i} className="sched-conflict-item">
 												{msg}
 											</div>
 										))}
@@ -300,7 +294,7 @@ const ManageSchedules = () => {
 								))}
 							</>
 						) : (
-							<div className="no-conflicts">✓ No conflicts found in the schedule</div>
+							<div className="sched-no-conflicts">✓ No conflicts found in the schedule</div>
 						)}
 					</div>
 				</div>
@@ -1126,7 +1120,7 @@ const ManageSchedules = () => {
 			}
 		};
 		return (
-			<div className="scheduled-calendar-container">
+			<div className="sched-scheduled-calendar-container">
 				<Calendar tileDisabled={() => true} tileClassName={tileClassNameforScheduledDates} />
 			</div>
 		);
@@ -1220,38 +1214,32 @@ const ManageSchedules = () => {
 	const projectName = useSelector((state) => state.project.projectName);
 
 	return (
-		<div className="page-container">
+		<div className="sched-page-container">
 			{isGenerating && (
-				<div className="modal-overlay">
-					<div className="modal-content">
-						<div className="spinner"></div>
-						<p className="loading-text">Generating Schedule...</p>
+				<div className="sched-modal-overlay">
+					<div className="sched-modal">
+						<div className="sched-spinner"></div>
+						<p className="sched-loading-text">Generating Schedule...</p>
 					</div>
 				</div>
 			)}
 
-			<div className="header">
-				<div>
-					<h2 className="page-title">Project : {projectName}</h2>
+			<div className="sched-header">
+				<div className="sched-header-left">
+					<h2 className="sched-page-title">Project : {projectName}</h2>
 				</div>
-				<div className="header-right">
-					<div className="date-info">
+				<div className="sched-header-right">
+					<div className="sched-date-info">
 						<div>Schedule Start Date: {scheduleDates.start || "Not set"}</div>
 						<div>Schedule End Date: {scheduleDates.end || "Not set"}</div>
 					</div>
 				</div>
 			</div>
-			<div className="content">
-				<div className="left-panel">
-					<button
-						onClick={() => {
-							//setDOODselected(true);
-						}}
-					>
-						Add availability dates
-					</button>
-					<div className="element-selector">
-						<div className="selector-header">
+			<div className="sched-content">
+				<div className="sched-left-panel">
+					<div className="sched-left-panel-header">Availability dates</div>
+					<div className="sched-element-selector">
+						<div className="sched-selector-header">
 							<select
 								value={elementType}
 								onChange={(e) => {
@@ -1264,13 +1252,13 @@ const ManageSchedules = () => {
 									}
 									setElementType(e.target.value);
 								}}
-								className="element-dropdown"
+								className="sched-element-dropdown"
 							>
 								<option value="location">Locations</option>
 								<option value="character">Characters</option>
 							</select>
 						</div>
-						<div className="selector-header selector-header-margin">
+						<div className="sched-selector-header sched-selector-header-margin">
 							<span>&lt;</span>
 							<select
 								value={element}
@@ -1285,7 +1273,7 @@ const ManageSchedules = () => {
 									setElement(e.target.value);
 									console.log(scheduleData);
 								}}
-								className="element-dropdown"
+								className="sched-element-dropdown"
 							>
 								<option value="">Select Element</option>
 								{getElementOptions(elementType).map((option, index) => (
@@ -1298,11 +1286,11 @@ const ManageSchedules = () => {
 						</div>
 					</div>
 
-					<div className="given-dates">
-						<div className="section-title">Given Dates</div>
+					<div className="sched-given-dates">
+						<div className="sched-section-title">Given Dates</div>
 
-						<div className="mode-selector">
-							<label className="mode-label">
+						<div className="sched-mode-selector">
+							<label className="sched-mode-label">
 								<input
 									type="radio"
 									value="flexible"
@@ -1310,11 +1298,11 @@ const ManageSchedules = () => {
 									onChange={(e) => {
 										setDatePickerMode(e.target.value);
 									}}
-									className="radio-input"
+									className="sched-radio-input"
 								/>
 								Flexible Dates
 							</label>
-							<label className="mode-label">
+							<label className="sched-mode-label">
 								<input
 									type="radio"
 									value="fixed"
@@ -1322,7 +1310,7 @@ const ManageSchedules = () => {
 									onChange={(e) => {
 										setDatePickerMode(e.target.value);
 									}}
-									className="radio-input"
+									className="sched-radio-input"
 								/>
 								Fixed Dates
 							</label>
@@ -1330,19 +1318,19 @@ const ManageSchedules = () => {
 						{selectedElement &&
 							scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element] &&
 							scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element]["flexible"] && (
-								<div className="existing-dates-info">
+								<div className="sched-existing-dates-info">
 									<span> ✅ Flexible dates saved for {element}</span>
 								</div>
 							)}
 						{selectedElement ? (
-							<div className="date-picker-container">
+							<div className="sched-date-picker-container">
 								{scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element] &&
 									selectedDates.length === 0 &&
 									!isSaving &&
 									!scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element]["flexible"] &&
 									datePickerMode !== "flexible" && (
-										<div className="existing-dates-info">
-											<span className="existing-dates-label">{`No dates selected for ${getSelectedElementName()}`}</span>
+										<div className="sched-existing-dates-info">
+											<span className="sched-existing-dates-label">{`No dates selected for ${getSelectedElementName()}`}</span>
 										</div>
 									)}
 
@@ -1356,7 +1344,7 @@ const ManageSchedules = () => {
 												onClick={() => {
 													saveDates("Flexible");
 												}}
-												className="add-range-button"
+												className="sched-add-range-button"
 												disabled={!selectedElement}
 											>
 												Save Flexible dates
@@ -1365,54 +1353,54 @@ const ManageSchedules = () => {
 									)}
 
 								{datePickerMode === "fixed" && datePickerValue === "single" && (
-									<input type="date" onChange={handleSingleDateChange} className="date-picker" />
+									<input type="date" onChange={handleSingleDateChange} className="sched-date-picker" />
 								)}
 
 								{datePickerValue === "range" && datePickerMode === "fixed" && (
-									<div className="date-range-container">
-										<div className="date-range-inputs">
+									<div className="sched-date-range-container">
+										<div className="sched-date-range-inputs">
 											<input
 												type="date"
 												value={dateRangeStart}
 												onChange={handleRangeStartChange}
-												className="date-range-input"
+												className="sched-date-range-input"
 												placeholder="Start Date"
 											/>
-											<span className="date-range-separator">to</span>
+											<span className="sched-date-range-separator">to</span>
 											<input
 												type="date"
 												value={dateRangeEnd}
 												min={dateRangeStart}
 												onChange={handleRangeEndChange}
-												className="date-range-input"
+												className="sched-date-range-input"
 												placeholder="End Date"
 											/>
 										</div>
-										<button onClick={addDateRange} className="add-range-button" disabled={!dateRangeStart || !dateRangeEnd}>
+										<button onClick={addDateRange} className="sched-add-range-button" disabled={!dateRangeStart || !dateRangeEnd}>
 											Add Range
 										</button>
 									</div>
 								)}
 
 								{datePickerMode === "fixed" && (
-									<div className="mode-selector">
-										<label className="mode-label">
+									<div className="sched-mode-selector">
+										<label className="sched-mode-label">
 											<input
 												type="radio"
 												value="range"
 												checked={datePickerValue === "range"}
 												onChange={(e) => setDatePickerValue(e.target.value)}
-												className="radio-input"
+												className="sched-radio-input"
 											/>
 											Range
 										</label>
-										<label className="mode-label">
+										<label className="sched-mode-label">
 											<input
 												type="radio"
 												value="single"
 												checked={datePickerValue === "single"}
 												onChange={(e) => setDatePickerValue(e.target.value)}
-												className="radio-input"
+												className="sched-radio-input"
 											/>
 											Single
 										</label>
@@ -1420,14 +1408,14 @@ const ManageSchedules = () => {
 								)}
 
 								{(selectedDates.length > 0 || hasChanges()) && (
-									<div className="selected-dates-list">
-										<div className="selected-dates-header">
+									<div className="sched-selected-dates-list">
+										<div className="sched-selected-dates-header">
 											<span>Selected Dates ({selectedDates.length}):</span>
-											<div className="date-actions">
+											<div className="sched-date-actions">
 												{hasChanges() && (
 													<button
 														onClick={saveDates}
-														className="save-dates-button"
+														className="sched-save-dates-button"
 														title="Save dates"
 														disabled={isSaving}
 													>
@@ -1435,14 +1423,14 @@ const ManageSchedules = () => {
 													</button>
 												)}
 												{selectedDates.length > 0 && (
-													<button onClick={clearAllDates} className="clear-all-button" title="Clear all dates">
+													<button onClick={clearAllDates} className="sched-clear-all-button" title="Clear all dates">
 														Clear All
 													</button>
 												)}
 											</div>
 										</div>
 										{scheduleData?.first_date && scheduleData?.last_date && selectedDates.length > 0 && (
-											<div className="calendar-container">
+											<div className="sched-calendar-container">
 												<Calendar
 													selectRange={false}
 													activeStartDate={null}
@@ -1455,36 +1443,38 @@ const ManageSchedules = () => {
 								)}
 							</div>
 						) : (
-							<div className="calendar-placeholder">Select an element to choose dates</div>
+							<div className="sched-calendar-placeholder">Select an element to choose dates</div>
 						)}
 					</div>
 
-					<div className="scheduled-dates">
-						<div className="section-title">Scheduled Dates</div>
+					<div className="sched-scheduled-dates">
+						<div className="sched-section-title">Scheduled Dates</div>
 						{selectedElement && scheduleData?.schedule ? (
-							generateScheduledCalendar() || <div className="dates-placeholder">No scheduled dates for {getSelectedElementName()}</div>
+							generateScheduledCalendar() || (
+								<div className="sched-dates-placeholder">No scheduled dates for {getSelectedElementName()}</div>
+							)
 						) : (
-							<div className="dates-placeholder">
+							<div className="sched-dates-placeholder">
 								{selectedElement ? "Generate schedule to see scheduled dates" : "Select an element to see scheduled dates"}
 							</div>
 						)}
 					</div>
 				</div>
 
-				<div className="center-panel">
-					<div className="schedule-header schedule-header-flex">
+				<div className="sched-center-panel">
+					<div className="sched-schedule-header">
 						Schedule
 						{scheduleData?.schedule && (
-							<span className="schedule-header-generated">
+							<span className="sched-schedule-header-generated">
 								&nbsp;– Generated Schedule for {generatedMaxScenes || "N/A"} max scenes per day
 							</span>
 						)}
 					</div>
 
 					{conflicts.length > 0 && (
-						<div className="schedule-header schedule-header-flex schedule-header-conflict">
+						<div className="sched-schedule-header sched-schedule-header-conflict">
 							<button
-								className="conflict-button"
+								className="sched-conflict-button"
 								onClick={() => {
 									setShowConflictModal(true);
 								}}
@@ -1492,33 +1482,31 @@ const ManageSchedules = () => {
 								Show conflicts
 							</button>
 
-							<span className="conflict-text">There are some conflicts in this schedule</span>
+							<span className="sched-conflict-text">There are some conflicts in this schedule</span>
 						</div>
 					)}
 					<ConflictsModal />
 
-					<div className="max-pages-section">
-						<div className="max-pages-upper">
-							<div className="flex-column gap-8">
-								<label className="schedule-by-label">
-									Schedule By:
-									<select value={scheduleMode} onChange={(e) => setScheduleMode(e.target.value)} className="mode-dropdown">
-										<option value="scenes">Max Scenes Per Day</option>
-										<option value="page-eights">Max Page-Eights Per Day</option>
-										<option value="hours">Max Shooting Hours Per Day</option>
-									</select>
-								</label>
-							</div>
+					<div className="sched-controls-section">
+						<div className="sched-controls-group">
+							<label className="sched-controls-label">
+								Schedule By:
+								<select value={scheduleMode} onChange={(e) => setScheduleMode(e.target.value)} className="sched-mode-dropdown">
+									<option value="scenes">Max Scenes Per Day</option>
+									<option value="page-eights">Max Page-Eights Per Day</option>
+									<option value="hours">Max Shooting Hours Per Day</option>
+								</select>
+							</label>
 						</div>
 
 						{scheduleMode === "scenes" && (
-							<div className="flex-row gap-8" style={{ alignItems: "center" }}>
-								<label className="max-pages-label">Max scenes:</label>
+							<div className="sched-controls-group">
+								<label className="sched-controls-label">Max scenes:</label>
 								<input
 									type="number"
 									value={maxScenes}
 									onChange={(e) => setMaxScenes(e.target.value)}
-									className="page-input"
+									className="sched-page-input"
 									placeholder="5"
 									min="1"
 								/>
@@ -1526,13 +1514,13 @@ const ManageSchedules = () => {
 						)}
 
 						{scheduleMode === "page-eights" && (
-							<div className="flex-row gap-8" style={{ alignItems: "center" }}>
-								<label className="max-pages-label">Max page-eights:</label>
+							<div className="sched-controls-group">
+								<label className="sched-controls-label">Max page-eights:</label>
 								<input
 									type="number"
 									value={maxPageEights.pages}
 									onChange={(e) => setMaxPageEights({ ...maxPageEights, pages: e.target.value })}
-									className="page-input"
+									className="sched-page-input"
 									placeholder="2"
 									min="0"
 								/>
@@ -1541,7 +1529,7 @@ const ManageSchedules = () => {
 									type="number"
 									value={maxPageEights.eighths}
 									onChange={(e) => setMaxPageEights({ ...maxPageEights, eighths: e.target.value })}
-									className="page-input"
+									className="sched-page-input"
 									placeholder="3"
 									min="0"
 									max="7"
@@ -1551,11 +1539,11 @@ const ManageSchedules = () => {
 						)}
 
 						{scheduleMode === "hours" && (
-							<div className="flex-row gap-8" style={{ alignItems: "center" }}>
-								<label className="max-pages-label">Max hours:</label>
+							<div className="sched-controls-group">
+								<label className="sched-controls-label">Max hours:</label>
 								<input
 									type="number"
-									style={{ width: "40px" }}
+									className="sched-page-input"
 									placeholder="HH"
 									value={maxHours.hours}
 									onChange={(e) => setMaxHours({ ...maxHours, hours: e.target.value })}
@@ -1563,7 +1551,7 @@ const ManageSchedules = () => {
 								<span>:</span>
 								<input
 									type="number"
-									style={{ width: "40px" }}
+									className="sched-page-input"
 									placeholder="MM"
 									value={maxHours.minutes}
 									onChange={(e) => setMaxHours({ ...maxHours, minutes: e.target.value })}
@@ -1571,17 +1559,17 @@ const ManageSchedules = () => {
 							</div>
 						)}
 
-						<div className="max-pages-upper">
-							<button className="generate-button" onClick={handleGenerateSchedule} disabled={isGenerating}>
+						<div className="sched-controls-group">
+							<button className="sched-generate-button" onClick={handleGenerateSchedule} disabled={isGenerating}>
 								{isGenerating ? "GENERATING..." : "GENERATE"}
 							</button>
 
-							<div className="flex-grow" />
+							<div className="sched-flex-grow" />
 
 							{scheduleData?.schedule &&
 								(isEditing ? (
-									<div className="flex-row gap-10" style={{ alignItems: "center" }}>
-										<button onClick={handleSaveChanges} className="save-button">
+									<div className="sched-flex-row sched-gap-10" style={{ alignItems: "center" }}>
+										<button onClick={handleSaveChanges} className="sched-action-btn-success">
 											Save
 										</button>
 
@@ -1590,9 +1578,9 @@ const ManageSchedules = () => {
 											type="date"
 											value={newScheduleDayInput}
 											onChange={(e) => setNewScheduleDayInput(e.target.value)}
-											className="date-picker"
+											className="sched-date-picker"
 										/>
-										<button onClick={handleAddScheduleDay} className="add-button" disabled={!newScheduleDayInput}>
+										<button onClick={handleAddScheduleDay} className="sched-action-btn-primary" disabled={!newScheduleDayInput}>
 											Add Day
 										</button>
 										<button
@@ -1600,7 +1588,7 @@ const ManageSchedules = () => {
 												setScheduleDays(originalScheduleDays);
 												setIsEditing(false);
 											}}
-											className="cancel-button"
+											className="sched-action-btn-danger"
 										>
 											Cancel
 										</button>
@@ -1611,14 +1599,14 @@ const ManageSchedules = () => {
 											setOriginalScheduleDays(JSON.parse(JSON.stringify(scheduleDays)));
 											setIsEditing(true);
 										}}
-										className="edit-button"
+										className="sched-action-btn"
 									>
 										Edit
 									</button>
 								))}
 
 							{scheduleMode == "hours" && (
-								<button className="edit-button" onClick={handleSaveHours}>
+								<button className="sched-action-btn" onClick={handleSaveHours}>
 									Save Est. Hours
 								</button>
 							)}
@@ -1627,7 +1615,7 @@ const ManageSchedules = () => {
 
 					{scheduleData?.schedule && (
 						<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-							<div className="flex-column">
+							<div className="sched-schedule-content">
 								{scheduleDays.map((day) => {
 									return (
 										<ScheduleColumn
@@ -1646,88 +1634,86 @@ const ManageSchedules = () => {
 						</DndContext>
 					)}
 					{!scheduleData?.schedule && scenes.length > 0 && (
-						<div className="all-scenes-container">
+						<div className="sched-all-scenes-container">
 							<h4>All Scenes</h4>
-							<table className="table-style">
-								<thead>
-									<tr style={{ backgroundColor: "#e0e0e0" }}>
-										<th className="th-style">Scene</th>
+							<table className="sched-table">
+								<thead className="sched-thead">
+									<tr className="sched-header-row">
+										<th className="sched-header-cell">Scene</th>
 
-										<th className="th-style">Int./Ext.</th>
-										<th className="th-style location-synopsis-column">Location/Synopsis</th>
+										<th className="sched-header-cell">Int./Ext.</th>
+										<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
 
-										{<th className="th-style">Pgs</th>}
+										<th className="sched-header-cell">Pgs</th>
 
-										<th className="th-style">Characters</th>
-										{<th className="th-style">Est. Hours</th>}
+										<th className="sched-header-cell">Characters</th>
+										<th className="sched-header-cell">Est. Hours</th>
 									</tr>
 								</thead>
 								<tbody>
 									{scenes.map((scene, index) => (
-										<tr key={index} className="tr-style">
-											<td className="td-style">{scene["Scene Number"] || scene["Scene No."] || ""}</td>
+										<tr key={index} className="sched-data-row">
+											<td className="sched-data-cell">{scene["Scene Number"] || scene["Scene No."] || ""}</td>
 
-											<td className="td-style">{scene["Int./Ext."]}</td>
-											<td className="td-style location-synopsis-column">
+											<td className="sched-data-cell">{scene["Int./Ext."]}</td>
+											<td className="sched-data-cell sched-location-synopsis-column">
 												{scene["Location"]}
 												<br />
 												<br /> Synopsis: {scene["Synopsis"]}
 											</td>
-											{<td className="td-style">{formatPageEights(scene["Page Eighths"] || scene["Pgs"])}</td>}
-											<td className="td-style"> {scene["Characters"]}</td>
-											{
-												<td className="td-style">
-													<input
-														type="number"
-														style={{ width: "40px" }}
-														placeholder="HH"
-														value={sceneHours[scene["Scene Number"] ?? scene["Scene No."]]?.hours ?? ""}
-														onChange={(e) => {
-															const newSceneHours = { ...sceneHours };
-															if (!newSceneHours[scene["Scene Number"] || scene["Scene No."]]) {
-																newSceneHours[scene["Scene Number"] || scene["Scene No."]] = {
-																	hours: "",
-																	minutes: "",
-																};
-															}
-															const value = parseInt(e.target.value);
-															console.log(value);
-															if (value < 0) {
-																alert("Cannot have negative values for hours");
-																return;
-															}
-															newSceneHours[scene["Scene Number"] || scene["Scene No."]].hours = value;
-															setSceneHours(newSceneHours);
-														}}
-													/>
-													<span>
-														:<br />
-													</span>
-													<input
-														type="number"
-														style={{ width: "40px" }}
-														placeholder="MM"
-														value={sceneHours[scene["Scene Number"] ?? scene["Scene No."]]?.minutes ?? ""}
-														onChange={(e) => {
-															const newSceneHours = { ...sceneHours };
-															if (!newSceneHours[scene["Scene Number"] || scene["Scene No."]]) {
-																newSceneHours[scene["Scene Number"] || scene["Scene No."]] = {
-																	hours: "",
-																	minutes: "",
-																};
-															}
-															const value = parseInt(e.target.value);
-															console.log(value);
-															if (value < 0 || value > 60) {
-																alert("Enter a acceptable value for minutes");
-																return;
-															}
-															newSceneHours[scene["Scene Number"] || scene["Scene No."]].minutes = value;
-															setSceneHours(newSceneHours);
-														}}
-													/>
-												</td>
-											}
+											<td className="sched-data-cell">{formatPageEights(scene["Page Eighths"] || scene["Pgs"])}</td>
+											<td className="sched-data-cell"> {scene["Characters"]}</td>
+											<td className="sched-data-cell">
+												<input
+													type="number"
+													className="sched-hours-input"
+													placeholder="HH"
+													value={sceneHours[scene["Scene Number"] ?? scene["Scene No."]]?.hours ?? ""}
+													onChange={(e) => {
+														const newSceneHours = { ...sceneHours };
+														if (!newSceneHours[scene["Scene Number"] || scene["Scene No."]]) {
+															newSceneHours[scene["Scene Number"] || scene["Scene No."]] = {
+																hours: "",
+																minutes: "",
+															};
+														}
+														const value = parseInt(e.target.value);
+														console.log(value);
+														if (value < 0) {
+															alert("Cannot have negative values for hours");
+															return;
+														}
+														newSceneHours[scene["Scene Number"] || scene["Scene No."]].hours = value;
+														setSceneHours(newSceneHours);
+													}}
+												/>
+												<span>
+													:<br />
+												</span>
+												<input
+													type="number"
+													className="sched-hours-input"
+													placeholder="MM"
+													value={sceneHours[scene["Scene Number"] ?? scene["Scene No."]]?.minutes ?? ""}
+													onChange={(e) => {
+														const newSceneHours = { ...sceneHours };
+														if (!newSceneHours[scene["Scene Number"] || scene["Scene No."]]) {
+															newSceneHours[scene["Scene Number"] || scene["Scene No."]] = {
+																hours: "",
+																minutes: "",
+															};
+														}
+														const value = parseInt(e.target.value);
+														console.log(value);
+														if (value < 0 || value > 60) {
+															alert("Enter a acceptable value for minutes");
+															return;
+														}
+														newSceneHours[scene["Scene Number"] || scene["Scene No."]].minutes = value;
+														setSceneHours(newSceneHours);
+													}}
+												/>
+											</td>
 										</tr>
 									))}
 								</tbody>
@@ -1735,8 +1721,8 @@ const ManageSchedules = () => {
 						</div>
 					)}
 					{!scheduleData?.schedule && scenes.length === 0 && (
-						<div className="empty-schedule-section">
-							<div className="empty-schedule-message">Generate rough schedule</div>
+						<div className="sched-empty-section">
+							<div className="sched-empty-message">Generate rough schedule</div>
 						</div>
 					)}
 				</div>
