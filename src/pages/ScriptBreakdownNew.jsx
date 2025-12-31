@@ -4,6 +4,8 @@ import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
 import "../css/ScriptBreakdownNew.css";
 import { PiMagnifyingGlass, PiSlidersHorizontal } from "react-icons/pi";
+import { FaFileExcel, FaPlus, FaTrash } from "react-icons/fa";
+import * as XLSX from "xlsx";
 
 /*
   ScriptBreakdown page - final variant:
@@ -209,6 +211,64 @@ const ScriptBreakdownNew = () => {
 	const [showRightShadow, setShowRightShadow] = useState(false);
 	const [editParsing, setEditParsing] = useState(false);
 	const [activeTab, setActiveTab] = useState("master");
+	// Selected script for generated breakdown dropdown
+	const [selectedGeneratedScript, setSelectedGeneratedScript] = useState(null);
+	// Add/Remove Element state
+	const [showAddElementModal, setShowAddElementModal] = useState(false);
+	const [newElementName, setNewElementName] = useState("");
+	const [isAddingElement, setIsAddingElement] = useState(false);
+	const [customFields, setCustomFields] = useState([]);
+	const [defaultFields, setDefaultFields] = useState([]);
+	// Remove element mode
+	const [removeElementMode, setRemoveElementMode] = useState(false);
+	const [selectedElementToRemove, setSelectedElementToRemove] = useState(null);
+	const [showRemoveConfirmModal, setShowRemoveConfirmModal] = useState(false);
+	const [isRemovingElement, setIsRemovingElement] = useState(false);
+	// Add Scene state
+	const [showAddSceneModal, setShowAddSceneModal] = useState(false);
+	const [addScenePosition, setAddScenePosition] = useState(0); // Position where to insert new scene
+	const [showPositionSelector, setShowPositionSelector] = useState(false);
+	const [isAddingScene, setIsAddingScene] = useState(false);
+	// Remove Scene state
+	const [removeSceneMode, setRemoveSceneMode] = useState(false);
+	const [selectedSceneToRemove, setSelectedSceneToRemove] = useState(null);
+	const [showRemoveSceneModal, setShowRemoveSceneModal] = useState(false);
+	const [isRemovingScene, setIsRemovingScene] = useState(false);
+	// Location and Cast lists for dropdowns
+	const [locationList, setLocationList] = useState([]);
+	const [castList, setCastList] = useState([]);
+	const [newSceneForm, setNewSceneForm] = useState({
+		scene_number: "",
+		int_ext: "INT.",
+		location: "",
+		time: "DAY",
+		page_eighths: 1, // Store as number (1-1000 represents eighths of a page)
+		synopsis: "",
+		selectedCharacterIds: [], // Store selected character IDs for dropdown
+		action_props: "",
+		other_props: "",
+		picture_vehicles: "",
+		animals: "",
+		extras: "",
+		wardrobe: "",
+		set_dressing: "",
+	});
+
+	// Derive master script (oldest/first uploaded) and generated scripts (all others)
+	const masterScript = useMemo(() => {
+		if (!allScripts || allScripts.length === 0) return null;
+		// allScripts is sorted by version desc (newest first), so master is the last one
+		return allScripts[allScripts.length - 1];
+	}, [allScripts]);
+
+	const generatedScripts = useMemo(() => {
+		if (!allScripts || allScripts.length <= 1) return [];
+		// All scripts except the master (oldest one)
+		return allScripts.slice(0, -1);
+	}, [allScripts]);
+
+	// View-only mode when on generated tab
+	const isViewOnly = activeTab === "generated";
 
 	const updateShadows = () => {
 		const el = tableWrapRef.current;
@@ -259,6 +319,15 @@ const ScriptBreakdownNew = () => {
 			if (data.scene_breakdowns) {
 				setSceneBreakdowns(data.scene_breakdowns);
 			}
+			// Store default and custom fields
+			if (data.default_fields) {
+				setDefaultFields(data.default_fields);
+			}
+			if (data.custom_fields) {
+				setCustomFields(data.custom_fields);
+			} else {
+				setCustomFields([]);
+			}
 			if (data.tsv_content) {
 				const parsed = parseTSV(data.tsv_content);
 				setScriptBreakdown(parsed);
@@ -284,7 +353,13 @@ const ScriptBreakdownNew = () => {
 				const sorted = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
 				setAllScripts(sorted);
 				if (sorted.length > 0) {
-					handleScriptSelect(sorted[0]); // This will set the selected script and fetch its breakdown
+					// Always load master script (oldest one, last in sorted array) by default
+					const master = sorted[sorted.length - 1];
+					handleScriptSelect(master);
+					// Set default generated script to the newest (first in sorted array) if there are multiple scripts
+					if (sorted.length > 1) {
+						setSelectedGeneratedScript(sorted[0]);
+					}
 				}
 			} else {
 				console.error("Failed to fetch scripts");
@@ -320,6 +395,72 @@ const ScriptBreakdownNew = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [id]);
 
+	// Fetch location list for Add Scene dropdown
+	useEffect(() => {
+		const fetchLocationList = async () => {
+			try {
+				const response = await fetch(getApiUrl(`/api/${id}/locations`));
+				if (response.ok) {
+					const data = await response.json();
+					setLocationList(data.locations || []);
+				}
+			} catch (error) {
+				console.error("Error fetching location list:", error);
+			}
+		};
+		fetchLocationList();
+	}, [id]);
+
+	// Fetch cast list for Add Scene dropdown
+	useEffect(() => {
+		const fetchCastList = async () => {
+			try {
+				const response = await fetch(getApiUrl(`/api/${id}/cast-list`));
+				if (response.ok) {
+					const data = await response.json();
+					setCastList(data.cast_list || []);
+				}
+			} catch (error) {
+				console.error("Error fetching cast list:", error);
+			}
+		};
+		fetchCastList();
+	}, [id]);
+
+	// Load correct breakdown when tab changes
+	useEffect(() => {
+		if (activeTab === "master" && masterScript) {
+			setSelectedScript(masterScript);
+			fetchBreakdown(masterScript.id);
+		} else if (activeTab === "generated" && selectedGeneratedScript) {
+			setSelectedScript(selectedGeneratedScript);
+			fetchBreakdown(selectedGeneratedScript.id);
+		}
+		// Reset view mode when switching tabs
+		setViewMode("table");
+		setEditingScene(null);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [activeTab, masterScript]);
+
+	// Load breakdown when generated script selection changes
+	useEffect(() => {
+		if (activeTab === "generated" && selectedGeneratedScript) {
+			setSelectedScript(selectedGeneratedScript);
+			fetchBreakdown(selectedGeneratedScript.id);
+			setViewMode("table");
+			setEditingScene(null);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [selectedGeneratedScript]);
+
+	// Helper function to convert snake_case to Title Case for display
+	const snakeCaseToTitleCase = (str) => {
+		return str
+			.split("_")
+			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+			.join(" ");
+	};
+
 	// Helper function to convert JSON scene breakdown to display format
 	const sceneBreakdownToDisplayFormat = (sceneData) => {
 		if (!sceneData) return null;
@@ -328,7 +469,7 @@ const ScriptBreakdownNew = () => {
 			if (!arr || !Array.isArray(arr) || arr.length === 0) return "N/A";
 			return arr.join(", ");
 		};
-		return {
+		const result = {
 			"Scene Number": sceneData.scene_number || "",
 			"Int./Ext.": sceneData.int_ext || "",
 			Location: sceneData.location || "",
@@ -344,18 +485,32 @@ const ScriptBreakdownNew = () => {
 			Wardrobe: arrayToString(sceneData.wardrobe),
 			"Set Dressing": arrayToString(sceneData.set_dressing),
 		};
+		// Add custom fields
+		customFields.forEach((fieldKey) => {
+			const displayName = snakeCaseToTitleCase(fieldKey);
+			result[displayName] = arrayToString(sceneData[fieldKey]);
+		});
+		return result;
 	};
 
 	/* ---------- open the scene editor (either from button or row click) ---------- */
 	const openSceneEditorAt = (index) => {
 		if (!sceneBreakdowns || sceneBreakdowns.length === 0) return;
 		const idx = Math.max(0, Math.min(index, sceneBreakdowns.length - 1));
+
+		// Check if the scene exists at this index
+		const sceneData = sceneBreakdowns[idx];
+		if (!sceneData) {
+			console.warn(`Scene at index ${idx} not found - may have been deleted`);
+			alert("This scene is no longer available. It may have been deleted.");
+			return;
+		}
+
 		setEditingSceneIndex(idx);
 		// Use JSON scene breakdown data (which is correct) instead of TSV parsed data
-		const sceneData = sceneBreakdowns[idx];
 		const displayData = sceneBreakdownToDisplayFormat(sceneData);
 		setEditingScene(displayData);
-		setEditingSceneParsing(parsing[idx]);
+		setEditingSceneParsing(parsing[idx] || { heading: "", content: "" });
 		// Set character IDs from scene breakdowns
 		if (sceneData && sceneData.characters_ids) {
 			setEditingCharacterIds([...sceneData.characters_ids]);
@@ -407,7 +562,7 @@ const ScriptBreakdownNew = () => {
 				// Get character names from the IDs for the characters field
 				const charNames = editingCharacterIds.map((id) => allCharacters.find((c) => c.id === id)?.name).filter(Boolean);
 
-				updatedSceneBreakdowns[editingSceneIndex] = {
+				const updatedScene = {
 					...updatedSceneBreakdowns[editingSceneIndex],
 					// Map all fields from editingScene to scene breakdown format
 					scene_number: editingScene["Scene Number"] || updatedSceneBreakdowns[editingSceneIndex].scene_number,
@@ -428,6 +583,14 @@ const ScriptBreakdownNew = () => {
 					wardrobe: parseToArray(editingScene["Wardrobe"]),
 					set_dressing: parseToArray(editingScene["Set Dressing"]),
 				};
+
+				// Handle custom fields
+				customFields.forEach((fieldKey) => {
+					const displayName = snakeCaseToTitleCase(fieldKey);
+					updatedScene[fieldKey] = parseToArray(editingScene[displayName]);
+				});
+
+				updatedSceneBreakdowns[editingSceneIndex] = updatedScene;
 			}
 
 			console.log("Saving scene breakdowns", updatedSceneBreakdowns[editingSceneIndex]);
@@ -436,6 +599,7 @@ const ScriptBreakdownNew = () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
+					script_id: masterScript?.id, // Always update master script
 					scene_breakdowns: updatedSceneBreakdowns,
 					parsing: parsing,
 					characters: allCharacters,
@@ -450,7 +614,411 @@ const ScriptBreakdownNew = () => {
 			console.error(e);
 			alert("Failed to save changes. Try again.");
 		}
-	}, [parsing, editingScene, scriptBreakdown, sceneBreakdowns, editingCharacterIds, allCharacters, editingSceneIndex, id]);
+	}, [parsing, editingScene, scriptBreakdown, sceneBreakdowns, editingCharacterIds, allCharacters, editingSceneIndex, id, masterScript]);
+
+	/* ---------- Add Element ---------- */
+	const handleAddElement = useCallback(async () => {
+		if (!newElementName.trim()) {
+			alert("Please enter an element name");
+			return;
+		}
+		if (!masterScript?.id) {
+			alert("No script selected");
+			return;
+		}
+
+		setIsAddingElement(true);
+		try {
+			const response = await fetch(getApiUrl(`/api/${id}/add-element`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					script_id: masterScript.id,
+					element_name: newElementName.trim(),
+				}),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to add element");
+			}
+
+			// Update custom fields
+			if (data.custom_fields) {
+				setCustomFields(data.custom_fields);
+			}
+
+			// Add the new element to all scene breakdowns locally
+			const elementKey = data.element_key;
+			setSceneBreakdowns((prev) =>
+				prev.map((scene) => ({
+					...scene,
+					[elementKey]: scene[elementKey] || [],
+				}))
+			);
+
+			setNewElementName("");
+			setShowAddElementModal(false);
+			alert(`Element "${newElementName}" added successfully!`);
+		} catch (e) {
+			console.error(e);
+			alert(e.message || "Failed to add element");
+		} finally {
+			setIsAddingElement(false);
+		}
+	}, [newElementName, masterScript, id]);
+
+	/* ---------- Remove Element ---------- */
+	const handleRemoveElement = useCallback(async () => {
+		if (!selectedElementToRemove) {
+			alert("No element selected");
+			return;
+		}
+		if (!masterScript?.id) {
+			alert("No script selected");
+			return;
+		}
+
+		setIsRemovingElement(true);
+		try {
+			const response = await fetch(getApiUrl(`/api/${id}/remove-element`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					script_id: masterScript.id,
+					element_key: selectedElementToRemove,
+				}),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to remove element");
+			}
+
+			// Update custom fields
+			if (data.custom_fields) {
+				setCustomFields(data.custom_fields);
+			}
+
+			// Remove the element from all scene breakdowns locally
+			setSceneBreakdowns((prev) =>
+				prev.map((scene) => {
+					const newScene = { ...scene };
+					delete newScene[selectedElementToRemove];
+					return newScene;
+				})
+			);
+
+			setSelectedElementToRemove(null);
+			setShowRemoveConfirmModal(false);
+			setRemoveElementMode(false);
+			alert(`Element removed successfully!`);
+		} catch (e) {
+			console.error(e);
+			alert(e.message || "Failed to remove element");
+		} finally {
+			setIsRemovingElement(false);
+		}
+	}, [selectedElementToRemove, masterScript, id]);
+
+	// Toggle remove element mode
+	const handleRemoveElementClick = () => {
+		if (removeElementMode && selectedElementToRemove) {
+			// If already in remove mode and an element is selected, show confirmation
+			setShowRemoveConfirmModal(true);
+		} else {
+			// Toggle remove mode
+			setRemoveElementMode(!removeElementMode);
+			setSelectedElementToRemove(null);
+		}
+	};
+
+	/* ---------- Remove Scene ---------- */
+	const handleRemoveSceneClick = () => {
+		if (removeSceneMode) {
+			// Cancel remove mode
+			setRemoveSceneMode(false);
+			setSelectedSceneToRemove(null);
+		} else {
+			// Enter remove mode
+			setRemoveSceneMode(true);
+			setSelectedSceneToRemove(null);
+			// Cancel other modes
+			setShowPositionSelector(false);
+			setRemoveElementMode(false);
+		}
+	};
+
+	const handleSelectSceneToRemove = (scene) => {
+		setSelectedSceneToRemove(scene);
+		setShowRemoveSceneModal(true);
+	};
+
+	const handleRemoveScene = useCallback(async () => {
+		if (!selectedSceneToRemove) {
+			alert("No scene selected");
+			return;
+		}
+		if (!masterScript?.id) {
+			alert("No script selected");
+			return;
+		}
+
+		setIsRemovingScene(true);
+		try {
+			const response = await fetch(getApiUrl(`/api/${id}/remove-scene`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					script_id: masterScript.id,
+					scene_id: selectedSceneToRemove.id,
+					scene_number: selectedSceneToRemove.scene_number,
+				}),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to remove scene");
+			}
+
+			// Update scene breakdowns locally
+			if (data.scene_breakdowns) {
+				setSceneBreakdowns(data.scene_breakdowns);
+			}
+
+			// Re-fetch breakdown to get updated data
+			fetchBreakdown(masterScript.id);
+
+			setSelectedSceneToRemove(null);
+			setShowRemoveSceneModal(false);
+			setRemoveSceneMode(false);
+			alert("Scene removed successfully!");
+		} catch (e) {
+			console.error(e);
+			alert(e.message || "Failed to remove scene");
+		} finally {
+			setIsRemovingScene(false);
+		}
+	}, [selectedSceneToRemove, masterScript, id]);
+
+	/* ---------- Add Scene ---------- */
+	const handleAddSceneClick = () => {
+		setShowPositionSelector(!showPositionSelector);
+		// Cancel other modes
+		setRemoveSceneMode(false);
+		setRemoveElementMode(false);
+	};
+
+	const handleSelectPosition = (position) => {
+		setAddScenePosition(position);
+		setShowPositionSelector(false);
+		// Reset the form
+		setNewSceneForm({
+			scene_number: "",
+			int_ext: "INT.",
+			location: "",
+			time: "DAY",
+			page_eighths: "1/8",
+			synopsis: "",
+		});
+		setShowAddSceneModal(true);
+	};
+
+	const handleAddScene = useCallback(async () => {
+		// Validate required fields
+		if (!newSceneForm.scene_number.trim()) {
+			alert("Scene Number is required");
+			return;
+		}
+		if (!newSceneForm.int_ext.trim()) {
+			alert("Int./Ext. is required");
+			return;
+		}
+		if (!newSceneForm.location.trim()) {
+			alert("Location is required");
+			return;
+		}
+		if (!newSceneForm.time.trim()) {
+			alert("Time is required");
+			return;
+		}
+		if (!newSceneForm.page_eighths || newSceneForm.page_eighths < 1 || newSceneForm.page_eighths > 1000) {
+			alert("Page Eighths must be between 1 and 1000");
+			return;
+		}
+		if (!newSceneForm.synopsis.trim()) {
+			alert("Synopsis is required");
+			return;
+		}
+
+		// Check for duplicate scene number
+		const newSceneNumber = newSceneForm.scene_number.trim();
+		const duplicateScene = sceneBreakdowns.find((scene) => scene.scene_number?.trim() === newSceneNumber);
+		if (duplicateScene) {
+			alert(`Scene number "${newSceneNumber}" already exists. Please use a unique scene number.`);
+			return;
+		}
+
+		if (!masterScript?.id) {
+			alert("No script selected");
+			return;
+		}
+
+		setIsAddingScene(true);
+		try {
+			// Convert page_eighths number to string format (e.g., 1 -> "1/8", 8 -> "1", 9 -> "1 1/8")
+			const formatPageEighths = (num) => {
+				if (num <= 0) return "1/8";
+				const wholePages = Math.floor(num / 8);
+				const eighths = num % 8;
+				if (wholePages === 0) return `${eighths}/8`;
+				if (eighths === 0) return `${wholePages}`;
+				return `${wholePages} ${eighths}/8`;
+			};
+
+			// Parse comma-separated strings into arrays
+			const parseToArray = (str) =>
+				str
+					? str
+							.split(",")
+							.map((s) => s.trim())
+							.filter(Boolean)
+					: [];
+
+			// Get character names from selected IDs (using allCharacters from breakdown)
+			const selectedIds = newSceneForm.selectedCharacterIds || [];
+			const selectedCharacterNames = selectedIds
+				.map((charId) => {
+					const char = allCharacters.find((c) => c.id === charId);
+					return char?.name || "";
+				})
+				.filter(Boolean);
+
+			const sceneDataToSend = {
+				...newSceneForm,
+				page_eighths: formatPageEighths(newSceneForm.page_eighths),
+				characters: selectedCharacterNames,
+				characters_ids: selectedIds,
+				action_props: parseToArray(newSceneForm.action_props),
+				other_props: parseToArray(newSceneForm.other_props),
+				picture_vehicles: parseToArray(newSceneForm.picture_vehicles),
+				animals: parseToArray(newSceneForm.animals),
+				extras: parseToArray(newSceneForm.extras),
+				wardrobe: parseToArray(newSceneForm.wardrobe),
+				set_dressing: parseToArray(newSceneForm.set_dressing),
+			};
+			// Remove the temporary selectedCharacterIds field
+			delete sceneDataToSend.selectedCharacterIds;
+
+			// Parse custom fields as arrays too
+			customFields.forEach((fieldKey) => {
+				sceneDataToSend[fieldKey] = parseToArray(newSceneForm[fieldKey] || "");
+			});
+
+			const response = await fetch(getApiUrl(`/api/${id}/add-scene`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					script_id: masterScript.id,
+					position: addScenePosition,
+					scene_data: sceneDataToSend,
+				}),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to add scene");
+			}
+
+			// Update scene breakdowns locally with the new scene
+			if (data.scene_breakdowns) {
+				setSceneBreakdowns(data.scene_breakdowns);
+			}
+
+			// Re-fetch breakdown to get updated data
+			fetchBreakdown(masterScript.id);
+
+			setShowAddSceneModal(false);
+			setNewSceneForm({
+				scene_number: "",
+				int_ext: "INT.",
+				location: "",
+				time: "DAY",
+				page_eighths: 1,
+				synopsis: "",
+				selectedCharacterIds: [],
+				action_props: "",
+				other_props: "",
+				picture_vehicles: "",
+				animals: "",
+				extras: "",
+				wardrobe: "",
+				set_dressing: "",
+			});
+			alert("Scene added successfully!");
+		} catch (e) {
+			console.error(e);
+			alert(e.message || "Failed to add scene");
+		} finally {
+			setIsAddingScene(false);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [newSceneForm, masterScript, id, addScenePosition]);
+
+	/* ---------- Export to Excel ---------- */
+	const exportToExcel = useCallback(() => {
+		if (!sceneBreakdowns || sceneBreakdowns.length === 0) {
+			alert("No breakdown data to export");
+			return;
+		}
+
+		// Convert scene breakdowns to flat rows for Excel
+		const excelData = sceneBreakdowns.map((scene) => {
+			const row = {
+				"Scene Number": scene.scene_number || "",
+				"Int./Ext.": scene.int_ext || "",
+				Location: scene.location || "",
+				Time: scene.time || "",
+				"Page Eighths": scene.page_eighths || "",
+				Synopsis: scene.synopsis || "",
+				Characters: (scene.characters || []).join(", "),
+				"Action Props": (scene.action_props || []).join(", "),
+				"Other Props": (scene.other_props || []).join(", "),
+				"Picture Vehicles": (scene.picture_vehicles || []).join(", "),
+				Animals: (scene.animals || []).join(", "),
+				Extras: (scene.extras || []).join(", "),
+				Wardrobe: (scene.wardrobe || []).join(", "),
+				"Set Dressing": (scene.set_dressing || []).join(", "),
+			};
+			// Add custom fields
+			customFields.forEach((fieldKey) => {
+				const displayName = snakeCaseToTitleCase(fieldKey);
+				row[displayName] = (scene[fieldKey] || []).join(", ");
+			});
+			return row;
+		});
+
+		// Create workbook and worksheet
+		const worksheet = XLSX.utils.json_to_sheet(excelData);
+		const workbook = XLSX.utils.book_new();
+		XLSX.utils.book_append_sheet(workbook, worksheet, "Breakdown");
+
+		// Auto-size columns
+		const colWidths = Object.keys(excelData[0] || {}).map((key) => ({
+			wch: Math.max(key.length, 15),
+		}));
+		worksheet["!cols"] = colWidths;
+
+		// Generate filename with script name if available
+		const filename = selectedScript?.name ? `${selectedScript.name.replace(/\.[^/.]+$/, "")}_breakdown.xlsx` : "script_breakdown.xlsx";
+
+		// Download the file
+		XLSX.writeFile(workbook, filename);
+	}, [sceneBreakdowns, selectedScript, customFields]);
 
 	/* ---------- props columns: explicit list ---------- */
 	const propsHeaderNames = useMemo(() => {
@@ -470,15 +1038,26 @@ const ScriptBreakdownNew = () => {
 	}, []);
 
 	const propsKeys = useMemo(() => {
-		if (!scriptBreakdown || scriptBreakdown.length === 0) return [];
-		return Object.keys(scriptBreakdown[0]).filter((k) => {
-			if (!k) return false;
-			const lower = k.trim().toLowerCase();
-			if (propsHeaderNames.has(lower)) return true;
-			if (/prop/i.test(k)) return true;
-			return false;
-		});
-	}, [scriptBreakdown, propsHeaderNames]);
+		const customFieldDisplayNames = customFields.map((fieldKey) => snakeCaseToTitleCase(fieldKey));
+
+		// Start with custom field display names (they're always props/tags)
+		const keys = [...customFieldDisplayNames];
+
+		// Add default props from scriptBreakdown if available
+		if (scriptBreakdown && scriptBreakdown.length > 0) {
+			Object.keys(scriptBreakdown[0]).forEach((k) => {
+				if (!k) return;
+				const lower = k.trim().toLowerCase();
+				if (propsHeaderNames.has(lower) || /prop/i.test(k)) {
+					if (!keys.includes(k)) {
+						keys.push(k);
+					}
+				}
+			});
+		}
+
+		return keys;
+	}, [scriptBreakdown, propsHeaderNames, customFields]);
 
 	/* ---------- updateTableCell helper (used by scene editor only) ---------- */
 	const updateTableCell = (row, header, newValue) => {
@@ -516,6 +1095,7 @@ const ScriptBreakdownNew = () => {
 							<span className="sbn-scene-counter">
 								({editingSceneIndex + 1} of {scriptBreakdown.length})
 							</span>
+							{isViewOnly && <span className="sbn-view-only-badge">View Only</span>}
 						</h3>
 						<button className="sbn-nav-btn" onClick={handleNextScene} disabled={editingSceneIndex === scriptBreakdown.length - 1}>
 							Next ›
@@ -540,7 +1120,22 @@ const ScriptBreakdownNew = () => {
 						return (
 							<div key={key} className="sbn-field-group">
 								<label className="sbn-field-label">{key}:</label>
-								{isCharacters ? (
+								{isViewOnly ? (
+									// Read-only display for generated breakdowns
+									<div className="sbn-field-readonly">
+										{isProps || isCharacters ? (
+											<div className="sbn-readonly-tags">
+												{(value || "N/A").split(",").map((tag, i) => (
+													<span key={i} className="sbn-readonly-tag">
+														{tag.trim() || "N/A"}
+													</span>
+												))}
+											</div>
+										) : (
+											<div className="sbn-readonly-text">{value || "N/A"}</div>
+										)}
+									</div>
+								) : isCharacters ? (
 									<CharacterTagInput
 										selectedIds={editingCharacterIds}
 										allCharacters={allCharacters}
@@ -576,9 +1171,11 @@ const ScriptBreakdownNew = () => {
 					})}
 
 					<div className="sbn-scene-actions">
-						<button className="sbn-scene-save-btn" onClick={handleSaveSceneChanges}>
-							Save Changes
-						</button>
+						{!isViewOnly && (
+							<button className="sbn-scene-save-btn" onClick={handleSaveSceneChanges}>
+								Save Changes
+							</button>
+						)}
 						<button
 							className="sbn-cancel-btn"
 							onClick={() => {
@@ -586,7 +1183,7 @@ const ScriptBreakdownNew = () => {
 								setViewMode("table");
 							}}
 						>
-							Cancel
+							{isViewOnly ? "Close" : "Cancel"}
 						</button>
 					</div>
 				</div>
@@ -603,12 +1200,31 @@ const ScriptBreakdownNew = () => {
 		if (scriptBreakdown.length === 0) return null;
 		const allHeaders = Object.keys(scriptBreakdown[0] || {});
 
-		// Define the columns to show (up to Other Props)
-		const visibleColumns = ["Scene Number", "Int./Ext.", "Location", "Time", "Page Eighths", "Synopsis", "Characters", "Action Props", "Other Props"];
+		// Define the default columns to show
+		const defaultVisibleColumns = [
+			"Scene Number",
+			"Int./Ext.",
+			"Location",
+			"Time",
+			"Page Eighths",
+			"Synopsis",
+			"Characters",
+			"Action Props",
+			"Other Props",
+			"Picture Vehicles",
+			"Animals",
+			"Extras",
+			"Wardrobe",
+			"Set Dressing",
+		];
+
+		// Add custom fields to visible columns
+		const customFieldDisplayNames = customFields.map((fieldKey) => snakeCaseToTitleCase(fieldKey));
+		const visibleColumns = [...defaultVisibleColumns, ...customFieldDisplayNames];
 
 		// Filter headers to only show visible columns that exist in data
 		const headers = visibleColumns
-			.filter((col) => allHeaders.some((h) => h.toLowerCase() === col.toLowerCase()))
+			.filter((col) => allHeaders.some((h) => h.toLowerCase() === col.toLowerCase()) || customFieldDisplayNames.includes(col))
 			.map((col) => allHeaders.find((h) => h.toLowerCase() === col.toLowerCase()) || col);
 
 		const filtered = scriptBreakdown.filter((row) => {
@@ -637,43 +1253,145 @@ const ScriptBreakdownNew = () => {
 					<table className="sbn-table">
 						<thead className="sbn-thead">
 							<tr className="sbn-header-row">
-								{headers.map((h, i) => (
-									<th key={i} className="sbn-header-cell">
-										{h}
-									</th>
-								))}
+								{showPositionSelector && <th className="sbn-header-cell sbn-insert-col">Insert</th>}
+								{removeSceneMode && <th className="sbn-header-cell sbn-remove-col">Remove</th>}
+								{headers.map((h, i) => {
+									// Check if this is a custom field (can be removed)
+									const fieldKey = h.toLowerCase().replace(/ /g, "_").replace(/-/g, "_");
+									const isCustomField = customFields.includes(fieldKey);
+									const isSelected = selectedElementToRemove === fieldKey;
+
+									return (
+										<th key={i} className={`sbn-header-cell ${isSelected ? "sbn-header-selected" : ""}`}>
+											<div className="sbn-header-content">
+												{removeElementMode && isCustomField && (
+													<input
+														type="checkbox"
+														className="sbn-remove-checkbox"
+														checked={isSelected}
+														onChange={(e) => {
+															e.stopPropagation();
+															if (isSelected) {
+																setSelectedElementToRemove(null);
+															} else {
+																setSelectedElementToRemove(fieldKey);
+															}
+														}}
+														onClick={(e) => e.stopPropagation()}
+													/>
+												)}
+												<span>{h}</span>
+											</div>
+										</th>
+									);
+								})}
 							</tr>
 						</thead>
 						<tbody className="sbn-tbody">
-							{filtered.map((row, rIdx) => (
-								<tr
-									key={rIdx}
-									className="sbn-data-row"
-									onClick={() => {
-										// Find the matching scene in sceneBreakdowns by scene number
-										const sceneNum = row["Scene Number"];
-										const jsonIdx = sceneBreakdowns.findIndex((s) => s.scene_number === sceneNum);
-										openSceneEditorAt(jsonIdx === -1 ? rIdx : jsonIdx);
-									}}
-								>
-									{headers.map((header, cIdx) => {
-										const cellValue = row[header] ?? "";
-										const isSceneNumber = header.toLowerCase().includes("scene") && header.toLowerCase().includes("number");
-										const isPropColumn = propsKeys.includes(header);
-
-										return (
-											<td key={cIdx} className="sbn-data-cell">
-												{isSceneNumber ? (
-													<span className="sbn-cell-scene-number">{cellValue}</span>
-												) : isPropColumn && isNAValue(cellValue) ? (
-													<span className="sbn-na-badge">N/A</span>
-												) : (
-													<span className="sbn-cell-text">{cellValue}</span>
-												)}
-											</td>
-										);
-									})}
+							{/* Insert at beginning option */}
+							{showPositionSelector && (
+								<tr className="sbn-insert-row">
+									<td colSpan={headers.length + 1}>
+										<button className="sbn-insert-btn sbn-insert-btn-full" onClick={() => handleSelectPosition(0)}>
+											<FaPlus className="sbn-insert-icon" />
+											<span>Insert new scene at the beginning</span>
+										</button>
+									</td>
 								</tr>
+							)}
+							{filtered.map((row, rIdx) => (
+								<React.Fragment key={rIdx}>
+									<tr
+										className={`sbn-data-row ${showPositionSelector ? "sbn-row-selectable" : ""} ${
+											removeSceneMode ? "sbn-row-removable" : ""
+										}`}
+										onClick={() => {
+											if (showPositionSelector) return; // Disable row click in position selector mode
+											if (removeSceneMode) return; // Disable row click in remove mode
+											// Find the matching scene in sceneBreakdowns by scene number
+											const sceneNum = row["Scene Number"];
+											const jsonIdx = sceneBreakdowns.findIndex((s) => s.scene_number === sceneNum);
+											openSceneEditorAt(jsonIdx === -1 ? rIdx : jsonIdx);
+										}}
+									>
+										{showPositionSelector && (
+											<td className="sbn-data-cell sbn-insert-cell">
+												<span className="sbn-row-number">{rIdx + 1}</span>
+											</td>
+										)}
+										{removeSceneMode && (
+											<td className="sbn-data-cell sbn-remove-cell">
+												<button
+													className="sbn-remove-scene-btn"
+													onClick={(e) => {
+														e.stopPropagation();
+														const sceneNum = row["Scene Number"];
+														const sceneData = sceneBreakdowns.find((s) => s.scene_number === sceneNum);
+														if (sceneData) {
+															handleSelectSceneToRemove(sceneData);
+														} else {
+															// Fallback if not found in sceneBreakdowns
+															handleSelectSceneToRemove({
+																id: rIdx,
+																scene_number: sceneNum,
+																location: row["Location"],
+																synopsis: row["Synopsis"],
+															});
+														}
+													}}
+												>
+													<FaTrash />
+												</button>
+											</td>
+										)}
+										{headers.map((header, cIdx) => {
+											// For custom fields, we need to get the value from sceneBreakdowns
+											const fieldKey = header.toLowerCase().replace(/ /g, "_").replace(/-/g, "_");
+											const isCustomField = customFields.includes(fieldKey);
+
+											let cellValue = row[header] ?? "";
+
+											// If custom field, get from sceneBreakdowns
+											if (isCustomField) {
+												const sceneNum = row["Scene Number"];
+												const sceneData = sceneBreakdowns.find((s) => s.scene_number === sceneNum);
+												if (sceneData && sceneData[fieldKey]) {
+													const arr = sceneData[fieldKey];
+													cellValue = Array.isArray(arr) && arr.length > 0 ? arr.join(", ") : "N/A";
+												} else {
+													cellValue = "N/A";
+												}
+											}
+
+											const isSceneNumber = header.toLowerCase().includes("scene") && header.toLowerCase().includes("number");
+											const isPropColumn = propsKeys.includes(header) || isCustomField;
+											const isSelected = selectedElementToRemove === fieldKey;
+
+											return (
+												<td key={cIdx} className={`sbn-data-cell ${isSelected ? "sbn-cell-selected" : ""}`}>
+													{isSceneNumber ? (
+														<span className="sbn-cell-scene-number">{cellValue}</span>
+													) : isPropColumn && isNAValue(cellValue) ? (
+														<span className="sbn-na-badge">N/A</span>
+													) : (
+														<span className="sbn-cell-text">{cellValue}</span>
+													)}
+												</td>
+											);
+										})}
+									</tr>
+									{/* Insert after this row option */}
+									{showPositionSelector && (
+										<tr className="sbn-insert-row">
+											<td colSpan={headers.length + 1}>
+												<button className="sbn-insert-btn" onClick={() => handleSelectPosition(rIdx + 1)}>
+													<FaPlus className="sbn-insert-icon" />
+													<span>Insert after Scene {row["Scene Number"]}</span>
+												</button>
+											</td>
+										</tr>
+									)}
+								</React.Fragment>
 							))}
 						</tbody>
 					</table>
@@ -810,6 +1528,428 @@ const ScriptBreakdownNew = () => {
 	return (
 		<div className="sbn-page-container">
 			{editParsing && EditParsingModal()}
+			{/* Add Element Modal - inlined to prevent re-render on typing */}
+			{showAddElementModal && (
+				<div className="sbn-overlay" onClick={() => setShowAddElementModal(false)}>
+					<div className="sbn-element-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="sbn-element-modal-header">
+							<h3>Add New Element</h3>
+							<button className="sbn-modal-close-btn" onClick={() => setShowAddElementModal(false)}>
+								×
+							</button>
+						</div>
+						<div className="sbn-element-modal-body">
+							<label className="sbn-element-label">Element Name</label>
+							<input
+								type="text"
+								value={newElementName}
+								onChange={(e) => setNewElementName(e.target.value)}
+								placeholder="e.g., Special Effects, Makeup..."
+								className="sbn-element-input"
+								autoFocus
+								onKeyDown={(e) => {
+									if (e.key === "Enter" && !isAddingElement) {
+										handleAddElement();
+									}
+								}}
+							/>
+							<p className="sbn-element-hint">
+								This will add a new column to all scenes in the breakdown. The element name will be converted to a field key (e.g.,
+								"Special Effects" becomes "special_effects").
+							</p>
+						</div>
+						<div className="sbn-element-modal-footer">
+							<button className="sbn-element-cancel-btn" onClick={() => setShowAddElementModal(false)} disabled={isAddingElement}>
+								Cancel
+							</button>
+							<button className="sbn-element-add-btn" onClick={handleAddElement} disabled={isAddingElement || !newElementName.trim()}>
+								{isAddingElement ? "Adding..." : "Add Element"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+			{/* Remove Element Confirm Modal - simplified */}
+			{showRemoveConfirmModal && (
+				<div className="sbn-overlay" onClick={() => setShowRemoveConfirmModal(false)}>
+					<div className="sbn-element-modal sbn-confirm-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="sbn-element-modal-header">
+							<h3>Remove Element</h3>
+							<button className="sbn-modal-close-btn" onClick={() => setShowRemoveConfirmModal(false)}>
+								×
+							</button>
+						</div>
+						<div className="sbn-element-modal-body">
+							<p className="sbn-confirm-text">
+								Are you sure you want to remove{" "}
+								<strong>"{selectedElementToRemove ? snakeCaseToTitleCase(selectedElementToRemove) : ""}"</strong>?
+							</p>
+						</div>
+						<div className="sbn-element-modal-footer">
+							<button className="sbn-element-cancel-btn" onClick={() => setShowRemoveConfirmModal(false)} disabled={isRemovingElement}>
+								Cancel
+							</button>
+							<button className="sbn-element-remove-btn" onClick={handleRemoveElement} disabled={isRemovingElement}>
+								{isRemovingElement ? "Removing..." : "Remove"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Remove Scene Confirm Modal */}
+			{showRemoveSceneModal && selectedSceneToRemove && (
+				<div className="sbn-overlay" onClick={() => setShowRemoveSceneModal(false)}>
+					<div className="sbn-element-modal sbn-confirm-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="sbn-element-modal-header">
+							<h3>Remove Scene</h3>
+							<button className="sbn-modal-close-btn" onClick={() => setShowRemoveSceneModal(false)}>
+								×
+							</button>
+						</div>
+						<div className="sbn-element-modal-body">
+							<p className="sbn-confirm-text">
+								Are you sure you want to remove <strong>Scene {selectedSceneToRemove.scene_number}</strong>?
+							</p>
+							<p className="sbn-confirm-warning">
+								This will permanently delete the scene and all its breakdown data. This action cannot be undone.
+							</p>
+							{selectedSceneToRemove.location && (
+								<p className="sbn-confirm-detail">
+									<strong>Location:</strong> {selectedSceneToRemove.location}
+								</p>
+							)}
+							{selectedSceneToRemove.synopsis && (
+								<p className="sbn-confirm-detail">
+									<strong>Synopsis:</strong> {selectedSceneToRemove.synopsis.substring(0, 100)}
+									{selectedSceneToRemove.synopsis.length > 100 ? "..." : ""}
+								</p>
+							)}
+						</div>
+						<div className="sbn-element-modal-footer">
+							<button
+								className="sbn-element-cancel-btn"
+								onClick={() => {
+									setShowRemoveSceneModal(false);
+									setSelectedSceneToRemove(null);
+								}}
+								disabled={isRemovingScene}
+							>
+								Cancel
+							</button>
+							<button className="sbn-element-remove-btn" onClick={handleRemoveScene} disabled={isRemovingScene}>
+								{isRemovingScene ? "Removing..." : "Remove Scene"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Add Scene Modal */}
+			{showAddSceneModal && (
+				<div className="sbn-overlay" onClick={() => setShowAddSceneModal(false)}>
+					<div className="sbn-add-scene-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="sbn-add-scene-modal-header">
+							<h3>Add a Scene</h3>
+							<button className="sbn-modal-close-btn" onClick={() => setShowAddSceneModal(false)}>
+								×
+							</button>
+						</div>
+						<div className="sbn-add-scene-modal-body">
+							<div className="sbn-add-scene-form">
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Scene Number <span className="sbn-required">*</span>
+										</label>
+										<input
+											type="text"
+											value={newSceneForm.scene_number}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, scene_number: e.target.value })}
+											placeholder="e.g., 1, 2A, 3..."
+											className="sbn-form-input"
+											autoFocus
+										/>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Int./Ext. <span className="sbn-required">*</span>
+										</label>
+										<select
+											value={newSceneForm.int_ext}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, int_ext: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="INT.">INT.</option>
+											<option value="EXT.">EXT.</option>
+											<option value="INT./EXT.">INT./EXT.</option>
+										</select>
+									</div>
+								</div>
+
+								<div className="sbn-form-row">
+									<div className="sbn-form-group sbn-form-group-wide">
+										<label className="sbn-form-label">
+											Location <span className="sbn-required">*</span>
+										</label>
+										<select
+											value={newSceneForm.location}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, location: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="">Select Location...</option>
+											{locationList.map((loc) => (
+												<option key={loc.location_id || loc.location} value={loc.location}>
+													{loc.location}
+												</option>
+											))}
+										</select>
+									</div>
+								</div>
+
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Time <span className="sbn-required">*</span>
+										</label>
+										<select
+											value={newSceneForm.time}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, time: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="DAY">DAY</option>
+											<option value="NIGHT">NIGHT</option>
+											<option value="DAWN">DAWN</option>
+											<option value="DUSK">DUSK</option>
+											<option value="MORNING">MORNING</option>
+											<option value="AFTERNOON">AFTERNOON</option>
+											<option value="EVENING">EVENING</option>
+											<option value="CONTINUOUS">CONTINUOUS</option>
+											<option value="LATER">LATER</option>
+											<option value="MOMENTS LATER">MOMENTS LATER</option>
+										</select>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Page Eighths <span className="sbn-required">*</span>
+										</label>
+										<div className="sbn-page-eighths-input">
+											<span className="sbn-page-eighths-prefix">(</span>
+											<input
+												type="number"
+												min="1"
+												max="1000"
+												value={newSceneForm.page_eighths}
+												onChange={(e) => setNewSceneForm({ ...newSceneForm, page_eighths: parseInt(e.target.value) || 1 })}
+												className="sbn-form-input sbn-page-eighths-number"
+											/>
+											<span className="sbn-page-eighths-suffix">/8)</span>
+										</div>
+										<span className="sbn-page-eighths-hint">
+											{newSceneForm.page_eighths <= 8
+												? `= ${newSceneForm.page_eighths}/8 page`
+												: `= ${Math.floor(newSceneForm.page_eighths / 8)} ${
+														newSceneForm.page_eighths % 8 > 0 ? `${newSceneForm.page_eighths % 8}/8` : ""
+												  } pages`}
+										</span>
+									</div>
+								</div>
+
+								<div className="sbn-form-group sbn-form-group-full">
+									<label className="sbn-form-label">
+										Synopsis <span className="sbn-required">*</span>
+									</label>
+									<textarea
+										value={newSceneForm.synopsis}
+										onChange={(e) => setNewSceneForm({ ...newSceneForm, synopsis: e.target.value })}
+										placeholder="Brief description of the scene..."
+										className="sbn-form-textarea"
+										rows={3}
+									/>
+								</div>
+
+								<div className="sbn-form-divider">
+									<span>Additional Fields (Optional)</span>
+								</div>
+
+								<div className="sbn-form-group sbn-form-group-full">
+									<label className="sbn-form-label">Characters</label>
+									<CharacterTagInput
+										selectedIds={newSceneForm.selectedCharacterIds || []}
+										allCharacters={allCharacters}
+										onChange={(ids) => setNewSceneForm({ ...newSceneForm, selectedCharacterIds: ids })}
+									/>
+								</div>
+
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Action Props</label>
+										<input
+											type="text"
+											value={newSceneForm.action_props}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, action_props: e.target.value })}
+											placeholder="e.g., Gun, Phone..."
+											className="sbn-form-input"
+										/>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Other Props</label>
+										<input
+											type="text"
+											value={newSceneForm.other_props}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, other_props: e.target.value })}
+											placeholder="e.g., Book, Lamp..."
+											className="sbn-form-input"
+										/>
+									</div>
+								</div>
+
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Picture Vehicles</label>
+										<input
+											type="text"
+											value={newSceneForm.picture_vehicles}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, picture_vehicles: e.target.value })}
+											placeholder="e.g., Police Car, Taxi..."
+											className="sbn-form-input"
+										/>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Animals</label>
+										<input
+											type="text"
+											value={newSceneForm.animals}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, animals: e.target.value })}
+											placeholder="e.g., Dog, Horse..."
+											className="sbn-form-input"
+										/>
+									</div>
+								</div>
+
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Extras</label>
+										<input
+											type="text"
+											value={newSceneForm.extras}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, extras: e.target.value })}
+											placeholder="e.g., Crowd, Waiters..."
+											className="sbn-form-input"
+										/>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Wardrobe</label>
+										<input
+											type="text"
+											value={newSceneForm.wardrobe}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, wardrobe: e.target.value })}
+											placeholder="e.g., Wedding Dress, Suit..."
+											className="sbn-form-input"
+										/>
+									</div>
+								</div>
+
+								<div className="sbn-form-group sbn-form-group-full">
+									<label className="sbn-form-label">Set Dressing</label>
+									<input
+										type="text"
+										value={newSceneForm.set_dressing}
+										onChange={(e) => setNewSceneForm({ ...newSceneForm, set_dressing: e.target.value })}
+										placeholder="e.g., Christmas Decorations, Office Furniture..."
+										className="sbn-form-input"
+									/>
+								</div>
+
+								{/* Custom Fields */}
+								{customFields.length > 0 && (
+									<>
+										<div className="sbn-form-divider">
+											<span>Custom Fields</span>
+										</div>
+										{customFields.map((fieldKey, index) => (
+											<div
+												key={fieldKey}
+												className={
+													index % 2 === 0 && index < customFields.length - 1
+														? "sbn-form-row"
+														: "sbn-form-group sbn-form-group-full"
+												}
+											>
+												{index % 2 === 0 && index < customFields.length - 1 ? (
+													<>
+														<div className="sbn-form-group">
+															<label className="sbn-form-label">{snakeCaseToTitleCase(fieldKey)}</label>
+															<input
+																type="text"
+																value={newSceneForm[fieldKey] || ""}
+																onChange={(e) =>
+																	setNewSceneForm({ ...newSceneForm, [fieldKey]: e.target.value })
+																}
+																placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
+																className="sbn-form-input"
+															/>
+														</div>
+														{customFields[index + 1] && (
+															<div className="sbn-form-group">
+																<label className="sbn-form-label">
+																	{snakeCaseToTitleCase(customFields[index + 1])}
+																</label>
+																<input
+																	type="text"
+																	value={newSceneForm[customFields[index + 1]] || ""}
+																	onChange={(e) =>
+																		setNewSceneForm({
+																			...newSceneForm,
+																			[customFields[index + 1]]: e.target.value,
+																		})
+																	}
+																	placeholder={`e.g., ${snakeCaseToTitleCase(
+																		customFields[index + 1]
+																	)} items...`}
+																	className="sbn-form-input"
+																/>
+															</div>
+														)}
+													</>
+												) : index % 2 !== 0 ? null : (
+													<>
+														<label className="sbn-form-label">{snakeCaseToTitleCase(fieldKey)}</label>
+														<input
+															type="text"
+															value={newSceneForm[fieldKey] || ""}
+															onChange={(e) => setNewSceneForm({ ...newSceneForm, [fieldKey]: e.target.value })}
+															placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
+															className="sbn-form-input"
+														/>
+													</>
+												)}
+											</div>
+										))}
+									</>
+								)}
+
+								<div className="sbn-form-position-info">
+									<span className="sbn-position-label">Insert Position:</span>
+									<span className="sbn-position-value">
+										{addScenePosition === 0
+											? "Before all scenes"
+											: `After Scene ${sceneBreakdowns[addScenePosition - 1]?.scene_number || addScenePosition}`}
+									</span>
+								</div>
+							</div>
+						</div>
+						<div className="sbn-add-scene-modal-footer">
+							<button className="sbn-element-cancel-btn" onClick={() => setShowAddSceneModal(false)} disabled={isAddingScene}>
+								Cancel
+							</button>
+							<button className="sbn-add-scene-btn" onClick={handleAddScene} disabled={isAddingScene}>
+								{isAddingScene ? "Adding..." : "Add Scene"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 
 			<div className="sbn-main-content">
 				{viewMode === "scene" ? (
@@ -818,14 +1958,16 @@ const ScriptBreakdownNew = () => {
 						<div className="sbn-right-pane">
 							<div className="sbn-pdf-header">
 								<h3 className="sbn-pdf-title">Script Preview</h3>
-								<button
-									className="sbn-edit-parsing-btn"
-									onClick={() => {
-										setEditParsing(true);
-									}}
-								>
-									edit
-								</button>
+								{!isViewOnly && (
+									<button
+										className="sbn-edit-parsing-btn"
+										onClick={() => {
+											setEditParsing(true);
+										}}
+									>
+										edit
+									</button>
+								)}
 							</div>
 
 							{
@@ -860,6 +2002,30 @@ const ScriptBreakdownNew = () => {
 									Generated Breakdown
 								</button>
 							</div>
+							{/* Script selector dropdown for Generated tab */}
+							{activeTab === "generated" && (
+								<div className="sbn-script-selector">
+									{generatedScripts.length > 0 ? (
+										<select
+											className="sbn-script-dropdown"
+											value={selectedGeneratedScript?.id || ""}
+											onChange={(e) => {
+												const scriptId = parseInt(e.target.value, 10);
+												const script = generatedScripts.find((s) => s.id === scriptId);
+												if (script) setSelectedGeneratedScript(script);
+											}}
+										>
+											{generatedScripts.map((script) => (
+												<option key={script.id} value={script.id}>
+													{script.name} (v{script.version})
+												</option>
+											))}
+										</select>
+									) : (
+										<span className="sbn-no-scripts-msg">No other scripts available</span>
+									)}
+								</div>
+							)}
 						</div>
 
 						{/* Search and Filter Row */}
@@ -881,6 +2047,12 @@ const ScriptBreakdownNew = () => {
 								</button>
 							</div>
 							<div className="sbn-toolbar-right">
+								<button className="sbn-sync-btn" onClick={exportToExcel}>
+									<span>
+										<FaFileExcel />
+									</span>
+									<span>Export to Excel</span>
+								</button>
 								<button className="sbn-sync-btn">
 									<span className="sbn-sync-symbol">⟳</span>
 									<span>Sync Latest Scripts</span>
@@ -888,18 +2060,63 @@ const ScriptBreakdownNew = () => {
 							</div>
 						</div>
 
-						{/* Action Buttons Row */}
-						<div className="sbn-actions-row">
-							<button className="sbn-action-btn">Add Scene</button>
-							<button className="sbn-action-btn">Remove Scene</button>
-							<button className="sbn-action-btn">Add Element</button>
-							<button className="sbn-action-btn">Remove Element</button>
-							<button className="sbn-action-btn">Split Scene</button>
-							<button className="sbn-action-btn">Merge Scene</button>
-						</div>
+						{/* Action Buttons Row - Only show for Master Breakdown */}
+						{!isViewOnly && (
+							<div className="sbn-actions-row">
+								<button
+									className={`sbn-action-btn  ${showPositionSelector ? "sbn-action-btn-active" : ""}`}
+									onClick={handleAddSceneClick}
+								>
+									{showPositionSelector ? "Cancel" : "Add Scene"}
+								</button>
+								<button
+									className={`sbn-action-btn ${removeSceneMode ? "sbn-action-btn-active sbn-action-btn-remove" : ""}`}
+									onClick={handleRemoveSceneClick}
+								>
+									{removeSceneMode ? "Cancel Remove" : "Remove Scene"}
+								</button>
+								<button
+									className="sbn-action-btn sbn-action-btn-add"
+									onClick={() => {
+										setNewElementName("");
+										setShowAddElementModal(true);
+									}}
+								>
+									Add Element
+								</button>
+								<button
+									className={`sbn-action-btn ${removeElementMode ? "sbn-action-btn-active" : ""} ${
+										removeElementMode && selectedElementToRemove ? "sbn-action-btn-remove" : ""
+									}`}
+									onClick={handleRemoveElementClick}
+								>
+									{removeElementMode && selectedElementToRemove ? "Confirm Remove" : removeElementMode ? "Cancel" : "Remove Element"}
+								</button>
+								{removeElementMode && (
+									<button
+										className="sbn-action-btn sbn-action-btn-cancel"
+										onClick={() => {
+											setRemoveElementMode(false);
+											setSelectedElementToRemove(null);
+										}}
+									>
+										Cancel Selection
+									</button>
+								)}
+								<button className="sbn-action-btn">Split Scene</button>
+								<button className="sbn-action-btn">Merge Scene</button>
+							</div>
+						)}
 
 						{/* Table Content */}
-						{isLoading ? (
+						{activeTab === "generated" && generatedScripts.length === 0 ? (
+							<div className="sbn-empty-container">
+								<div className="sbn-message">No other scripts available</div>
+								<div className="sbn-action-hint">
+									<p>Upload additional scripts to see their generated breakdowns here.</p>
+								</div>
+							</div>
+						) : isLoading ? (
 							<div className="sbn-loading-container">
 								<div className="sbn-spinner" />
 								<div className="sbn-message">Loading breakdown...</div>

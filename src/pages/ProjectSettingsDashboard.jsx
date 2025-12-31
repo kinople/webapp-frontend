@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { getApiUrl, fetchWithAuth } from "../utils/api";
+import "../css/ProjectSettingsDashboard.css";
 
 const ProjectSettingsDashboard = () => {
 	const { user, id: projectid } = useParams();
@@ -165,208 +166,34 @@ const ProjectSettingsDashboard = () => {
 		return role ? role.name : "Unknown";
 	};
 
-	const styles = {
-		page: {
-			background: "linear-gradient(135deg, #f5f7fa, #c3cfe2)",
-			minHeight: "100vh",
-			padding: "32px",
-			fontFamily: "sans-serif",
-		},
-		header: {
-			marginBottom: "32px",
-		},
-		title: {
-			fontSize: "28px",
-			fontWeight: "bold",
-			color: "#1f2937",
-			marginBottom: "8px",
-		},
-		subtitle: {
-			fontSize: "16px",
-			color: "#6b7280",
-		},
-		card: {
-			backgroundColor: "#ffffff",
-			borderRadius: "12px",
-			boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-			padding: "24px",
-			marginBottom: "24px",
-		},
-		cardHeader: {
-			borderBottom: "1px solid #e5e7eb",
-			paddingBottom: "16px",
-			marginBottom: "16px",
-		},
-		cardTitle: {
-			fontSize: "20px",
-			fontWeight: "600",
-			color: "#1f2937",
-		},
-		cardSubtitle: {
-			fontSize: "14px",
-			color: "#6b7280",
-			marginTop: "4px",
-		},
-		label: {
-			display: "block",
-			fontSize: "14px",
-			fontWeight: "500",
-			color: "#374151",
-			marginBottom: "8px",
-		},
-		input: {
-			width: "100%",
-			padding: "10px 12px",
-			borderRadius: "8px",
-			border: "1px solid #d1d5db",
-			backgroundColor: "#f9fafb",
-			color: "#1f2937",
-			fontSize: "14px",
-		},
-		button: {
-			backgroundColor: "#4B9CD3",
-			color: "#ffffff",
-			padding: "10px 16px",
-			borderRadius: "8px",
-			border: "none",
-			fontSize: "14px",
-			fontWeight: "600",
-			cursor: "pointer",
-			transition: "background-color 0.3s",
-		},
-		table: {
-			width: "100%",
-			borderCollapse: "collapse",
-		},
-		tableHead: {
-			backgroundColor: "#f9fafb",
-		},
-		tableHeaderCell: {
-			padding: "12px 16px",
-			textAlign: "left",
-			fontSize: "12px",
-			fontWeight: "600",
-			color: "#6b7280",
-			textTransform: "uppercase",
-			borderBottom: "1px solid #e5e7eb",
-		},
-		tableRow: {
-			borderBottom: "1px solid #e5e7eb",
-		},
-		tableCell: {
-			padding: "16px",
-			fontSize: "14px",
-			color: "#374151",
-		},
-		modalOverlay: {
-			position: "fixed",
-			top: 0,
-			left: 0,
-			right: 0,
-			bottom: 0,
-			backgroundColor: "rgba(0, 0, 0, 0.5)",
-			display: "flex",
-			justifyContent: "center",
-			alignItems: "center",
-			zIndex: 1000,
-		},
-		modal: {
-			backgroundColor: "#ffffff",
-			borderRadius: "12px",
-			boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-			width: "100%",
-			maxWidth: "500px",
-			padding: "24px",
-		},
-		modalHeader: {
-			display: "flex",
-			justifyContent: "space-between",
-			alignItems: "center",
-			marginBottom: "16px",
-		},
-		modalTitle: {
-			fontSize: "20px",
-			fontWeight: "600",
-			color: "#1f2937",
-		},
-		closeButton: {
-			backgroundColor: "transparent",
-			border: "none",
-			color: "#6b7280",
-			fontSize: "24px",
-			cursor: "pointer",
-		},
-		modalBody: {
-			paddingTop: "16px",
-		},
-		modalFooter: {
-			display: "flex",
-			justifyContent: "flex-end",
-			gap: "12px",
-			marginTop: "24px",
-		},
-		cancelButton: {
-			backgroundColor: "#e5e7eb",
-			color: "#374151",
-			padding: "10px 16px",
-			borderRadius: "8px",
-			border: "none",
-			fontSize: "14px",
-			fontWeight: "600",
-			cursor: "pointer",
-		},
-	};
-
 	const renderGeneralContent = () => (
-		<div style={styles.card}>
-			<div style={styles.cardHeader}>
-				<h3 style={styles.cardTitle}>General Settings</h3>
-				<p style={styles.cardSubtitle}>View your project's details.</p>
+		<div className="proj-settings-card">
+			<div className="proj-settings-card-header">
+				<div className="proj-settings-card-header-left">
+					<h3 className="proj-settings-card-title">General Settings</h3>
+					<p className="proj-settings-card-subtitle">View your project's details.</p>
+				</div>
 			</div>
-			<div style={{ width: "90%" }}>
-				<label style={styles.label}>Project Name</label>
-				<input type="text" value={projectName || ""} readOnly style={styles.input} />
+			<div className="proj-settings-form-group">
+				<label className="proj-settings-label">Project Name</label>
+				<input type="text" value={projectName || ""} readOnly className="proj-settings-input" />
 			</div>
-			<div style={{ marginTop: "24px" }}>
-				<h4 style={{ ...styles.cardTitle, fontSize: "18px", marginBottom: "16px" }}>Deleted Drafts</h4>
-				<ul style={{ listStyle: "none", padding: 0 }}>
-					<li
-						style={{
-							display: "flex",
-							justifyContent: "space-between",
-							alignItems: "center",
-							padding: "12px 0",
-							borderBottom: "1px solid #e5e7eb",
-						}}
-					>
-						<div>
-							<p style={{ margin: 0, fontWeight: "500", color: "#1f2937" }}>My First Script - Draft v1</p>
-							<p style={{ margin: 0, fontSize: "14px", color: "#6b7280" }}>Deleted on: 2025-08-23</p>
+			<div className="proj-settings-section-divider">
+				<h4 className="proj-settings-section-title">Deleted Drafts</h4>
+				<ul className="proj-settings-drafts-list">
+					<li className="proj-settings-draft-item">
+						<div className="proj-settings-draft-info">
+							<h4>My First Script - Draft v1</h4>
+							<p>Deleted on: 2025-08-23</p>
 						</div>
-						<button
-							style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#ffffff", cursor: "pointer" }}
-						>
-							Restore
-						</button>
+						<button className="proj-settings-btn proj-settings-btn-secondary">Restore</button>
 					</li>
-					<li
-						style={{
-							display: "flex",
-							justifyContent: "space-between",
-							alignItems: "center",
-							padding: "12px 0",
-							borderBottom: "1px solid #e5e7eb",
-						}}
-					>
-						<div>
-							<p style={{ margin: 0, fontWeight: "500", color: "#1f2937" }}>Scene 4 - Alternate Ending</p>
-							<p style={{ margin: 0, fontSize: "14px", color: "#6b7280" }}>Deleted on: 2025-08-22</p>
+					<li className="proj-settings-draft-item">
+						<div className="proj-settings-draft-info">
+							<h4>Scene 4 - Alternate Ending</h4>
+							<p>Deleted on: 2025-08-22</p>
 						</div>
-						<button
-							style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#ffffff", cursor: "pointer" }}
-						>
-							Restore
-						</button>
+						<button className="proj-settings-btn proj-settings-btn-secondary">Restore</button>
 					</li>
 				</ul>
 			</div>
@@ -375,82 +202,57 @@ const ProjectSettingsDashboard = () => {
 
 	const renderProjectMembersContent = () => (
 		<>
-			<div style={styles.card}>
-				<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-					<div>
-						<h3 style={styles.cardTitle}>Active Members</h3>
-						<p style={styles.cardSubtitle}>
+			<div className="proj-settings-card">
+				<div className="proj-settings-card-header">
+					<div className="proj-settings-card-header-left">
+						<h3 className="proj-settings-card-title">Active Members</h3>
+						<p className="proj-settings-card-subtitle">
 							{teamMembers.length} active member{teamMembers.length !== 1 ? "s" : ""}
 						</p>
 					</div>
-					<button onClick={handleOpenInviteModal} style={styles.button}>
+					<button onClick={handleOpenInviteModal} className="proj-settings-btn proj-settings-btn-primary">
 						+ Add Member
 					</button>
 				</div>
 
 				{/* Error message */}
-				{error && (
-					<div style={{ color: "#dc2626", backgroundColor: "#fef2f2", padding: "12px", borderRadius: "8px", marginBottom: "16px" }}>{error}</div>
-				)}
+				{error && <div className="proj-settings-error">{error}</div>}
 
-				<table style={styles.table}>
-					<thead style={styles.tableHead}>
-						<tr>
-							<th style={styles.tableHeaderCell}>User</th>
-							<th style={styles.tableHeaderCell}>Role</th>
-							<th style={styles.tableHeaderCell}>Action</th>
+				<table className="proj-settings-table">
+					<thead className="proj-settings-thead">
+						<tr className="proj-settings-header-row">
+							<th className="proj-settings-header-cell">User</th>
+							<th className="proj-settings-header-cell">Role</th>
+							<th className="proj-settings-header-cell">Action</th>
 						</tr>
 					</thead>
 					<tbody>
 						{teamLoading ? (
 							<tr>
-								<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
+								<td colSpan="3" className="proj-settings-empty-row">
 									Loading members...
 								</td>
 							</tr>
 						) : teamMembers.length === 0 ? (
 							<tr>
-								<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
+								<td colSpan="3" className="proj-settings-empty-row">
 									No members yet.
 								</td>
 							</tr>
 						) : (
 							teamMembers.map((member) => (
-								<tr key={member.username} style={styles.tableRow}>
-									<td style={styles.tableCell}>
-										<div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-											<div
-												style={{
-													width: "32px",
-													height: "32px",
-													borderRadius: "50%",
-													backgroundColor: "#4B9CD3",
-													display: "flex",
-													alignItems: "center",
-													justifyContent: "center",
-													color: "white",
-													fontWeight: "600",
-													fontSize: "14px",
-												}}
-											>
-												{member.username?.charAt(0).toUpperCase() || "?"}
-											</div>
+								<tr key={member.username} className="proj-settings-data-row">
+									<td className="proj-settings-data-cell">
+										<div className="proj-settings-member-info">
+											<div className="proj-settings-member-avatar">{member.username?.charAt(0).toUpperCase() || "?"}</div>
 											<span>{member.username}</span>
 										</div>
 									</td>
-									<td style={styles.tableCell}>{getRoleName(member.role_id)}</td>
-									<td style={styles.tableCell}>
+									<td className="proj-settings-data-cell">{getRoleName(member.role_id)}</td>
+									<td className="proj-settings-data-cell">
 										<button
 											onClick={() => handleDeleteClick(member.username)}
-											style={{
-												backgroundColor: "#ef4444",
-												color: "white",
-												padding: "6px 12px",
-												borderRadius: "6px",
-												border: "none",
-												cursor: "pointer",
-												fontSize: "13px",
-											}}
+											className="proj-settings-btn proj-settings-btn-danger"
 										>
 											Remove
 										</button>
@@ -461,68 +263,57 @@ const ProjectSettingsDashboard = () => {
 					</tbody>
 				</table>
 
-				<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px" }}>
-					<div>
-						<h3 style={styles.cardTitle}>Pending Invites</h3>
-						<p style={styles.cardSubtitle}>0 pending invites</p>
+				<div className="proj-settings-section-divider">
+					<div className="proj-settings-card-header">
+						<div className="proj-settings-card-header-left">
+							<h3 className="proj-settings-card-title">Pending Invites</h3>
+							<p className="proj-settings-card-subtitle">0 pending invites</p>
+						</div>
 					</div>
+					<table className="proj-settings-table">
+						<thead className="proj-settings-thead">
+							<tr className="proj-settings-header-row">
+								<th className="proj-settings-header-cell">User</th>
+								<th className="proj-settings-header-cell">Invited</th>
+								<th className="proj-settings-header-cell">Role</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td colSpan="3" className="proj-settings-empty-row">
+									No pending invites
+								</td>
+							</tr>
+						</tbody>
+					</table>
 				</div>
-				<table style={styles.table}>
-					<thead style={styles.tableHead}>
-						<tr>
-							<th style={styles.tableHeaderCell}>User</th>
-							<th style={styles.tableHeaderCell}>Invited</th>
-							<th style={styles.tableHeaderCell}>Role</th>
-						</tr>
-					</thead>
-					<tbody>
-						{/* Placeholder for pending invites */}
-						<tr>
-							<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
-								No pending invites
-							</td>
-						</tr>
-					</tbody>
-				</table>
 			</div>
 
-			<button
-				style={{
-					backgroundColor: "#4B9CD3",
-					color: "white",
-					padding: "15px",
-					borderRadius: "5px",
-					border: "None",
-					marginLeft: "45%",
-					marginTop: "50px",
-				}}
-			>
-				<b>Leave Project</b>
-			</button>
+			<button className="proj-settings-leave-btn">Leave Project</button>
 
 			{/* Delete Confirmation Modal */}
 			{confirmDelete && (
-				<div style={styles.modalOverlay}>
-					<div style={styles.modal}>
-						<div style={styles.modalHeader}>
-							<h3 style={styles.modalTitle}>Confirm Remove Member</h3>
-							<button onClick={handleCancelDelete} style={styles.closeButton}>
+				<div className="proj-settings-modal-overlay">
+					<div className="proj-settings-modal">
+						<div className="proj-settings-modal-header">
+							<h3 className="proj-settings-modal-title">Confirm Remove Member</h3>
+							<button onClick={handleCancelDelete} className="proj-settings-modal-close">
 								&times;
 							</button>
 						</div>
-						<div style={styles.modalBody}>
+						<div className="proj-settings-modal-body">
 							<p>
 								Are you sure you want to remove <strong>{confirmDelete}</strong> from this project?
 							</p>
 						</div>
-						<div style={styles.modalFooter}>
-							<button type="button" onClick={handleCancelDelete} style={styles.cancelButton}>
+						<div className="proj-settings-modal-footer">
+							<button type="button" onClick={handleCancelDelete} className="proj-settings-btn proj-settings-btn-secondary">
 								Cancel
 							</button>
 							<button
 								type="button"
 								onClick={handleConfirmDelete}
-								style={{ ...styles.button, backgroundColor: "#ef4444" }}
+								className="proj-settings-btn proj-settings-btn-danger"
 								disabled={teamLoading}
 							>
 								{teamLoading ? "Removing..." : "Remove"}
@@ -535,20 +326,22 @@ const ProjectSettingsDashboard = () => {
 	);
 
 	const renderBillingAndUsageContent = () => (
-		<div style={styles.card}>
-			<div style={styles.cardHeader}>
-				<h3 style={styles.cardTitle}>Billing and Usage</h3>
-				<p style={styles.cardSubtitle}>Manage your subscription and view usage.</p>
+		<div className="proj-settings-card">
+			<div className="proj-settings-card-header">
+				<div className="proj-settings-card-header-left">
+					<h3 className="proj-settings-card-title">Billing and Usage</h3>
+					<p className="proj-settings-card-subtitle">Manage your subscription and view usage.</p>
+				</div>
 			</div>
 			<p>Billing and usage content goes here.</p>
 		</div>
 	);
 
 	return (
-		<div style={styles.page}>
-			<div style={styles.header}>
-				<h1 style={styles.title}>{projectName}</h1>
-				<p style={styles.subtitle}>Manage your project settings and members.</p>
+		<div className="proj-settings-page">
+			<div className="proj-settings-header">
+				<h1 className="proj-settings-title">{projectName}</h1>
+				<p className="proj-settings-subtitle">Manage your project settings and members.</p>
 			</div>
 
 			{currentSection === "general" && renderGeneralContent()}
@@ -556,30 +349,31 @@ const ProjectSettingsDashboard = () => {
 			{currentSection === "billing" && renderBillingAndUsageContent()}
 
 			{showInviteMemberModal && (
-				<div style={styles.modalOverlay}>
-					<div style={styles.modal}>
-						<div style={styles.modalHeader}>
-							<h3 style={styles.modalTitle}>Add Team Member</h3>
-							<button onClick={handleCloseInviteModal} style={styles.closeButton}>
+				<div className="proj-settings-modal-overlay">
+					<div className="proj-settings-modal">
+						<div className="proj-settings-modal-header">
+							<h3 className="proj-settings-modal-title">Add Team Member</h3>
+							<button onClick={handleCloseInviteModal} className="proj-settings-modal-close">
 								&times;
 							</button>
 						</div>
 						<form onSubmit={handleInviteMemberSubmit}>
-							<div style={styles.modalBody}>
-								<div style={{ marginBottom: "16px" }}>
-									<label style={styles.label}>Username or Email</label>
+							<div className="proj-settings-modal-body">
+								<div className="proj-settings-form-group">
+									<label className="proj-settings-label">Username or Email</label>
 									<input
 										type="text"
 										name="username"
 										value={inviteMemberFormData.username}
 										onChange={handleInviteMemberInputChange}
 										required
-										style={styles.input}
+										className="proj-settings-input"
 										placeholder="Enter username or email"
+										style={{ maxWidth: "100%" }}
 									/>
 								</div>
-								<div>
-									<label style={styles.label}>Role</label>
+								<div className="proj-settings-form-group">
+									<label className="proj-settings-label">Role</label>
 									<select
 										name="role_id"
 										value={inviteMemberFormData.role_id}
@@ -589,7 +383,7 @@ const ProjectSettingsDashboard = () => {
 												role_id: parseInt(e.target.value, 10),
 											}))
 										}
-										style={styles.input}
+										className="proj-settings-select"
 									>
 										{roles.map((role) => (
 											<option key={role.id} value={role.id}>
@@ -599,11 +393,11 @@ const ProjectSettingsDashboard = () => {
 									</select>
 								</div>
 							</div>
-							<div style={styles.modalFooter}>
-								<button type="button" onClick={handleCloseInviteModal} style={styles.cancelButton}>
+							<div className="proj-settings-modal-footer">
+								<button type="button" onClick={handleCloseInviteModal} className="proj-settings-btn proj-settings-btn-secondary">
 									Cancel
 								</button>
-								<button type="submit" disabled={inviteMemberLoading} style={styles.button}>
+								<button type="submit" disabled={inviteMemberLoading} className="proj-settings-btn proj-settings-btn-primary">
 									{inviteMemberLoading ? "Adding..." : "Add Member"}
 								</button>
 							</div>

@@ -358,9 +358,10 @@ const ManageSchedules = () => {
 				const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
 
 				if (sortedScripts.length > 0) {
-					const latestScript = sortedScripts[0];
+					// Use master script (oldest/first uploaded) for scheduling
+					const masterScript = sortedScripts[sortedScripts.length - 1];
 
-					const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?script_id=${latestScript.id}`));
+					const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?script_id=${masterScript.id}`));
 					if (!breakdownResponse.ok) {
 						if (breakdownResponse.status === 404) {
 							return;
@@ -426,6 +427,7 @@ const ManageSchedules = () => {
 				if (response.ok) {
 					const data = await response.json();
 					setLocationList(data.locations || []);
+					console.log("location list ------------ ", data);
 				}
 			} catch (error) {
 				console.error("Error fetching location list:", error);
@@ -483,6 +485,32 @@ const ManageSchedules = () => {
 		return map;
 	}, [breakdownCharacters]);
 
+	// Get locked option info for the selected location
+	const selectedLocationLockedInfo = useMemo(() => {
+		if (elementType !== "location" || !element) return null;
+
+		const selectedLocation = locationList.find((loc) => loc.location === element);
+		if (!selectedLocation) return null;
+
+		const lockedOptionId = selectedLocation.locked;
+		// Check if there's a locked option (locked is not -1 or "-1" or null)
+		if (lockedOptionId === -1 || lockedOptionId === "-1" || lockedOptionId === null || lockedOptionId === undefined) {
+			return null;
+		}
+
+		const locationOptions = selectedLocation.location_options || {};
+		const lockedOption = locationOptions[String(lockedOptionId)];
+
+		if (!lockedOption) return null;
+
+		return {
+			optionId: lockedOptionId,
+			optionName: lockedOption.locationName || lockedOption.location_name || "Unknown",
+			address: lockedOption.address || "",
+			availableDates: lockedOption.available_dates || lockedOption.availableDates || [],
+		};
+	}, [elementType, element, locationList]);
+
 	useEffect(() => {
 		if (scheduleData && scheduleData.schedule && scheduleData.schedule.schedule_by_day) {
 			// Build character name to ID mapping from castList API data (fallback)
@@ -498,36 +526,63 @@ const ManageSchedules = () => {
 				const days = Object.values(scheduleData.schedule.schedule_by_day).map((day) => ({
 					id: String(day.date),
 					date: day.date,
-					scenes: day.scenes.map((scheduledScene, index) => {
-						const fullScene = scenes.find((s) => (s["Scene Number"] || s["Scene No."]) === String(scheduledScene.scene_number));
+					scenes: day.scenes
+						.map((scheduledScene, index) => {
+							// Find breakdown scene by matching the 'id' field
+							const breakdownScene = breakdownScenes.find(
+								(bs) => bs.id === scheduledScene.scene_id || bs.id === parseInt(scheduledScene.scene_id)
+							);
 
-						// Find breakdown scene data to get character_ids directly
-						const breakdownScene = breakdownScenes.find((bs) => bs.scene_number === String(scheduledScene.scene_number));
+							const newScene = {};
 
-						const newScene = {};
+							if (breakdownScene) {
+								newScene.id = id++;
+								newScene.scene_id = scheduledScene.scene_id;
+								newScene.scene_number = scheduledScene.scene_number || breakdownScene.scene_number;
+								newScene.int_ext = breakdownScene.int_ext;
+								newScene.time_of_day = breakdownScene.time_of_day;
+								newScene.page_eighths = breakdownScene.page_eighths;
+								newScene.synopsis = breakdownScene.synopsis;
 
-						if (fullScene) {
-							newScene.id = id++;
-							newScene.scene_number = fullScene["Scene Number"];
-							newScene.int_ext = fullScene["Int./Ext."];
-							newScene.time_of_day = fullScene["Time of Day"] || fullScene["Time"];
-							newScene.page_eighths = fullScene["Page Eighths"] || fullScene["Pgs"];
-							newScene.synopsis = fullScene["Synopsis"];
+								newScene.location_name = breakdownScene.location;
 
-							newScene.location_name = fullScene["Location"];
+								newScene.character_names = breakdownScene.characters || [];
 
-							newScene.character_names = fullScene["Characters"] ? fullScene["Characters"].split(",").map((c) => c.trim()) : [];
-
-							// Use character_ids from breakdown data if available, otherwise map from names
-							if (breakdownScene && breakdownScene.characters_ids) {
-								newScene.character_ids = breakdownScene.characters_ids;
+								// Use character_ids from breakdown data if available, otherwise map from names
+								if (breakdownScene.characters_ids) {
+									newScene.character_ids = breakdownScene.characters_ids;
+								} else {
+									newScene.character_ids = newScene.character_names.map((name) => charNameToId[name] || null);
+								}
 							} else {
-								newScene.character_ids = newScene.character_names.map((name) => charNameToId[name] || null);
-							}
-						}
+								// Fallback to TSV scenes data if breakdown scene not found
+								const fullScene = scenes.find((s) => (s["Scene Number"] || s["Scene No."]) === String(scheduledScene.scene_number));
+								if (fullScene) {
+									newScene.id = id++;
+									newScene.scene_id = scheduledScene.scene_id;
+									newScene.scene_number = scheduledScene.scene_number || fullScene["Scene Number"];
+									newScene.int_ext = fullScene["Int./Ext."];
+									newScene.time_of_day = fullScene["Time of Day"] || fullScene["Time"];
+									newScene.page_eighths = fullScene["Page Eighths"] || fullScene["Pgs"];
+									newScene.synopsis = fullScene["Synopsis"];
 
-						return newScene;
-					}),
+									newScene.location_name = fullScene["Location"];
+
+									newScene.character_names = fullScene["Characters"] ? fullScene["Characters"].split(",").map((c) => c.trim()) : [];
+									newScene.character_ids = newScene.character_names.map((name) => charNameToId[name] || null);
+								} else {
+									// Scene not found in breakdown data - it may have been deleted
+									// Return null to filter it out
+									console.log(
+										`Scene ${scheduledScene.scene_number} (id: ${scheduledScene.scene_id}) not found in breakdown - may have been deleted`
+									);
+									return null;
+								}
+							}
+
+							return newScene;
+						})
+						.filter((scene) => scene !== null && scene.scene_number), // Filter out deleted/missing scenes
 				}));
 				console.log("days -- ", days);
 				const dates = days.map((item) => new Date(item.date));
@@ -712,8 +767,24 @@ const ManageSchedules = () => {
 				const scenes = dayData.scenes || [];
 
 				scenes.forEach((scene) => {
-					const { scene_number, location_name, character_names, character_ids } = scene;
+					const { scene_id, scene_number } = scene;
 					const conflictList = [];
+
+					// Find breakdown scene by matching the 'id' field
+					const breakdownScene = breakdownScenes.find((bs) => bs.id === scene_id || bs.id === parseInt(scene_id));
+
+					// Skip if scene doesn't exist in breakdown (may have been deleted)
+					if (!breakdownScene) {
+						// console.log(
+						// 	`Scene ${scene_number} (id: ${scene_id}) not found in breakdown for conflict detection - may have been deleted`,
+						// 	breakdownScene
+						// );
+						return; // Skip this scene
+					}
+
+					const character_names = breakdownScene?.characters || scene.character_names || [];
+					const character_ids = breakdownScene?.characters_ids || scene.character_ids || [];
+					const location_name = breakdownScene?.location || scene.location_name;
 
 					character_ids?.forEach((charId, index) => {
 						const charName = character_names?.[index];
@@ -734,18 +805,20 @@ const ManageSchedules = () => {
 					}
 
 					if (conflictList.length > 0) {
-						if (!sceneConflicts[scene_number]) {
-							sceneConflicts[scene_number] = {
+						if (!sceneConflicts[scene_id]) {
+							sceneConflicts[scene_id] = {
+								scene_number,
 								date: dayData.date,
 								conflicts: [],
 							};
 						}
-						sceneConflicts[scene_number].conflicts.push(...conflictList);
+						sceneConflicts[scene_id].conflicts.push(...conflictList);
 					}
 				});
 			});
 
-			const newConflicts = Object.entries(sceneConflicts).map(([scene_number, { date, conflicts }]) => ({
+			const newConflicts = Object.entries(sceneConflicts).map(([scene_id, { scene_number, date, conflicts }]) => ({
+				scene_id,
 				scene_number,
 				date,
 				conflicts,
@@ -758,7 +831,7 @@ const ManageSchedules = () => {
 			detectConflicts();
 			console.log("conflicts----------", conflicts);
 		}
-	}, [scheduleData]);
+	}, [scheduleData, breakdownScenes]);
 
 	const getElementOptions = (type) => {
 		const options = [];
@@ -1080,10 +1153,16 @@ const ManageSchedules = () => {
 				const scenes = dayData.scenes || [];
 
 				for (const scheduledScene of scenes) {
-					// Find the scene in breakdownScenes by scene_number
-					const breakdownScene = breakdownScenes.find((bs) => bs.scene_number === String(scheduledScene.scene_number));
+					// Find breakdown scene by matching the 'id' field
+					const breakdownScene = breakdownScenes.find((bs) => bs.id === scheduledScene.scene_id || bs.id === parseInt(scheduledScene.scene_id));
 
-					if (!breakdownScene) continue;
+					// Skip if scene doesn't exist in breakdown (may have been deleted)
+					if (!breakdownScene) {
+						console.warn(
+							`Scene ${scheduledScene.scene_number} (id: ${scheduledScene.scene_id}) not found for scheduled dates - may have been deleted`
+						);
+						continue;
+					}
 
 					if (type === "character") {
 						// Check if the character is in this breakdown scene's characters array
@@ -1181,9 +1260,10 @@ const ManageSchedules = () => {
 			const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
 
 			if (sortedScripts.length > 0) {
-				const latestScript = sortedScripts[0];
+				// Use master script (oldest/first uploaded) for scheduling
+				const masterScript = sortedScripts[sortedScripts.length - 1];
 
-				const SaveResponse = await fetch(getApiUrl(`/api/save-hours?script_id=${latestScript.id}`), {
+				const SaveResponse = await fetch(getApiUrl(`/api/save-hours?script_id=${masterScript.id}`), {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
@@ -1254,7 +1334,7 @@ const ManageSchedules = () => {
 								}}
 								className="sched-element-dropdown"
 							>
-								<option value="location">Locations</option>
+								<option value="location">Location Groups</option>
 								<option value="character">Characters</option>
 							</select>
 						</div>
@@ -1285,6 +1365,42 @@ const ManageSchedules = () => {
 							<span>&gt;</span>
 						</div>
 					</div>
+
+					{/* Locked Option Info Display */}
+					{elementType === "location" && element && (
+						<div className="sched-locked-option-info">
+							{selectedLocationLockedInfo ? (
+								<div className="sched-locked-option-card">
+									<div className="sched-locked-option-header">
+										<span className="sched-locked-icon">🔒</span>
+										<span className="sched-locked-label">Locked Option:</span>
+									</div>
+									<div className="sched-locked-option-details">
+										<div className="sched-locked-option-name">{selectedLocationLockedInfo.optionName}</div>
+										{selectedLocationLockedInfo.address && (
+											<div className="sched-locked-option-address">📍 {selectedLocationLockedInfo.address}</div>
+										)}
+										{selectedLocationLockedInfo.availableDates.length > 0 && (
+											<div className="sched-locked-option-dates">
+												<span className="sched-locked-dates-label">Available Dates: </span>
+												<span className="sched-locked-dates-count">
+													{selectedLocationLockedInfo.availableDates.length} date(s)
+												</span>
+											</div>
+										)}
+									</div>
+									<div className="sched-locked-sync-note">
+										<small>📌 Changes to dates here will sync to the locked option</small>
+									</div>
+								</div>
+							) : (
+								<div className="sched-no-locked-option">
+									<span className="sched-unlocked-icon">🔓</span>
+									<span>No option locked for this location</span>
+								</div>
+							)}
+						</div>
+					)}
 
 					<div className="sched-given-dates">
 						<div className="sched-section-title">Given Dates</div>

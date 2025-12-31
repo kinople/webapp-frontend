@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
 import "../css/Locations.css";
 
 // Create a memoized modal component
 const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm }) => {
+	const [dateRangeStart, setDateRangeStart] = useState("");
+	const [dateRangeEnd, setDateRangeEnd] = useState("");
+	const [selectedDates, setSelectedDates] = useState(optionForm.availableDates || []);
+
 	const handleSubmit = async (e) => {
 		e.preventDefault();
-		await onSubmit(optionForm);
+		await onSubmit({ ...optionForm, availableDates: selectedDates });
 	};
 
 	const handleInputChange = useCallback(
@@ -20,39 +26,188 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 		[setOptionForm]
 	);
 
+	const addDateRange = () => {
+		if (!dateRangeStart || !dateRangeEnd) {
+			alert("Please select both start and end dates");
+			return;
+		}
+		if (dateRangeStart > dateRangeEnd) {
+			alert("Start date must be before end date");
+			return;
+		}
+
+		const rangeDates = [];
+		const currentDate = new Date(dateRangeStart);
+		const endDate = new Date(dateRangeEnd);
+
+		while (currentDate <= endDate) {
+			rangeDates.push(currentDate.toISOString().split("T")[0]);
+			currentDate.setDate(currentDate.getDate() + 1);
+		}
+
+		setSelectedDates((prev) => {
+			const newDates = [...prev];
+			rangeDates.forEach((date) => {
+				if (!newDates.includes(date)) {
+					newDates.push(date);
+				}
+			});
+			return newDates.sort();
+		});
+
+		setDateRangeStart("");
+		setDateRangeEnd("");
+	};
+
+	const handleCalendarDateClick = (date) => {
+		const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
+		setSelectedDates((prev) => {
+			if (prev.includes(dateStr)) {
+				return prev.filter((d) => d !== dateStr);
+			} else {
+				return [...prev, dateStr].sort();
+			}
+		});
+	};
+
+	const removeDate = (dateToRemove) => {
+		setSelectedDates((prev) => prev.filter((d) => d !== dateToRemove));
+	};
+
+	const clearAllDates = () => {
+		setSelectedDates([]);
+	};
+
+	const formatDisplayDate = (dateString) => {
+		const date = new Date(dateString);
+		return date.toLocaleDateString("en-US", {
+			weekday: "short",
+			month: "short",
+			day: "numeric",
+		});
+	};
+
+	const tileClassName = ({ date, view }) => {
+		if (view === "month") {
+			const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
+			if (selectedDates.includes(dateStr)) {
+				return "loc-calendar-selected";
+			}
+		}
+		return null;
+	};
+
 	return (
 		<div className="loc-modal-overlay">
-			<div className="loc-modal">
+			<div className="loc-modal loc-modal-wide">
 				<h3 className="loc-modal-title">Add Location Option</h3>
 				<form onSubmit={handleSubmit} className="loc-form">
-					<div className="loc-form-group">
-						<label className="loc-label">Location Name:</label>
-						<input
-							type="text"
-							value={optionForm.locationName || ""}
-							onChange={(e) => handleInputChange("locationName", e.target.value)}
-							className="loc-input"
-							required
-							autoFocus
-						/>
-					</div>
-					<div className="loc-form-group">
-						<label className="loc-label">Address:</label>
-						<input
-							type="text"
-							value={optionForm.address || ""}
-							onChange={(e) => handleInputChange("address", e.target.value)}
-							className="loc-input"
-						/>
-					</div>
-					<div className="loc-form-group">
-						<label className="loc-label">Notes:</label>
-						<textarea
-							value={optionForm.notes || ""}
-							onChange={(e) => handleInputChange("notes", e.target.value)}
-							className="loc-textarea"
-							placeholder=""
-						/>
+					<div className="loc-form-row">
+						<div className="loc-form-column">
+							<div className="loc-form-group">
+								<label className="loc-label">Location Name:</label>
+								<input
+									type="text"
+									value={optionForm.locationName || ""}
+									onChange={(e) => handleInputChange("locationName", e.target.value)}
+									className="loc-input"
+									required
+									autoFocus
+								/>
+							</div>
+							<div className="loc-form-group">
+								<label className="loc-label">Address:</label>
+								<input
+									type="text"
+									value={optionForm.address || ""}
+									onChange={(e) => handleInputChange("address", e.target.value)}
+									className="loc-input"
+								/>
+							</div>
+							<div className="loc-form-group">
+								<label className="loc-label">Notes:</label>
+								<textarea
+									value={optionForm.notes || ""}
+									onChange={(e) => handleInputChange("notes", e.target.value)}
+									className="loc-textarea"
+									placeholder=""
+								/>
+							</div>
+							<div className="loc-form-group">
+								<label className="loc-label">Media:</label>
+								<input
+									type="text"
+									value={optionForm.media || ""}
+									onChange={(e) => handleInputChange("media", e.target.value)}
+									className="loc-input"
+									placeholder="Media links or references"
+								/>
+							</div>
+							<div className="loc-form-group">
+								<label className="loc-label">Location Pin Link:</label>
+								<input
+									type="text"
+									value={optionForm.locationPinLink || ""}
+									onChange={(e) => handleInputChange("locationPinLink", e.target.value)}
+									className="loc-input"
+									placeholder="Google Maps or location pin URL"
+								/>
+							</div>
+						</div>
+						<div className="loc-form-column">
+							<div className="loc-form-group">
+								<label className="loc-label">Available Dates:</label>
+								<div className="loc-date-picker-container">
+									<div className="loc-date-range-inputs">
+										<input
+											type="date"
+											value={dateRangeStart}
+											onChange={(e) => setDateRangeStart(e.target.value)}
+											className="loc-date-input"
+										/>
+										<span className="loc-date-separator">to</span>
+										<input
+											type="date"
+											value={dateRangeEnd}
+											min={dateRangeStart}
+											onChange={(e) => setDateRangeEnd(e.target.value)}
+											className="loc-date-input"
+										/>
+										<button
+											type="button"
+											onClick={addDateRange}
+											className="loc-add-range-btn"
+											disabled={!dateRangeStart || !dateRangeEnd}
+										>
+											Add Range
+										</button>
+									</div>
+									<div className="loc-calendar-wrapper">
+										<Calendar selectRange={false} onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
+									</div>
+									{selectedDates.length > 0 && (
+										<div className="loc-selected-dates">
+											<div className="loc-selected-dates-header">
+												<span>Selected Dates ({selectedDates.length}):</span>
+												<button type="button" onClick={clearAllDates} className="loc-clear-dates-btn">
+													Clear All
+												</button>
+											</div>
+											<div className="loc-dates-list">
+												{selectedDates.map((date) => (
+													<span key={date} className="loc-date-tag">
+														{formatDisplayDate(date)}
+														<button type="button" onClick={() => removeDate(date)} className="loc-remove-date-btn">
+															×
+														</button>
+													</span>
+												))}
+											</div>
+										</div>
+									)}
+								</div>
+							</div>
+						</div>
 					</div>
 					<div className="loc-modal-buttons">
 						<button type="submit" className="loc-submit-btn">
@@ -81,11 +236,14 @@ const Locations = () => {
 		locationName: "",
 		address: "",
 		notes: "",
+		availableDates: [],
+		media: "",
+		locationPinLink: "",
 	});
 	const [selectedOptions, setSelectedOptions] = useState(new Set());
 	const [isSelectingMode, setIsSelectingMode] = useState(new Set()); // Track which locations are in selecting mode
-	const [lockedOptions, setLockedOptions] = useState(new Set()); // Track locked options
 	const [collapsedCards, setCollapsedCards] = useState(new Set()); // Track collapsed cards
+	const [optionDetailsModal, setOptionDetailsModal] = useState(null); // Store option data for modal: { option, isLocked, locationName }
 
 	// Memoize the option form setter to prevent unnecessary re-renders
 	const memoizedSetOptionForm = useCallback((updater) => {
@@ -113,6 +271,9 @@ const Locations = () => {
 			locationName: "",
 			address: "",
 			notes: "",
+			availableDates: [],
+			media: "",
+			locationPinLink: "",
 		});
 	}, []);
 
@@ -167,6 +328,9 @@ const Locations = () => {
 				locationName: "",
 				address: "",
 				notes: "",
+				availableDates: [],
+				media: "",
+				locationPinLink: "",
 			});
 			setShowAddOptionModal(false);
 
@@ -218,42 +382,35 @@ const Locations = () => {
 		}
 	};
 
-	const toggleLockOption = async (locationIndex, optionId) => {
+	const toggleLockOption = async (locationIndex, optionId, locationId) => {
 		try {
-			const key = `${locationIndex}-${optionId}`;
-			const isCurrentlyLocked = lockedOptions.has(key);
+			const location = locationData.locations[locationIndex];
+			const isCurrentlyLocked = location.locked === optionId || location.locked === parseInt(optionId);
 
-			if (isCurrentlyLocked) {
-				// Unlock this option
-				setLockedOptions((prev) => {
-					const next = new Set(prev);
-					next.delete(key);
-					return next;
-				});
-			} else {
-				// Lock this option (and unlock any other locked option for this location)
-				setLockedOptions((prev) => {
-					const next = new Set(prev);
-					// Remove any existing locks for this location
-					Array.from(prev).forEach((lockedKey) => {
-						if (lockedKey.startsWith(`${locationIndex}-`)) {
-							next.delete(lockedKey);
-						}
-					});
-					// Add the new lock
-					next.add(key);
-					return next;
-				});
+			// Determine new lock value (-1 for unlock, optionId for lock)
+			const newLockValue = isCurrentlyLocked ? -1 : optionId;
+
+			// Call the backend API to update lock status
+			const response = await fetch(getApiUrl(`/api/${id}/location/${locationId}/lock`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ option_id: newLockValue }),
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to update lock status");
 			}
 
-			// Here you would typically make an API call to update the lock status
-			// await fetch(getApiUrl(`/api/${id}/location/${location.location_id}/options/${optionId}/lock`), {
-			//     method: 'POST',
-			//     headers: { 'Content-Type': 'application/json' },
-			//     body: JSON.stringify({ locked: !isCurrentlyLocked })
-			// });
+			// Refresh the locations data to get updated lock state
+			const refreshResponse = await fetch(getApiUrl(`/api/${id}/locations`));
+			if (!refreshResponse.ok) {
+				throw new Error("Failed to refresh locations");
+			}
+			const jsonData = await refreshResponse.json();
+			setLocationData(jsonData);
 		} catch (error) {
 			console.error("Error toggling lock:", error);
+			setError(error.message);
 		}
 	};
 
@@ -277,13 +434,13 @@ const Locations = () => {
 					) : (
 						<>
 							<div className="loc-header-info">
-								<h2 className="loc-heading">Locations - {locationData.project_name}</h2>
-								<p className="loc-subheading">Total Locations: {locationData.total_locations}</p>
+								<h2 className="loc-heading">Location Groups - {locationData.project_name}</h2>
+								<p className="loc-subheading">Total Location Groups: {locationData.total_locations}</p>
 							</div>
 
 							<div className="loc-action-buttons">
-								<button className="loc-action-btn loc-action-btn-primary">Add Location</button>
-								<button className="loc-action-btn">Remove Location</button>
+								<button className="loc-action-btn loc-action-btn-primary">Add Location Group</button>
+								<button className="loc-action-btn">Remove Location Group</button>
 							</div>
 
 							{locationData.locations.map((location, index) => {
@@ -470,6 +627,9 @@ const Locations = () => {
 																	<th className="loc-header-cell">Location Name</th>
 																	<th className="loc-header-cell">Address</th>
 																	<th className="loc-header-cell">Notes</th>
+																	<th className="loc-header-cell">Media</th>
+																	<th className="loc-header-cell">Location Pin Link</th>
+																	<th className="loc-header-cell">Available Dates</th>
 																	<th className="loc-header-cell">Lock</th>
 																</tr>
 															</thead>
@@ -479,15 +639,31 @@ const Locations = () => {
 																	Object.entries(location.location_options).map(
 																		([optionId, option], optionIndex) => {
 																			const optionKey = `${index}-${optionId}`;
-																			const isLocked = lockedOptions.has(optionKey);
-																			const hasAnyLocked = Array.from(lockedOptions).some((key) =>
-																				key.startsWith(`${index}-`)
-																			);
+																			const isLocked =
+																				location.locked === optionId ||
+																				location.locked === parseInt(optionId) ||
+																				String(location.locked) === optionId;
+																			const hasAnyLocked =
+																				location.locked !== -1 &&
+																				location.locked !== "-1" &&
+																				location.locked !== null &&
+																				location.locked !== undefined;
+																			const dates = option.available_dates || option.availableDates;
 
 																			return (
-																				<tr key={optionIndex} className="loc-data-row">
+																				<tr
+																					key={optionIndex}
+																					className="loc-data-row loc-data-row-clickable"
+																					onClick={() => {
+																						setOptionDetailsModal({
+																							option,
+																							isLocked,
+																							locationName: location.location,
+																						});
+																					}}
+																				>
 																					{isSelectingMode.has(index) && (
-																						<td className="loc-data-cell">
+																						<td className="loc-data-cell" onClick={(e) => e.stopPropagation()}>
 																							<input
 																								type="checkbox"
 																								checked={selectedOptions.has(optionKey)}
@@ -513,13 +689,81 @@ const Locations = () => {
 																					<td className="loc-data-cell">
 																						{option.address || "-"}
 																					</td>
-																					<td className="loc-data-cell">
+																					<td className="loc-data-cell loc-truncate">
 																						{option.notes || "-"}
 																					</td>
-																					<td className="loc-data-cell">
+																					<td className="loc-data-cell loc-truncate">
+																						{option.media || "-"}
+																					</td>
+																					<td className="loc-data-cell" onClick={(e) => e.stopPropagation()}>
+																						{option.location_pin_link ||
+																						option.locationPinLink ? (
+																							<a
+																								href={
+																									option.location_pin_link ||
+																									option.locationPinLink
+																								}
+																								target="_blank"
+																								rel="noopener noreferrer"
+																								className="loc-link"
+																							>
+																								View
+																							</a>
+																						) : (
+																							"-"
+																						)}
+																					</td>
+																					<td className="loc-data-cell loc-dates-cell">
+																						{(() => {
+																							if (
+																								!dates ||
+																								(Array.isArray(dates) &&
+																									dates.length === 0)
+																							)
+																								return "-";
+																							if (Array.isArray(dates)) {
+																								return dates.length > 3
+																									? `${dates
+																											.slice(0, 3)
+																											.map((d) =>
+																												new Date(
+																													d
+																												).toLocaleDateString(
+																													"en-US",
+																													{
+																														month: "short",
+																														day: "numeric",
+																													}
+																												)
+																											)
+																											.join(", ")} +${
+																											dates.length - 3
+																									  } more`
+																									: dates
+																											.map((d) =>
+																												new Date(
+																													d
+																												).toLocaleDateString(
+																													"en-US",
+																													{
+																														month: "short",
+																														day: "numeric",
+																													}
+																												)
+																											)
+																											.join(", ");
+																							}
+																							return dates;
+																						})()}
+																					</td>
+																					<td className="loc-data-cell" onClick={(e) => e.stopPropagation()}>
 																						<button
 																							onClick={() =>
-																								toggleLockOption(index, optionId)
+																								toggleLockOption(
+																									index,
+																									optionId,
+																									location.location_id
+																								)
 																							}
 																							className={`loc-lock-btn ${
 																								isLocked ? "loc-locked" : ""
@@ -547,7 +791,7 @@ const Locations = () => {
 																) : (
 																	<tr className="loc-data-row">
 																		<td
-																			colSpan={isSelectingMode.has(index) ? "5" : "5"}
+																			colSpan={isSelectingMode.has(index) ? "8" : "7"}
 																			className="loc-empty-row"
 																		>
 																			No location options added yet
@@ -604,6 +848,103 @@ const Locations = () => {
 					optionForm={optionForm}
 					setOptionForm={memoizedSetOptionForm}
 				/>
+			)}
+
+			{/* Option Details Modal */}
+			{optionDetailsModal && (
+				<div className="loc-modal-overlay" onClick={() => setOptionDetailsModal(null)}>
+					<div className="loc-option-details-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="loc-option-modal-header">
+							<div className="loc-option-modal-title-row">
+								{optionDetailsModal.isLocked && <span className="loc-locked-badge">🔒 Locked</span>}
+								<h3 className="loc-option-modal-title">
+									{optionDetailsModal.option.locationName || optionDetailsModal.option.location_name || "Location Option"}
+								</h3>
+							</div>
+							<div className="loc-option-modal-subtitle">
+								Location Group: {optionDetailsModal.locationName}
+							</div>
+							<button className="loc-option-modal-close" onClick={() => setOptionDetailsModal(null)}>
+								×
+							</button>
+						</div>
+
+						<div className="loc-option-modal-content">
+							<div className="loc-option-modal-section">
+								<div className="loc-option-modal-label">📍 Address</div>
+								<div className="loc-option-modal-value">
+									{optionDetailsModal.option.address || "Not specified"}
+								</div>
+							</div>
+
+							<div className="loc-option-modal-section">
+								<div className="loc-option-modal-label">📝 Notes</div>
+								<div className="loc-option-modal-value loc-option-modal-notes">
+									{optionDetailsModal.option.notes || "No notes"}
+								</div>
+							</div>
+
+							<div className="loc-option-modal-section">
+								<div className="loc-option-modal-label">🎬 Media</div>
+								<div className="loc-option-modal-value">
+									{optionDetailsModal.option.media || "No media"}
+								</div>
+							</div>
+
+							<div className="loc-option-modal-section">
+								<div className="loc-option-modal-label">🗺️ Location Pin</div>
+								<div className="loc-option-modal-value">
+									{optionDetailsModal.option.location_pin_link || optionDetailsModal.option.locationPinLink ? (
+										<a
+											href={optionDetailsModal.option.location_pin_link || optionDetailsModal.option.locationPinLink}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="loc-option-modal-link"
+										>
+											Open in Maps →
+										</a>
+									) : (
+										"No location pin"
+									)}
+								</div>
+							</div>
+
+							<div className="loc-option-modal-section loc-option-modal-dates-section">
+								<div className="loc-option-modal-label">
+									📅 Available Dates ({(optionDetailsModal.option.available_dates || optionDetailsModal.option.availableDates || []).length})
+								</div>
+								<div className="loc-option-modal-dates-container">
+									{(() => {
+										const dates = optionDetailsModal.option.available_dates || optionDetailsModal.option.availableDates || [];
+										if (dates.length === 0) {
+											return <span className="loc-option-modal-no-dates">No dates specified</span>;
+										}
+										return (
+											<div className="loc-option-modal-dates-list">
+												{dates.map((d) => (
+													<span key={d} className="loc-option-modal-date-tag">
+														{new Date(d).toLocaleDateString("en-US", {
+															weekday: "short",
+															month: "short",
+															day: "numeric",
+															year: "numeric",
+														})}
+													</span>
+												))}
+											</div>
+										);
+									})()}
+								</div>
+							</div>
+						</div>
+
+						<div className="loc-option-modal-footer">
+							<button className="loc-option-modal-close-btn" onClick={() => setOptionDetailsModal(null)}>
+								Close
+							</button>
+						</div>
+					</div>
+				</div>
 			)}
 		</div>
 	);

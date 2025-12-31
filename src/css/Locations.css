@@ -147,11 +147,9 @@
 	transition: all 0.15s ease;
 }
 
-.loc-left-panel-collapsed{
+.loc-left-panel-collapsed {
 	width: 95% !important;
-	
 }
-
 
 .loc-collapse-btn:hover {
 	background: #f5f6f8;
@@ -591,6 +589,183 @@
 	background: rgba(255, 103, 88, 0.08);
 }
 
+/* Wide Modal for Date Picker */
+.loc-modal-wide {
+	max-width: 800px;
+}
+
+.loc-form-row {
+	display: flex;
+	gap: 24px;
+}
+
+.loc-form-column {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+/* Date Picker Styles */
+.loc-date-picker-container {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.loc-date-range-inputs {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.loc-date-input {
+	padding: 8px 10px;
+	border-radius: 6px;
+	border: 1px solid #e6ecf8;
+	font-size: 13px;
+	font-family: "Inter", sans-serif;
+	background: #fff;
+	transition: border-color 0.15s ease;
+}
+
+.loc-date-input:focus {
+	outline: none;
+	border-color: #ff6758;
+}
+
+.loc-date-separator {
+	color: #6b7280;
+	font-size: 13px;
+}
+
+.loc-add-range-btn {
+	padding: 8px 14px;
+	border-radius: 6px;
+	border: 1px solid #ff6758;
+	background: transparent;
+	color: #ff6758;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.loc-add-range-btn:hover:not(:disabled) {
+	background: rgba(255, 103, 88, 0.08);
+}
+
+.loc-add-range-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Calendar Wrapper */
+.loc-calendar-wrapper {
+	border: 1px solid #e6ecf8;
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.loc-calendar-wrapper .react-calendar {
+	border: none;
+	width: 100%;
+	font-family: "Inter", sans-serif;
+}
+
+.loc-calendar-wrapper .react-calendar__tile--active {
+	background: #ff6758 !important;
+	color: white;
+}
+
+.loc-calendar-wrapper .react-calendar__tile:hover {
+	background: rgba(255, 103, 88, 0.1);
+}
+
+.loc-calendar-wrapper .loc-calendar-selected {
+	background: linear-gradient(180deg, #ff6454 0%, #ff4c3a 100%) !important;
+	color: white !important;
+	border-radius: 4px;
+}
+
+/* Selected Dates Display */
+.loc-selected-dates {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px;
+	background: #f8f9fb;
+	border-radius: 8px;
+	border: 1px solid #e6ecf8;
+}
+
+.loc-selected-dates-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 12px;
+	font-weight: 600;
+	color: #6b7280;
+}
+
+.loc-clear-dates-btn {
+	padding: 4px 10px;
+	border-radius: 4px;
+	border: 1px solid #dc3545;
+	background: transparent;
+	color: #dc3545;
+	font-size: 11px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.loc-clear-dates-btn:hover {
+	background: rgba(220, 53, 69, 0.08);
+}
+
+.loc-dates-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	max-height: 120px;
+	overflow-y: auto;
+}
+
+.loc-date-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 8px;
+	background: #fff;
+	border: 1px solid #e6ecf8;
+	border-radius: 4px;
+	font-size: 11px;
+	color: #0f1724;
+}
+
+.loc-remove-date-btn {
+	background: none;
+	border: none;
+	color: #9ca3af;
+	font-size: 14px;
+	cursor: pointer;
+	padding: 0;
+	line-height: 1;
+	transition: color 0.15s ease;
+}
+
+.loc-remove-date-btn:hover {
+	color: #dc3545;
+}
+
+/* Dates Cell in Table */
+.loc-dates-cell {
+	max-width: 180px;
+	font-size: 12px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
 	.loc-card {
@@ -612,7 +787,250 @@
 		padding: 16px;
 	}
 
+	.loc-modal-wide {
+		max-width: 95%;
+	}
+
+	.loc-form-row {
+		flex-direction: column;
+	}
+
 	.loc-action-buttons {
 		flex-wrap: wrap;
 	}
+
+	.loc-date-range-inputs {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.loc-date-separator {
+		text-align: center;
+	}
+}
+
+/* Link styling for location pin links */
+.loc-link {
+	color: #3b82f6;
+	text-decoration: none;
+	font-weight: 500;
+	transition: color 0.2s ease;
+}
+
+.loc-link:hover {
+	color: #1d4ed8;
+	text-decoration: underline;
+}
+
+/* Clickable row styles */
+.loc-data-row-clickable {
+	cursor: pointer;
+	transition: background-color 0.15s ease;
+}
+
+.loc-data-row-clickable:hover {
+	background-color: #f0f7ff;
+}
+
+.loc-truncate {
+	max-width: 150px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Option Details Modal */
+.loc-option-details-modal {
+	background: #fff;
+	border-radius: 16px;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+	max-width: 600px;
+	width: 90%;
+	max-height: 85vh;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	animation: modalSlideIn 0.25s ease-out;
+}
+
+@keyframes modalSlideIn {
+	from {
+		opacity: 0;
+		transform: scale(0.95) translateY(-20px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+
+.loc-option-modal-header {
+	padding: 20px 24px;
+	background: linear-gradient(180deg, #f8f9fb 0%, #fff 100%);
+	border-bottom: 1px solid #e6ecf8;
+	position: relative;
+}
+
+.loc-option-modal-title-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 4px;
+}
+
+.loc-option-modal-title {
+	font-size: 20px;
+	font-weight: 700;
+	color: #0f1724;
+	margin: 0;
+}
+
+.loc-option-modal-subtitle {
+	font-size: 13px;
+	color: #6b7280;
+}
+
+.loc-option-modal-close {
+	position: absolute;
+	top: 16px;
+	right: 16px;
+	width: 32px;
+	height: 32px;
+	border: none;
+	background: #f3f4f6;
+	border-radius: 8px;
+	font-size: 20px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #6b7280;
+	transition: all 0.15s ease;
+}
+
+.loc-option-modal-close:hover {
+	background: #e5e7eb;
+	color: #0f1724;
+}
+
+.loc-locked-badge {
+	font-size: 12px;
+	padding: 4px 10px;
+	background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+	color: white;
+	border-radius: 12px;
+	font-weight: 600;
+}
+
+.loc-option-modal-content {
+	padding: 24px;
+	overflow-y: auto;
+	flex: 1;
+}
+
+.loc-option-modal-section {
+	margin-bottom: 20px;
+}
+
+.loc-option-modal-section:last-child {
+	margin-bottom: 0;
+}
+
+.loc-option-modal-label {
+	font-size: 12px;
+	font-weight: 600;
+	color: #6b7280;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	margin-bottom: 6px;
+}
+
+.loc-option-modal-value {
+	font-size: 15px;
+	color: #0f1724;
+	line-height: 1.6;
+	padding: 12px 14px;
+	background: #f8f9fb;
+	border-radius: 10px;
+	border: 1px solid #e6ecf8;
+}
+
+.loc-option-modal-notes {
+	white-space: pre-wrap;
+	max-height: 120px;
+	overflow-y: auto;
+}
+
+.loc-option-modal-link {
+	color: #3b82f6;
+	text-decoration: none;
+	font-weight: 600;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	transition: color 0.15s ease;
+}
+
+.loc-option-modal-link:hover {
+	color: #1d4ed8;
+}
+
+.loc-option-modal-dates-section {
+	margin-bottom: 0;
+}
+
+.loc-option-modal-dates-container {
+	padding: 12px 14px;
+	background: #f8f9fb;
+	border-radius: 10px;
+	border: 1px solid #e6ecf8;
+}
+
+.loc-option-modal-dates-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	max-height: 180px;
+	overflow-y: auto;
+}
+
+.loc-option-modal-date-tag {
+	display: inline-block;
+	padding: 6px 12px;
+	background: linear-gradient(180deg, #ff6758 0%, #e55a4d 100%);
+	color: white;
+	border-radius: 16px;
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.loc-option-modal-no-dates {
+	color: #9ca3af;
+	font-style: italic;
+	font-size: 14px;
+}
+
+.loc-option-modal-footer {
+	padding: 16px 24px;
+	background: #f8f9fb;
+	border-top: 1px solid #e6ecf8;
+	display: flex;
+	justify-content: flex-end;
+}
+
+.loc-option-modal-close-btn {
+	padding: 10px 24px;
+	background: linear-gradient(180deg, #0f1724 0%, #1f2937 100%);
+	color: white;
+	border: none;
+	border-radius: 10px;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.loc-option-modal-close-btn:hover {
+	background: linear-gradient(180deg, #1f2937 0%, #374151 100%);
+	transform: translateY(-1px);
 }

@@ -215,10 +215,11 @@ const CastListNew = () => {
 				const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
 
 				if (sortedScripts.length > 0) {
-					const latestScript = sortedScripts[0];
+					// Use master script (oldest/first uploaded) for cast list
+					const masterScript = sortedScripts[sortedScripts.length - 1];
 
-					// Then, fetch the breakdown for the latest script
-					const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?script_id=${latestScript.id}`));
+					// Fetch the breakdown for the master script
+					const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?script_id=${masterScript.id}`));
 					if (!breakdownResponse.ok) {
 						if (breakdownResponse.status === 404) {
 							return;
