@@ -1783,3 +1783,322 @@
 .sbn-confirm-detail strong {
 	color: #374151;
 }
+
+/* Split Scene Styles */
+.sbn-split-col {
+	width: 60px;
+	min-width: 60px;
+	text-align: center;
+}
+
+.sbn-split-cell {
+	text-align: center;
+	width: 60px;
+	min-width: 60px;
+}
+
+.sbn-split-scene-select-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: none;
+	border-radius: 6px;
+	background: #e0f2fe;
+	color: #0284c7;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	font-size: 16px;
+}
+
+.sbn-split-scene-select-btn:hover {
+	background: #bae6fd;
+	color: #0369a1;
+	transform: scale(1.1);
+}
+
+.sbn-row-splittable {
+	position: relative;
+}
+
+.sbn-row-splittable:hover {
+	background-color: #f0f9ff !important;
+}
+
+.sbn-row-splittable:hover .sbn-data-cell {
+	background-color: #f0f9ff !important;
+}
+
+.sbn-action-btn-split {
+	background: linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%) !important;
+	color: #fff !important;
+}
+
+/* Split Scene Modal */
+.sbn-split-scene-modal {
+	background: #fff;
+	border-radius: 16px;
+	width: 100%;
+	max-width: 1100px;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15);
+	overflow: hidden;
+	animation: modalSlideIn 0.25s ease-out;
+}
+
+.sbn-split-scene-modal-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 20px 24px;
+	border-bottom: 1px solid #e6ecf8;
+	background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
+}
+
+.sbn-split-scene-modal-header h3 {
+	margin: 0;
+	font-size: 20px;
+	font-weight: 700;
+	color: #0f1724;
+}
+
+.sbn-split-scene-modal-body {
+	padding: 24px;
+	max-height: 65vh;
+	overflow-y: auto;
+}
+
+.sbn-split-scene-forms {
+	display: flex;
+	gap: 0;
+}
+
+.sbn-split-scene-form-container {
+	flex: 1;
+	padding: 0 20px;
+}
+
+.sbn-split-scene-form-container:first-child {
+	padding-left: 0;
+}
+
+.sbn-split-scene-form-container:last-child {
+	padding-right: 0;
+}
+
+.sbn-split-form-title {
+	margin: 0 0 16px 0;
+	font-size: 16px;
+	font-weight: 600;
+	color: #374151;
+	padding-bottom: 10px;
+	border-bottom: 2px solid #e6ecf8;
+}
+
+.sbn-split-scene-divider {
+	width: 1px;
+	background: linear-gradient(180deg, transparent 0%, #e6ecf8 10%, #e6ecf8 90%, transparent 100%);
+	margin: 0 4px;
+	flex-shrink: 0;
+}
+
+.sbn-split-scene-modal-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 12px;
+	padding: 16px 24px;
+	border-top: 1px solid #e6ecf8;
+	background: #fafbfc;
+}
+
+.sbn-split-scene-btn {
+	height: 44px;
+	padding: 0 28px;
+	border: none;
+	border-radius: 8px;
+	background: linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%);
+	font-size: 15px;
+	font-weight: 600;
+	color: #fff;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+.sbn-split-scene-btn:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+}
+
+.sbn-split-scene-btn:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+/* Responsive for split modal */
+@media (max-width: 900px) {
+	.sbn-split-scene-modal {
+		max-width: 95%;
+	}
+
+	.sbn-split-scene-forms {
+		flex-direction: column;
+		gap: 24px;
+	}
+
+	.sbn-split-scene-form-container {
+		padding: 0;
+	}
+
+	.sbn-split-scene-divider {
+		width: 100%;
+		height: 1px;
+		margin: 0;
+	}
+}
+
+/* Merge Scene Styles */
+.sbn-merge-col {
+	width: 60px;
+	min-width: 60px;
+	text-align: center;
+}
+
+.sbn-merge-cell {
+	text-align: center;
+	width: 60px;
+	min-width: 60px;
+}
+
+.sbn-merge-scene-select-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 2px solid #10b981;
+	border-radius: 6px;
+	background: #ecfdf5;
+	color: #059669;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	font-size: 14px;
+}
+
+.sbn-merge-scene-select-btn:hover {
+	background: #d1fae5;
+	color: #047857;
+	transform: scale(1.05);
+}
+
+.sbn-merge-scene-select-btn.sbn-merge-selected {
+	background: #10b981;
+	color: #fff;
+	border-color: #059669;
+}
+
+.sbn-merge-scene-select-btn.sbn-merge-selected:hover {
+	background: #059669;
+}
+
+.sbn-row-mergeable {
+	position: relative;
+}
+
+.sbn-row-mergeable:hover {
+	background-color: #ecfdf5 !important;
+}
+
+.sbn-row-mergeable:hover .sbn-data-cell {
+	background-color: #ecfdf5 !important;
+}
+
+.sbn-action-btn-merge {
+	background: linear-gradient(180deg, #10b981 0%, #059669 100%) !important;
+	color: #fff !important;
+}
+
+/* Merge Scene Modal */
+.sbn-merge-scene-modal {
+	background: #fff;
+	border-radius: 16px;
+	width: 100%;
+	max-width: 600px;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15);
+	overflow: hidden;
+	animation: modalSlideIn 0.25s ease-out;
+}
+
+.sbn-merge-scene-modal-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 20px 24px;
+	border-bottom: 1px solid #e6ecf8;
+	background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+}
+
+.sbn-merge-scene-modal-header h3 {
+	margin: 0;
+	font-size: 20px;
+	font-weight: 700;
+	color: #065f46;
+}
+
+.sbn-merge-scene-modal-body {
+	padding: 24px;
+	max-height: 65vh;
+	overflow-y: auto;
+}
+
+.sbn-merge-info-banner {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 16px;
+	background: #f0fdf4;
+	border: 1px solid #86efac;
+	border-radius: 8px;
+	margin-bottom: 20px;
+	font-size: 14px;
+	color: #166534;
+}
+
+.sbn-merge-info-banner span:first-child {
+	font-size: 18px;
+}
+
+.sbn-merge-scene-modal-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 12px;
+	padding: 16px 24px;
+	border-top: 1px solid #e6ecf8;
+	background: #fafbfc;
+}
+
+.sbn-merge-scene-btn {
+	height: 44px;
+	padding: 0 28px;
+	border: none;
+	border-radius: 8px;
+	background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+	font-size: 15px;
+	font-weight: 600;
+	color: #fff;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.sbn-merge-scene-btn:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.sbn-merge-scene-btn:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}

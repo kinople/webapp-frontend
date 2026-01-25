@@ -990,6 +990,135 @@
 	font-weight: 600;
 }
 
+/* Unscheduled Scenes Styles */
+.sched-schedule-header-unscheduled {
+	background: #fefce8;
+	border-bottom-color: #fef08a;
+	gap: 16px;
+	position: sticky;
+	top: 16px;
+	z-index: 21;
+}
+
+.sched-unscheduled-button {
+	padding: 8px 16px;
+	background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+	color: white;
+	border: none;
+	border-radius: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.sched-unscheduled-button:hover {
+	background: linear-gradient(180deg, #d97706 0%, #b45309 100%);
+}
+
+.sched-unscheduled-text {
+	font-size: 13px;
+	color: #b45309;
+	font-weight: 600;
+}
+
+/* Unscheduled Modal */
+.sched-unscheduled-modal {
+	background-color: #fff;
+	border-radius: 16px;
+	padding: 24px;
+	max-width: 900px;
+	width: 100%;
+	max-height: 80vh;
+	overflow: auto;
+	box-shadow: 0 20px 50px rgba(15, 23, 36, 0.2), 0 8px 24px rgba(15, 23, 36, 0.12);
+}
+
+.sched-unscheduled-count {
+	font-size: 13px;
+	color: #6b7280;
+	margin-bottom: 16px;
+	font-weight: 500;
+}
+
+.sched-unscheduled-table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 13px;
+}
+
+.sched-unscheduled-table thead {
+	background: #f8f9fb;
+}
+
+.sched-unscheduled-table th {
+	padding: 12px 16px;
+	text-align: left;
+	font-weight: 600;
+	color: #6b7280;
+	text-transform: uppercase;
+	font-size: 11px;
+	letter-spacing: 0.5px;
+	border-bottom: 1px solid #e6ecf8;
+}
+
+.sched-unscheduled-table th:first-child {
+	border-top-left-radius: 8px;
+}
+
+.sched-unscheduled-table th:last-child {
+	border-top-right-radius: 8px;
+}
+
+.sched-unscheduled-row {
+	transition: background-color 0.15s ease;
+}
+
+.sched-unscheduled-row:hover {
+	background-color: #fffbeb;
+}
+
+.sched-unscheduled-row td {
+	padding: 12px 16px;
+	border-bottom: 1px solid #e6ecf8;
+	color: #0f1724;
+	vertical-align: top;
+}
+
+.sched-unscheduled-scene-number {
+	font-weight: 700;
+	color: #f59e0b;
+}
+
+.sched-unscheduled-location {
+	max-width: 200px;
+}
+
+.sched-unscheduled-synopsis {
+	font-size: 11px;
+	color: #6b7280;
+	font-style: italic;
+	display: block;
+	margin-top: 4px;
+}
+
+.sched-unscheduled-characters {
+	max-width: 180px;
+	font-size: 12px;
+}
+
+.sched-all-scheduled {
+	padding: 32px;
+	text-align: center;
+	color: #22c55e;
+	font-size: 15px;
+	font-weight: 600;
+	background: #f0fdf4;
+	border-radius: 12px;
+	border: 1px solid #bbf7d0;
+}
+
 /* Calendar Highlight Classes */
 .highlight-blue {
 	background-color: #ff6758 !important;
@@ -1150,6 +1279,104 @@
 
 .sched-unlocked-icon {
 	font-size: 14px;
+}
+
+/* Unscheduled Scenes Panel */
+.sched-unscheduled-panel {
+	margin: 16px;
+	background: #fffbeb;
+	border-radius: 12px;
+	border: 2px dashed #f59e0b;
+	overflow: hidden;
+	box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+}
+
+.sched-unscheduled-panel-collapsed {
+	background: #fef3c7;
+}
+
+.sched-unscheduled-panel-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px 16px;
+	background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
+	border-bottom: 1px solid #fcd34d;
+}
+
+.sched-unscheduled-panel-header h4 {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 700;
+	color: #92400e;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.sched-drag-hint {
+	font-size: 12px;
+	font-weight: 500;
+	color: #b45309;
+	font-style: italic;
+}
+
+.sched-unscheduled-panel-header button {
+	padding: 6px 12px;
+	border-radius: 6px;
+	border: 1px solid #d97706;
+	background: #fff;
+	font-size: 12px;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	color: #92400e;
+}
+
+.sched-unscheduled-panel-header button:hover {
+	background: #fef3c7;
+	border-color: #b45309;
+}
+
+.sched-unscheduled-panel .sched-table {
+	background: #fff;
+}
+
+.sched-unscheduled-drag-row {
+	background: #fff;
+	transition: all 0.15s ease;
+}
+
+.sched-unscheduled-drag-row:hover {
+	background-color: #fef3c7 !important;
+}
+
+.sched-unscheduled-drag-row:hover .sched-data-cell {
+	background-color: #fef3c7;
+	border-color: #fcd34d;
+}
+
+.sched-unscheduled-drag-row .sched-unscheduled-scene-number {
+	font-weight: 700;
+	color: #d97706;
+}
+
+/* Dragging state for unscheduled scenes */
+.sched-unscheduled-drag-row[style*="transform"] {
+	box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
+	z-index: 100;
+}
+
+/* Empty state for unscheduled scenes panel */
+.sched-unscheduled-empty {
+	padding: 24px 16px;
+	text-align: center;
+	font-size: 13px;
+	color: #92400e;
+	font-style: italic;
+	background: #fff;
+	border-radius: 8px;
+	margin: 12px;
+	border: 1px dashed #fcd34d;
 }
 
 /* Responsive */

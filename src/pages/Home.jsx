@@ -72,6 +72,7 @@ const Home = () => {
 						{displayProjects.map((project) => (
 							<Link key={project.id} to={`/${user}/${project.id}`} className="home-project-card">
 								<div className="home-card-content">
+									
 									<div className="home-card-info">
 										<h3 className="home-card-title">{project.projectName || project.name}</h3>
 										<p className="home-card-type">Type: {project.type || project.projectType || "Film"}</p>
@@ -79,11 +80,11 @@ const Home = () => {
 									<div className="home-card-stats">
 										<div className="home-stat-item">
 											<PiUsers className="home-stat-icon" />
-											<span className="home-stat-text">{project.members || 2} members</span>
+											<span className="home-stat-text">{project.members} members</span>
 										</div>
 										<div className="home-stat-item">
 											<PiFolder className="home-stat-icon" />
-											<span className="home-stat-text">{project.scripts || 2} Scripts</span>
+											<span className="home-stat-text">{project.scripts} Scripts</span>
 										</div>
 										{(project.type === "Episodic" || project.projectType === "Episodic") && (
 											<div className="home-stat-item">

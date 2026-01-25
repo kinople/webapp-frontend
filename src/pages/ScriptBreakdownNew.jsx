@@ -198,7 +198,9 @@ const ScriptBreakdownNew = () => {
 	const [hasBreakdown, setHasBreakdown] = useState(false);
 	const [filterText, setFilterText] = useState("");
 	const [parsing, setParsing] = useState([]);
-	// All characters available in the script (from API)
+	// Characters from breakdown API
+	const [breakdownCharacters, setBreakdownCharacters] = useState([]);
+	// All characters (merged from breakdown + castList)
 	const [allCharacters, setAllCharacters] = useState([]);
 	// Scene breakdowns as JSON objects
 	const [sceneBreakdowns, setSceneBreakdowns] = useState([]);
@@ -237,10 +239,72 @@ const ScriptBreakdownNew = () => {
 	// Location and Cast lists for dropdowns
 	const [locationList, setLocationList] = useState([]);
 	const [castList, setCastList] = useState([]);
+	// Split Scene state
+	const [splitSceneMode, setSplitSceneMode] = useState(false);
+	const [selectedSceneToSplit, setSelectedSceneToSplit] = useState(null);
+	const [showSplitSceneModal, setShowSplitSceneModal] = useState(false);
+	const [isSplittingScene, setIsSplittingScene] = useState(false);
+	// Merge Scene state
+	const [mergeSceneMode, setMergeSceneMode] = useState(false);
+	const [selectedScenesToMerge, setSelectedScenesToMerge] = useState([]); // Array of 2 scenes
+	const [showMergeSceneModal, setShowMergeSceneModal] = useState(false);
+	const [isMergingScene, setIsMergingScene] = useState(false);
+	const [mergeSceneForm, setMergeSceneForm] = useState({
+		scene_number: "",
+		int_ext: "INT.",
+		location: "",
+		set: "",
+		time: "DAY",
+		page_eighths: 1,
+		synopsis: "",
+		selectedCharacterIds: [],
+		action_props: "",
+		other_props: "",
+		picture_vehicles: "",
+		animals: "",
+		extras: "",
+		wardrobe: "",
+		set_dressing: "",
+	});
+	const [splitSceneForm1, setSplitSceneForm1] = useState({
+		scene_number: "",
+		int_ext: "INT.",
+		location: "",
+		set: "",
+		time: "DAY",
+		page_eighths: 1,
+		synopsis: "",
+		selectedCharacterIds: [],
+		action_props: "",
+		other_props: "",
+		picture_vehicles: "",
+		animals: "",
+		extras: "",
+		wardrobe: "",
+		set_dressing: "",
+	});
+	const [splitSceneForm2, setSplitSceneForm2] = useState({
+		scene_number: "",
+		int_ext: "INT.",
+		location: "",
+		set: "",
+		time: "DAY",
+		page_eighths: 1,
+		synopsis: "",
+		selectedCharacterIds: [],
+		action_props: "",
+		other_props: "",
+		picture_vehicles: "",
+		animals: "",
+		extras: "",
+		wardrobe: "",
+		set_dressing: "",
+	});
 	const [newSceneForm, setNewSceneForm] = useState({
 		scene_number: "",
 		int_ext: "INT.",
 		location: "",
+		set: "",
 		time: "DAY",
 		page_eighths: 1, // Store as number (1-1000 represents eighths of a page)
 		synopsis: "",
@@ -311,9 +375,9 @@ const ScriptBreakdownNew = () => {
 			} else {
 				setError("No parsing data found");
 			}
-			// Store characters list
+			// Store characters list from breakdown
 			if (data.characters) {
-				setAllCharacters(data.characters);
+				setBreakdownCharacters(data.characters);
 			}
 			// Store scene breakdowns as JSON
 			if (data.scene_breakdowns) {
@@ -427,6 +491,24 @@ const ScriptBreakdownNew = () => {
 		fetchCastList();
 	}, [id]);
 
+	// Build allCharacters from castList (primary source of truth)
+	useEffect(() => {
+		const mergedCharacters = [];
+
+		// Use castList as the only source - use cast_id as the unique identifier
+		castList.forEach((cast) => {
+			if (cast.character) {
+				mergedCharacters.push({
+					id: String(cast.cast_id),  // Use cast_id as string for consistent comparison
+					name: cast.character,
+					cast_id: String(cast.cast_id),
+				});
+			}
+		});
+
+		setAllCharacters(mergedCharacters);
+	}, [castList]);
+
 	// Load correct breakdown when tab changes
 	useEffect(() => {
 		if (activeTab === "master" && masterScript) {
@@ -473,6 +555,7 @@ const ScriptBreakdownNew = () => {
 			"Scene Number": sceneData.scene_number || "",
 			"Int./Ext.": sceneData.int_ext || "",
 			Location: sceneData.location || "",
+			Set: sceneData.set || sceneData.location || "",
 			Time: sceneData.time || "",
 			"Page Eighths": sceneData.page_eighths || "",
 			Synopsis: sceneData.synopsis || "",
@@ -511,9 +594,20 @@ const ScriptBreakdownNew = () => {
 		const displayData = sceneBreakdownToDisplayFormat(sceneData);
 		setEditingScene(displayData);
 		setEditingSceneParsing(parsing[idx] || { heading: "", content: "" });
-		// Set character IDs from scene breakdowns
-		if (sceneData && sceneData.characters_ids) {
-			setEditingCharacterIds([...sceneData.characters_ids]);
+		
+		// Match characters by NAME from sceneData.characters to find IDs in allCharacters (castlist)
+		// This ensures consistency with the castlist regardless of old characters_ids
+		if (sceneData && sceneData.characters && Array.isArray(sceneData.characters)) {
+			const matchedIds = sceneData.characters
+				.map((charName) => {
+					const normalizedName = String(charName).trim().toUpperCase();
+					const foundChar = allCharacters.find(
+						(c) => c.name?.toUpperCase() === normalizedName
+					);
+					return foundChar?.id;
+				})
+				.filter(Boolean);
+			setEditingCharacterIds(matchedIds);
 		} else {
 			setEditingCharacterIds([]);
 		}
@@ -568,6 +662,7 @@ const ScriptBreakdownNew = () => {
 					scene_number: editingScene["Scene Number"] || updatedSceneBreakdowns[editingSceneIndex].scene_number,
 					int_ext: editingScene["Int./Ext."] || updatedSceneBreakdowns[editingSceneIndex].int_ext,
 					location: editingScene["Location"] || updatedSceneBreakdowns[editingSceneIndex].location,
+					set: editingScene["Set"] || updatedSceneBreakdowns[editingSceneIndex].set || editingScene["Location"],
 					time: editingScene["Time"] || updatedSceneBreakdowns[editingSceneIndex].time,
 					page_eighths: editingScene["Page Eighths"] || updatedSceneBreakdowns[editingSceneIndex].page_eighths,
 					synopsis: editingScene["Synopsis"] || updatedSceneBreakdowns[editingSceneIndex].synopsis,
@@ -748,6 +843,8 @@ const ScriptBreakdownNew = () => {
 			// Cancel other modes
 			setShowPositionSelector(false);
 			setRemoveElementMode(false);
+			setSplitSceneMode(false);
+			setMergeSceneMode(false);
 		}
 	};
 
@@ -804,12 +901,636 @@ const ScriptBreakdownNew = () => {
 		}
 	}, [selectedSceneToRemove, masterScript, id]);
 
+	/* ---------- Split Scene ---------- */
+	const handleSplitSceneClick = () => {
+		if (splitSceneMode) {
+			// Cancel split mode
+			setSplitSceneMode(false);
+			setSelectedSceneToSplit(null);
+		} else {
+			// Enter split mode
+			setSplitSceneMode(true);
+			setSelectedSceneToSplit(null);
+			// Cancel other modes
+			setShowPositionSelector(false);
+			setRemoveSceneMode(false);
+			setRemoveElementMode(false);
+			setMergeSceneMode(false);
+		}
+	};
+
+	const handleSelectSceneToSplit = (scene) => {
+		setSelectedSceneToSplit(scene);
+		// Pre-fill both forms with the original scene data
+		const originalSceneNumber = scene.scene_number || "";
+
+		// Parse array fields to comma-separated strings for the form
+		const arrayToString = (arr) => {
+			if (!arr || !Array.isArray(arr) || arr.length === 0) return "";
+			return arr.join(", ");
+		};
+
+		// Parse page_eighths string to number
+		const parsePageEighths = (pageStr) => {
+			if (!pageStr) return 1;
+			const str = String(pageStr);
+			// Handle formats like "1/8", "2/8", "1", "1 1/8", etc.
+			const match = str.match(/^(\d+)?\s*(\d+)\/8$/);
+			if (match) {
+				const whole = parseInt(match[1] || "0", 10);
+				const eighths = parseInt(match[2], 10);
+				return whole * 8 + eighths;
+			}
+			// Just a whole number
+			const wholeOnly = parseInt(str, 10);
+			if (!isNaN(wholeOnly)) return wholeOnly * 8;
+			return 1;
+		};
+
+		// Match characters by name to get IDs from castlist
+		const matchCharactersByName = (characters) => {
+			if (!characters || !Array.isArray(characters)) return [];
+			return characters
+				.map((charName) => {
+					const normalizedName = String(charName).trim().toUpperCase();
+					const foundChar = allCharacters.find((c) => c.name?.toUpperCase() === normalizedName);
+					return foundChar?.id;
+				})
+				.filter(Boolean);
+		};
+
+		const baseForm = {
+			scene_number: "",
+			int_ext: scene.int_ext || "INT.",
+			location: scene.location || "",
+			set: scene.set || scene.location || "",
+			time: scene.time || "DAY",
+			page_eighths: Math.max(1, Math.floor(parsePageEighths(scene.page_eighths) / 2)),
+			synopsis: scene.synopsis || "",
+			selectedCharacterIds: matchCharactersByName(scene.characters),
+			action_props: arrayToString(scene.action_props),
+			other_props: arrayToString(scene.other_props),
+			picture_vehicles: arrayToString(scene.picture_vehicles),
+			animals: arrayToString(scene.animals),
+			extras: arrayToString(scene.extras),
+			wardrobe: arrayToString(scene.wardrobe),
+			set_dressing: arrayToString(scene.set_dressing),
+		};
+
+		// Add custom fields
+		customFields.forEach((fieldKey) => {
+			baseForm[fieldKey] = arrayToString(scene[fieldKey]);
+		});
+
+		// Set first form with original scene number
+		setSplitSceneForm1({ ...baseForm, scene_number: originalSceneNumber });
+		// Set second form with suggested scene number (e.g., 1A -> 1B)
+		const suggestedNumber = suggestNextSceneNumber(originalSceneNumber);
+		setSplitSceneForm2({ ...baseForm, scene_number: suggestedNumber });
+
+		setSplitSceneMode(false);
+		setShowSplitSceneModal(true);
+	};
+
+	// Helper to suggest next scene number (e.g., 1A -> 1B, 1 -> 1A)
+	const suggestNextSceneNumber = (sceneNumber) => {
+		if (!sceneNumber) return "";
+		const str = String(sceneNumber).trim();
+		// Check if ends with a letter
+		const match = str.match(/^(.*)([A-Z])$/i);
+		if (match) {
+			const base = match[1];
+			const letter = match[2].toUpperCase();
+			if (letter === "Z") return `${base}AA`; // Z -> AA
+			return `${base}${String.fromCharCode(letter.charCodeAt(0) + 1)}`;
+		}
+		// No letter suffix, add 'A'
+		return `${str}A`;
+	};
+
+	const handleSplitScene = useCallback(async () => {
+		// Validate required fields for both forms
+		const validateForm = (form, formName) => {
+			if (!form.scene_number.trim()) {
+				alert(`${formName}: Scene Number is required`);
+				return false;
+			}
+			if (!form.int_ext.trim()) {
+				alert(`${formName}: Int./Ext. is required`);
+				return false;
+			}
+			if (!form.location.trim()) {
+				alert(`${formName}: Location is required`);
+				return false;
+			}
+			if (!form.time.trim()) {
+				alert(`${formName}: Time is required`);
+				return false;
+			}
+			if (!form.page_eighths || form.page_eighths < 1 || form.page_eighths > 1000) {
+				alert(`${formName}: Page Eighths must be between 1 and 1000`);
+				return false;
+			}
+			if (!form.synopsis.trim()) {
+				alert(`${formName}: Synopsis is required`);
+				return false;
+			}
+			return true;
+		};
+
+		if (!validateForm(splitSceneForm1, "Scene 1")) return;
+		if (!validateForm(splitSceneForm2, "Scene 2")) return;
+
+		// Validate scene numbers are different
+		const sceneNum1 = splitSceneForm1.scene_number.trim();
+		const sceneNum2 = splitSceneForm2.scene_number.trim();
+
+		if (sceneNum1 === sceneNum2) {
+			alert("Scene numbers must be different for the two split scenes");
+			return;
+		}
+
+		// Check that at least one scene number doesn't conflict with existing scenes
+		// (excluding the original scene being split)
+		const originalSceneNumber = selectedSceneToSplit?.scene_number?.trim();
+		const existingSceneNumbers = sceneBreakdowns
+			.filter((scene) => scene.scene_number?.trim() !== originalSceneNumber)
+			.map((scene) => scene.scene_number?.trim());
+
+		const scene1Exists = existingSceneNumbers.includes(sceneNum1);
+		const scene2Exists = existingSceneNumbers.includes(sceneNum2);
+
+		if (scene1Exists && sceneNum1 !== originalSceneNumber) {
+			alert(`Scene number "${sceneNum1}" already exists in another scene`);
+			return;
+		}
+		if (scene2Exists && sceneNum2 !== originalSceneNumber) {
+			alert(`Scene number "${sceneNum2}" already exists in another scene`);
+			return;
+		}
+
+		if (!masterScript?.id) {
+			alert("No script selected");
+			return;
+		}
+
+		setIsSplittingScene(true);
+		try {
+			// Helper to format page eighths
+			const formatPageEighths = (num) => {
+				if (num <= 0) return "1/8";
+				const wholePages = Math.floor(num / 8);
+				const eighths = num % 8;
+				if (wholePages === 0) return `${eighths}/8`;
+				if (eighths === 0) return `${wholePages}`;
+				return `${wholePages} ${eighths}/8`;
+			};
+
+			// Helper to parse comma-separated strings into arrays
+			const parseToArray = (str) =>
+				str
+					? str
+							.split(",")
+							.map((s) => s.trim())
+							.filter(Boolean)
+					: [];
+
+			// Prepare scene data for both scenes
+			const prepareSceneData = (form) => {
+				const selectedIds = form.selectedCharacterIds || [];
+				const selectedCharacterNames = selectedIds
+					.map((charId) => {
+						const char = allCharacters.find((c) => c.id === charId);
+						return char?.name || "";
+					})
+					.filter(Boolean);
+
+				const sceneData = {
+					...form,
+					page_eighths: formatPageEighths(form.page_eighths),
+					characters: selectedCharacterNames,
+					characters_ids: selectedIds,
+					action_props: parseToArray(form.action_props),
+					other_props: parseToArray(form.other_props),
+					picture_vehicles: parseToArray(form.picture_vehicles),
+					animals: parseToArray(form.animals),
+					extras: parseToArray(form.extras),
+					wardrobe: parseToArray(form.wardrobe),
+					set_dressing: parseToArray(form.set_dressing),
+				};
+				delete sceneData.selectedCharacterIds;
+
+				// Parse custom fields
+				customFields.forEach((fieldKey) => {
+					sceneData[fieldKey] = parseToArray(form[fieldKey] || "");
+				});
+
+				return sceneData;
+			};
+
+			// Find the position of the original scene
+			const originalPosition = sceneBreakdowns.findIndex(
+				(s) => s.id === selectedSceneToSplit.id || s.scene_number === selectedSceneToSplit.scene_number
+			);
+
+			// Step 1: Delete the original scene
+			const deleteResponse = await fetch(getApiUrl(`/api/${id}/remove-scene`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					script_id: masterScript.id,
+					scene_id: selectedSceneToSplit.id,
+					scene_number: selectedSceneToSplit.scene_number,
+				}),
+			});
+
+			if (!deleteResponse.ok) {
+				const deleteData = await deleteResponse.json();
+				throw new Error(deleteData.message || "Failed to delete original scene");
+			}
+
+			// Step 2: Add the first new scene at the original position
+			const scene1Data = prepareSceneData(splitSceneForm1);
+			const add1Response = await fetch(getApiUrl(`/api/${id}/add-scene`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					script_id: masterScript.id,
+					position: originalPosition >= 0 ? originalPosition : 0,
+					scene_data: scene1Data,
+				}),
+			});
+
+			if (!add1Response.ok) {
+				const add1Data = await add1Response.json();
+				throw new Error(add1Data.message || "Failed to add first split scene");
+			}
+
+			// Step 3: Add the second new scene right after the first
+			const scene2Data = prepareSceneData(splitSceneForm2);
+			const add2Response = await fetch(getApiUrl(`/api/${id}/add-scene`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					script_id: masterScript.id,
+					position: originalPosition >= 0 ? originalPosition + 1 : 1,
+					scene_data: scene2Data,
+				}),
+			});
+
+			const add2Data = await add2Response.json();
+
+			if (!add2Response.ok) {
+				throw new Error(add2Data.message || "Failed to add second split scene");
+			}
+
+			// Update scene breakdowns locally with the response
+			if (add2Data.scene_breakdowns) {
+				setSceneBreakdowns(add2Data.scene_breakdowns);
+			}
+
+			// Re-fetch breakdown to get updated data
+			fetchBreakdown(masterScript.id);
+
+			setShowSplitSceneModal(false);
+			setSelectedSceneToSplit(null);
+			// Reset forms
+			const emptyForm = {
+				scene_number: "",
+				int_ext: "INT.",
+				location: "",
+				set: "",
+				time: "DAY",
+				page_eighths: 1,
+				synopsis: "",
+				selectedCharacterIds: [],
+				action_props: "",
+				other_props: "",
+				picture_vehicles: "",
+				animals: "",
+				extras: "",
+				wardrobe: "",
+				set_dressing: "",
+			};
+			setSplitSceneForm1(emptyForm);
+			setSplitSceneForm2(emptyForm);
+			alert("Scene split successfully!");
+		} catch (e) {
+			console.error(e);
+			alert(e.message || "Failed to split scene");
+		} finally {
+			setIsSplittingScene(false);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [splitSceneForm1, splitSceneForm2, selectedSceneToSplit, masterScript, id, sceneBreakdowns, allCharacters, customFields]);
+
+	/* ---------- Merge Scene ---------- */
+	const handleMergeSceneClick = () => {
+		if (mergeSceneMode) {
+			// Cancel merge mode
+			setMergeSceneMode(false);
+			setSelectedScenesToMerge([]);
+		} else {
+			// Enter merge mode
+			setMergeSceneMode(true);
+			setSelectedScenesToMerge([]);
+			// Cancel other modes
+			setShowPositionSelector(false);
+			setRemoveSceneMode(false);
+			setRemoveElementMode(false);
+			setSplitSceneMode(false);
+		}
+	};
+
+	const handleSelectSceneToMerge = (scene) => {
+		// Check if scene is already selected
+		const isAlreadySelected = selectedScenesToMerge.some((s) => s.id === scene.id || s.scene_number === scene.scene_number);
+
+		if (isAlreadySelected) {
+			// Deselect the scene
+			setSelectedScenesToMerge(selectedScenesToMerge.filter((s) => s.id !== scene.id && s.scene_number !== scene.scene_number));
+		} else if (selectedScenesToMerge.length < 2) {
+			// Add to selection (max 2)
+			const newSelection = [...selectedScenesToMerge, scene];
+			setSelectedScenesToMerge(newSelection);
+
+			// If we now have 2 scenes selected, open the modal
+			if (newSelection.length === 2) {
+				// Pre-fill the merge form with combined data from both scenes
+				const scene1 = newSelection[0];
+				const scene2 = newSelection[1];
+
+				// Helper to merge arrays from both scenes
+				const mergeArrays = (arr1, arr2) => {
+					const combined = [...(arr1 || []), ...(arr2 || [])];
+					return [...new Set(combined)].join(", ");
+				};
+
+				// Parse page_eighths and combine
+				const parsePageEighths = (pageStr) => {
+					if (!pageStr) return 0;
+					const str = String(pageStr);
+					const match = str.match(/^(\d+)?\s*(\d+)\/8$/);
+					if (match) {
+						const whole = parseInt(match[1] || "0", 10);
+						const eighths = parseInt(match[2], 10);
+						return whole * 8 + eighths;
+					}
+					const wholeOnly = parseInt(str, 10);
+					if (!isNaN(wholeOnly)) return wholeOnly * 8;
+					return 1;
+				};
+
+				// Match characters by name to get IDs from castlist
+				const matchCharactersByName = (characters) => {
+					if (!characters || !Array.isArray(characters)) return [];
+					return characters
+						.map((charName) => {
+							const normalizedName = String(charName).trim().toUpperCase();
+							const foundChar = allCharacters.find((c) => c.name?.toUpperCase() === normalizedName);
+							return foundChar?.id;
+						})
+						.filter(Boolean);
+				};
+
+				// Combine characters from both scenes (unique)
+				const combinedCharacterIds = [...new Set([
+					...matchCharactersByName(scene1.characters),
+					...matchCharactersByName(scene2.characters)
+				])];
+
+				// Use the first scene's basic info as default, combine the rest
+				const mergedForm = {
+					scene_number: scene1.scene_number || "", // Default to first scene's number
+					int_ext: scene1.int_ext || scene2.int_ext || "INT.",
+					location: scene1.location || scene2.location || "",
+					set: scene1.set || scene1.location || scene2.set || scene2.location || "",
+					time: scene1.time || scene2.time || "DAY",
+					page_eighths: parsePageEighths(scene1.page_eighths) + parsePageEighths(scene2.page_eighths),
+					synopsis: [scene1.synopsis, scene2.synopsis].filter(Boolean).join(" "),
+					selectedCharacterIds: combinedCharacterIds,
+					action_props: mergeArrays(scene1.action_props, scene2.action_props),
+					other_props: mergeArrays(scene1.other_props, scene2.other_props),
+					picture_vehicles: mergeArrays(scene1.picture_vehicles, scene2.picture_vehicles),
+					animals: mergeArrays(scene1.animals, scene2.animals),
+					extras: mergeArrays(scene1.extras, scene2.extras),
+					wardrobe: mergeArrays(scene1.wardrobe, scene2.wardrobe),
+					set_dressing: mergeArrays(scene1.set_dressing, scene2.set_dressing),
+				};
+
+				// Add custom fields
+				customFields.forEach((fieldKey) => {
+					mergedForm[fieldKey] = mergeArrays(scene1[fieldKey], scene2[fieldKey]);
+				});
+
+				setMergeSceneForm(mergedForm);
+				setMergeSceneMode(false);
+				setShowMergeSceneModal(true);
+			}
+		}
+	};
+
+	const handleMergeScene = useCallback(async () => {
+		// Validate required fields
+		if (!mergeSceneForm.scene_number.trim()) {
+			alert("Scene Number is required");
+			return;
+		}
+		if (!mergeSceneForm.int_ext.trim()) {
+			alert("Int./Ext. is required");
+			return;
+		}
+		if (!mergeSceneForm.location.trim()) {
+			alert("Location is required");
+			return;
+		}
+		if (!mergeSceneForm.time.trim()) {
+			alert("Time is required");
+			return;
+		}
+		if (!mergeSceneForm.page_eighths || mergeSceneForm.page_eighths < 1 || mergeSceneForm.page_eighths > 1000) {
+			alert("Page Eighths must be between 1 and 1000");
+			return;
+		}
+		if (!mergeSceneForm.synopsis.trim()) {
+			alert("Synopsis is required");
+			return;
+		}
+
+		// Check for duplicate scene number (excluding the scenes being merged)
+		const newSceneNumber = mergeSceneForm.scene_number.trim();
+		const mergedSceneNumbers = selectedScenesToMerge.map((s) => s.scene_number?.trim());
+		const duplicateScene = sceneBreakdowns.find(
+			(scene) => scene.scene_number?.trim() === newSceneNumber && !mergedSceneNumbers.includes(scene.scene_number?.trim())
+		);
+		if (duplicateScene) {
+			alert(`Scene number "${newSceneNumber}" already exists. Please use a unique scene number.`);
+			return;
+		}
+
+		if (!masterScript?.id) {
+			alert("No script selected");
+			return;
+		}
+
+		if (selectedScenesToMerge.length !== 2) {
+			alert("Please select exactly 2 scenes to merge");
+			return;
+		}
+
+		setIsMergingScene(true);
+		try {
+			// Helper to format page eighths
+			const formatPageEighths = (num) => {
+				if (num <= 0) return "1/8";
+				const wholePages = Math.floor(num / 8);
+				const eighths = num % 8;
+				if (wholePages === 0) return `${eighths}/8`;
+				if (eighths === 0) return `${wholePages}`;
+				return `${wholePages} ${eighths}/8`;
+			};
+
+			// Helper to parse comma-separated strings into arrays
+			const parseToArray = (str) =>
+				str
+					? str
+							.split(",")
+							.map((s) => s.trim())
+							.filter(Boolean)
+					: [];
+
+			// Get character names from selected IDs
+			const selectedIds = mergeSceneForm.selectedCharacterIds || [];
+			const selectedCharacterNames = selectedIds
+				.map((charId) => {
+					const char = allCharacters.find((c) => c.id === charId);
+					return char?.name || "";
+				})
+				.filter(Boolean);
+
+			const sceneData = {
+				...mergeSceneForm,
+				page_eighths: formatPageEighths(mergeSceneForm.page_eighths),
+				characters: selectedCharacterNames,
+				characters_ids: selectedIds,
+				action_props: parseToArray(mergeSceneForm.action_props),
+				other_props: parseToArray(mergeSceneForm.other_props),
+				picture_vehicles: parseToArray(mergeSceneForm.picture_vehicles),
+				animals: parseToArray(mergeSceneForm.animals),
+				extras: parseToArray(mergeSceneForm.extras),
+				wardrobe: parseToArray(mergeSceneForm.wardrobe),
+				set_dressing: parseToArray(mergeSceneForm.set_dressing),
+			};
+			delete sceneData.selectedCharacterIds;
+
+			// Parse custom fields
+			customFields.forEach((fieldKey) => {
+				sceneData[fieldKey] = parseToArray(mergeSceneForm[fieldKey] || "");
+			});
+
+			// Find the position of the first selected scene (to insert merged scene there)
+			const positions = selectedScenesToMerge.map((s) =>
+				sceneBreakdowns.findIndex((scene) => scene.id === s.id || scene.scene_number === s.scene_number)
+			);
+			const insertPosition = Math.min(...positions.filter((p) => p >= 0));
+
+			// Step 1: Delete the first scene
+			const delete1Response = await fetch(getApiUrl(`/api/${id}/remove-scene`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					script_id: masterScript.id,
+					scene_id: selectedScenesToMerge[0].id,
+					scene_number: selectedScenesToMerge[0].scene_number,
+				}),
+			});
+
+			if (!delete1Response.ok) {
+				const deleteData = await delete1Response.json();
+				throw new Error(deleteData.message || "Failed to delete first scene");
+			}
+
+			// Step 2: Delete the second scene
+			const delete2Response = await fetch(getApiUrl(`/api/${id}/remove-scene`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					script_id: masterScript.id,
+					scene_id: selectedScenesToMerge[1].id,
+					scene_number: selectedScenesToMerge[1].scene_number,
+				}),
+			});
+
+			if (!delete2Response.ok) {
+				const deleteData = await delete2Response.json();
+				throw new Error(deleteData.message || "Failed to delete second scene");
+			}
+
+			// Step 3: Add the merged scene at the position of the first deleted scene
+			// Adjust position since we deleted scenes before it
+			const adjustedPosition = Math.max(0, insertPosition);
+			const addResponse = await fetch(getApiUrl(`/api/${id}/add-scene`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					script_id: masterScript.id,
+					position: adjustedPosition,
+					scene_data: sceneData,
+				}),
+			});
+
+			const addData = await addResponse.json();
+
+			if (!addResponse.ok) {
+				throw new Error(addData.message || "Failed to add merged scene");
+			}
+
+			// Update scene breakdowns locally with the response
+			if (addData.scene_breakdowns) {
+				setSceneBreakdowns(addData.scene_breakdowns);
+			}
+
+			// Re-fetch breakdown to get updated data
+			fetchBreakdown(masterScript.id);
+
+			setShowMergeSceneModal(false);
+			setSelectedScenesToMerge([]);
+			// Reset form
+			setMergeSceneForm({
+				scene_number: "",
+				int_ext: "INT.",
+				location: "",
+				set: "",
+				time: "DAY",
+				page_eighths: 1,
+				synopsis: "",
+				selectedCharacterIds: [],
+				action_props: "",
+				other_props: "",
+				picture_vehicles: "",
+				animals: "",
+				extras: "",
+				wardrobe: "",
+				set_dressing: "",
+			});
+			alert("Scenes merged successfully!");
+		} catch (e) {
+			console.error(e);
+			alert(e.message || "Failed to merge scenes");
+		} finally {
+			setIsMergingScene(false);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [mergeSceneForm, selectedScenesToMerge, masterScript, id, sceneBreakdowns, allCharacters, customFields]);
+
 	/* ---------- Add Scene ---------- */
 	const handleAddSceneClick = () => {
 		setShowPositionSelector(!showPositionSelector);
 		// Cancel other modes
 		setRemoveSceneMode(false);
 		setRemoveElementMode(false);
+		setSplitSceneMode(false);
+		setMergeSceneMode(false);
 	};
 
 	const handleSelectPosition = (position) => {
@@ -820,6 +1541,7 @@ const ScriptBreakdownNew = () => {
 			scene_number: "",
 			int_ext: "INT.",
 			location: "",
+			set: "",
 			time: "DAY",
 			page_eighths: "1/8",
 			synopsis: "",
@@ -947,6 +1669,7 @@ const ScriptBreakdownNew = () => {
 				scene_number: "",
 				int_ext: "INT.",
 				location: "",
+				set: "",
 				time: "DAY",
 				page_eighths: 1,
 				synopsis: "",
@@ -1117,6 +1840,7 @@ const ScriptBreakdownNew = () => {
 					{Object.entries(editingScene).map(([key, value]) => {
 						const isProps = propsKeys.includes(key);
 						const isCharacters = key.toLowerCase() === "characters";
+						const isSet = key.toLowerCase() === "set";
 						return (
 							<div key={key} className="sbn-field-group">
 								<label className="sbn-field-label">{key}:</label>
@@ -1149,6 +1873,21 @@ const ScriptBreakdownNew = () => {
 											setEditingScene((prev) => ({ ...prev, [key]: charNames }));
 										}}
 									/>
+								) : isSet ? (
+									<select
+										className="sbn-form-select"
+										value={value || ""}
+										onChange={(e) => {
+											setEditingScene({ ...editingScene, [key]: e.target.value });
+										}}
+									>
+										<option value="">Select Set...</option>
+										{locationList.map((loc) => (
+											<option key={loc.location_id || loc.location} value={loc.location}>
+												{loc.location}
+											</option>
+										))}
+									</select>
 								) : isProps ? (
 									<TagInput
 										value={value || ""}
@@ -1255,6 +1994,8 @@ const ScriptBreakdownNew = () => {
 							<tr className="sbn-header-row">
 								{showPositionSelector && <th className="sbn-header-cell sbn-insert-col">Insert</th>}
 								{removeSceneMode && <th className="sbn-header-cell sbn-remove-col">Remove</th>}
+								{splitSceneMode && <th className="sbn-header-cell sbn-split-col">Split</th>}
+								{mergeSceneMode && <th className="sbn-header-cell sbn-merge-col">Merge</th>}
 								{headers.map((h, i) => {
 									// Check if this is a custom field (can be removed)
 									const fieldKey = h.toLowerCase().replace(/ /g, "_").replace(/-/g, "_");
@@ -1304,10 +2045,12 @@ const ScriptBreakdownNew = () => {
 									<tr
 										className={`sbn-data-row ${showPositionSelector ? "sbn-row-selectable" : ""} ${
 											removeSceneMode ? "sbn-row-removable" : ""
-										}`}
+										} ${splitSceneMode ? "sbn-row-splittable" : ""} ${mergeSceneMode ? "sbn-row-mergeable" : ""}`}
 										onClick={() => {
 											if (showPositionSelector) return; // Disable row click in position selector mode
 											if (removeSceneMode) return; // Disable row click in remove mode
+											if (splitSceneMode) return; // Disable row click in split mode
+											if (mergeSceneMode) return; // Disable row click in merge mode
 											// Find the matching scene in sceneBreakdowns by scene number
 											const sceneNum = row["Scene Number"];
 											const jsonIdx = sceneBreakdowns.findIndex((s) => s.scene_number === sceneNum);
@@ -1342,6 +2085,71 @@ const ScriptBreakdownNew = () => {
 												>
 													<FaTrash />
 												</button>
+											</td>
+										)}
+										{splitSceneMode && (
+											<td className="sbn-data-cell sbn-split-cell">
+												<button
+													className="sbn-split-scene-select-btn"
+													onClick={(e) => {
+														e.stopPropagation();
+														const sceneNum = row["Scene Number"];
+														const sceneData = sceneBreakdowns.find((s) => s.scene_number === sceneNum);
+														if (sceneData) {
+															handleSelectSceneToSplit(sceneData);
+														} else {
+															// Fallback if not found in sceneBreakdowns
+															handleSelectSceneToSplit({
+																id: rIdx,
+																scene_number: sceneNum,
+																int_ext: row["Int./Ext."],
+																location: row["Location"],
+																time: row["Time"],
+																page_eighths: row["Page Eighths"],
+																synopsis: row["Synopsis"],
+																characters_ids: [],
+															});
+														}
+													}}
+												>
+													✂️
+												</button>
+											</td>
+										)}
+										{mergeSceneMode && (
+											<td className="sbn-data-cell sbn-merge-cell">
+												{(() => {
+													const sceneNum = row["Scene Number"];
+													const sceneData = sceneBreakdowns.find((s) => s.scene_number === sceneNum);
+													const isSelected = selectedScenesToMerge.some(
+														(s) => s.scene_number === sceneNum || s.id === sceneData?.id
+													);
+													return (
+														<button
+															className={`sbn-merge-scene-select-btn ${isSelected ? "sbn-merge-selected" : ""}`}
+															onClick={(e) => {
+																e.stopPropagation();
+																if (sceneData) {
+																	handleSelectSceneToMerge(sceneData);
+																} else {
+																	// Fallback if not found in sceneBreakdowns
+																	handleSelectSceneToMerge({
+																		id: rIdx,
+																		scene_number: sceneNum,
+																		int_ext: row["Int./Ext."],
+																		location: row["Location"],
+																		time: row["Time"],
+																		page_eighths: row["Page Eighths"],
+																		synopsis: row["Synopsis"],
+																		characters_ids: [],
+																	});
+																}
+															}}
+														>
+															{isSelected ? "✓" : "🔗"}
+														</button>
+													);
+												})()}
 											</td>
 										)}
 										{headers.map((header, cIdx) => {
@@ -1645,6 +2453,772 @@ const ScriptBreakdownNew = () => {
 				</div>
 			)}
 
+			{/* Split Scene Modal */}
+			{showSplitSceneModal && selectedSceneToSplit && (
+				<div className="sbn-overlay" onClick={() => setShowSplitSceneModal(false)}>
+					<div className="sbn-split-scene-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="sbn-split-scene-modal-header">
+							<h3>Split Scene {selectedSceneToSplit.scene_number}</h3>
+							<button className="sbn-modal-close-btn" onClick={() => setShowSplitSceneModal(false)}>
+								×
+							</button>
+						</div>
+						<div className="sbn-split-scene-modal-body">
+							<div className="sbn-split-scene-forms">
+								{/* Scene 1 Form */}
+								<div className="sbn-split-scene-form-container">
+									<h4 className="sbn-split-form-title">Scene 1</h4>
+									<div className="sbn-add-scene-form">
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Scene Number <span className="sbn-required">*</span>
+												</label>
+												<input
+													type="text"
+													value={splitSceneForm1.scene_number}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, scene_number: e.target.value })}
+													placeholder="e.g., 1, 2A, 3..."
+													className="sbn-form-input"
+												/>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Int./Ext. <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm1.int_ext}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, int_ext: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="INT.">INT.</option>
+													<option value="EXT.">EXT.</option>
+													<option value="INT./EXT.">INT./EXT.</option>
+												</select>
+											</div>
+										</div>
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Location <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm1.location}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, location: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="">Select Location...</option>
+													{locationList.map((loc) => (
+														<option key={loc.location_id || loc.location} value={loc.location}>
+															{loc.location}
+														</option>
+													))}
+												</select>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Set</label>
+												<select
+													value={splitSceneForm1.set}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, set: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="">Select Set...</option>
+													{locationList.map((loc) => (
+														<option key={loc.location_id || loc.location} value={loc.location}>
+															{loc.location}
+														</option>
+													))}
+												</select>
+											</div>
+										</div>
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Time <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm1.time}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, time: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="DAY">DAY</option>
+													<option value="NIGHT">NIGHT</option>
+													<option value="DAWN">DAWN</option>
+													<option value="DUSK">DUSK</option>
+													<option value="MORNING">MORNING</option>
+													<option value="AFTERNOON">AFTERNOON</option>
+													<option value="EVENING">EVENING</option>
+													<option value="CONTINUOUS">CONTINUOUS</option>
+													<option value="LATER">LATER</option>
+													<option value="MOMENTS LATER">MOMENTS LATER</option>
+												</select>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Page Eighths <span className="sbn-required">*</span>
+												</label>
+												<div className="sbn-page-eighths-input">
+													<span className="sbn-page-eighths-prefix">(</span>
+													<input
+														type="number"
+														min="1"
+														max="1000"
+														value={splitSceneForm1.page_eighths}
+														onChange={(e) =>
+															setSplitSceneForm1({
+																...splitSceneForm1,
+																page_eighths: parseInt(e.target.value) || 1,
+															})
+														}
+														className="sbn-form-input sbn-page-eighths-number"
+													/>
+													<span className="sbn-page-eighths-suffix">/8)</span>
+												</div>
+											</div>
+										</div>
+										<div className="sbn-form-group sbn-form-group-full">
+											<label className="sbn-form-label">
+												Synopsis <span className="sbn-required">*</span>
+											</label>
+											<textarea
+												value={splitSceneForm1.synopsis}
+												onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, synopsis: e.target.value })}
+												placeholder="Brief description of the scene..."
+												className="sbn-form-textarea"
+												rows={2}
+											/>
+										</div>
+										<div className="sbn-form-group sbn-form-group-full">
+											<label className="sbn-form-label">Characters</label>
+											<CharacterTagInput
+												selectedIds={splitSceneForm1.selectedCharacterIds || []}
+												allCharacters={allCharacters}
+												onChange={(ids) => setSplitSceneForm1({ ...splitSceneForm1, selectedCharacterIds: ids })}
+											/>
+										</div>
+										<div className="sbn-form-divider">
+											<span>Additional Fields (Optional)</span>
+										</div>
+
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Action Props</label>
+												<input
+													type="text"
+													value={splitSceneForm1.action_props}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, action_props: e.target.value })}
+													placeholder="e.g., Gun, Phone..."
+													className="sbn-form-input"
+												/>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Other Props</label>
+												<input
+													type="text"
+													value={splitSceneForm1.other_props}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, other_props: e.target.value })}
+													placeholder="e.g., Book, Lamp..."
+													className="sbn-form-input"
+												/>
+											</div>
+										</div>
+
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Picture Vehicles</label>
+												<input
+													type="text"
+													value={splitSceneForm1.picture_vehicles}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, picture_vehicles: e.target.value })}
+													placeholder="e.g., Police Car, Taxi..."
+													className="sbn-form-input"
+												/>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Animals</label>
+												<input
+													type="text"
+													value={splitSceneForm1.animals}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, animals: e.target.value })}
+													placeholder="e.g., Dog, Horse..."
+													className="sbn-form-input"
+												/>
+											</div>
+										</div>
+
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Extras</label>
+												<input
+													type="text"
+													value={splitSceneForm1.extras}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, extras: e.target.value })}
+													placeholder="e.g., Crowd, Waiters..."
+													className="sbn-form-input"
+												/>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Wardrobe</label>
+												<input
+													type="text"
+													value={splitSceneForm1.wardrobe}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, wardrobe: e.target.value })}
+													placeholder="e.g., Wedding Dress, Suit..."
+													className="sbn-form-input"
+												/>
+											</div>
+										</div>
+
+										<div className="sbn-form-group sbn-form-group-full">
+											<label className="sbn-form-label">Set Dressing</label>
+											<input
+												type="text"
+												value={splitSceneForm1.set_dressing}
+												onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, set_dressing: e.target.value })}
+												placeholder="e.g., Christmas Decorations, Office Furniture..."
+												className="sbn-form-input"
+											/>
+										</div>
+
+										{/* Custom Fields for Scene 1 */}
+										{customFields.length > 0 &&
+											customFields.map((fieldKey) => (
+												<div key={fieldKey} className="sbn-form-group sbn-form-group-full">
+													<label className="sbn-form-label">{snakeCaseToTitleCase(fieldKey)}</label>
+													<input
+														type="text"
+														value={splitSceneForm1[fieldKey] || ""}
+														onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, [fieldKey]: e.target.value })}
+														placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
+														className="sbn-form-input"
+													/>
+												</div>
+											))}
+									</div>
+								</div>
+
+								{/* Divider */}
+								<div className="sbn-split-scene-divider"></div>
+
+								{/* Scene 2 Form */}
+								<div className="sbn-split-scene-form-container">
+									<h4 className="sbn-split-form-title">Scene 2</h4>
+									<div className="sbn-add-scene-form">
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Scene Number <span className="sbn-required">*</span>
+												</label>
+												<input
+													type="text"
+													value={splitSceneForm2.scene_number}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, scene_number: e.target.value })}
+													placeholder="e.g., 1, 2A, 3..."
+													className="sbn-form-input"
+												/>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Int./Ext. <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm2.int_ext}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, int_ext: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="INT.">INT.</option>
+													<option value="EXT.">EXT.</option>
+													<option value="INT./EXT.">INT./EXT.</option>
+												</select>
+											</div>
+										</div>
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Location <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm2.location}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, location: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="">Select Location...</option>
+													{locationList.map((loc) => (
+														<option key={loc.location_id || loc.location} value={loc.location}>
+															{loc.location}
+														</option>
+													))}
+												</select>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Set</label>
+												<select
+													value={splitSceneForm2.set}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, set: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="">Select Set...</option>
+													{locationList.map((loc) => (
+														<option key={loc.location_id || loc.location} value={loc.location}>
+															{loc.location}
+														</option>
+													))}
+												</select>
+											</div>
+										</div>
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Time <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm2.time}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, time: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="DAY">DAY</option>
+													<option value="NIGHT">NIGHT</option>
+													<option value="DAWN">DAWN</option>
+													<option value="DUSK">DUSK</option>
+													<option value="MORNING">MORNING</option>
+													<option value="AFTERNOON">AFTERNOON</option>
+													<option value="EVENING">EVENING</option>
+													<option value="CONTINUOUS">CONTINUOUS</option>
+													<option value="LATER">LATER</option>
+													<option value="MOMENTS LATER">MOMENTS LATER</option>
+												</select>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Page Eighths <span className="sbn-required">*</span>
+												</label>
+												<div className="sbn-page-eighths-input">
+													<span className="sbn-page-eighths-prefix">(</span>
+													<input
+														type="number"
+														min="1"
+														max="1000"
+														value={splitSceneForm2.page_eighths}
+														onChange={(e) =>
+															setSplitSceneForm2({
+																...splitSceneForm2,
+																page_eighths: parseInt(e.target.value) || 1,
+															})
+														}
+														className="sbn-form-input sbn-page-eighths-number"
+													/>
+													<span className="sbn-page-eighths-suffix">/8)</span>
+												</div>
+											</div>
+										</div>
+										<div className="sbn-form-group sbn-form-group-full">
+											<label className="sbn-form-label">
+												Synopsis <span className="sbn-required">*</span>
+											</label>
+											<textarea
+												value={splitSceneForm2.synopsis}
+												onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, synopsis: e.target.value })}
+												placeholder="Brief description of the scene..."
+												className="sbn-form-textarea"
+												rows={2}
+											/>
+										</div>
+										<div className="sbn-form-group sbn-form-group-full">
+											<label className="sbn-form-label">Characters</label>
+											<CharacterTagInput
+												selectedIds={splitSceneForm2.selectedCharacterIds || []}
+												allCharacters={allCharacters}
+												onChange={(ids) => setSplitSceneForm2({ ...splitSceneForm2, selectedCharacterIds: ids })}
+											/>
+										</div>
+										<div className="sbn-form-divider">
+											<span>Additional Fields (Optional)</span>
+										</div>
+
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Action Props</label>
+												<input
+													type="text"
+													value={splitSceneForm2.action_props}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, action_props: e.target.value })}
+													placeholder="e.g., Gun, Phone..."
+													className="sbn-form-input"
+												/>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Other Props</label>
+												<input
+													type="text"
+													value={splitSceneForm2.other_props}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, other_props: e.target.value })}
+													placeholder="e.g., Book, Lamp..."
+													className="sbn-form-input"
+												/>
+											</div>
+										</div>
+
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Picture Vehicles</label>
+												<input
+													type="text"
+													value={splitSceneForm2.picture_vehicles}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, picture_vehicles: e.target.value })}
+													placeholder="e.g., Police Car, Taxi..."
+													className="sbn-form-input"
+												/>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Animals</label>
+												<input
+													type="text"
+													value={splitSceneForm2.animals}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, animals: e.target.value })}
+													placeholder="e.g., Dog, Horse..."
+													className="sbn-form-input"
+												/>
+											</div>
+										</div>
+
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Extras</label>
+												<input
+													type="text"
+													value={splitSceneForm2.extras}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, extras: e.target.value })}
+													placeholder="e.g., Crowd, Waiters..."
+													className="sbn-form-input"
+												/>
+											</div>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">Wardrobe</label>
+												<input
+													type="text"
+													value={splitSceneForm2.wardrobe}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, wardrobe: e.target.value })}
+													placeholder="e.g., Wedding Dress, Suit..."
+													className="sbn-form-input"
+												/>
+											</div>
+										</div>
+
+										<div className="sbn-form-group sbn-form-group-full">
+											<label className="sbn-form-label">Set Dressing</label>
+											<input
+												type="text"
+												value={splitSceneForm2.set_dressing}
+												onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, set_dressing: e.target.value })}
+												placeholder="e.g., Christmas Decorations, Office Furniture..."
+												className="sbn-form-input"
+											/>
+										</div>
+
+										{/* Custom Fields for Scene 2 */}
+										{customFields.length > 0 &&
+											customFields.map((fieldKey) => (
+												<div key={fieldKey} className="sbn-form-group sbn-form-group-full">
+													<label className="sbn-form-label">{snakeCaseToTitleCase(fieldKey)}</label>
+													<input
+														type="text"
+														value={splitSceneForm2[fieldKey] || ""}
+														onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, [fieldKey]: e.target.value })}
+														placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
+														className="sbn-form-input"
+													/>
+												</div>
+											))}
+									</div>
+								</div>
+							</div>
+						</div>
+						<div className="sbn-split-scene-modal-footer">
+							<button className="sbn-element-cancel-btn" onClick={() => setShowSplitSceneModal(false)} disabled={isSplittingScene}>
+								Cancel
+							</button>
+							<button className="sbn-split-scene-btn" onClick={handleSplitScene} disabled={isSplittingScene}>
+								{isSplittingScene ? "Splitting..." : "Split Scene"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Merge Scene Modal */}
+			{showMergeSceneModal && selectedScenesToMerge.length === 2 && (
+				<div className="sbn-overlay" onClick={() => setShowMergeSceneModal(false)}>
+					<div className="sbn-merge-scene-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="sbn-merge-scene-modal-header">
+							<h3>
+								Merge Scene {selectedScenesToMerge[0]?.scene_number} & Scene {selectedScenesToMerge[1]?.scene_number}
+							</h3>
+							<button className="sbn-modal-close-btn" onClick={() => setShowMergeSceneModal(false)}>
+								×
+							</button>
+						</div>
+						<div className="sbn-merge-scene-modal-body">
+							<div className="sbn-merge-info-banner">
+								<span>📋</span>
+								<span>Merging scenes will combine their data. Review and edit the merged scene details below.</span>
+							</div>
+							<div className="sbn-add-scene-form">
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Scene Number <span className="sbn-required">*</span>
+										</label>
+										<input
+											type="text"
+											value={mergeSceneForm.scene_number}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, scene_number: e.target.value })}
+											placeholder="e.g., 1, 2A, 3..."
+											className="sbn-form-input"
+											autoFocus
+										/>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Int./Ext. <span className="sbn-required">*</span>
+										</label>
+										<select
+											value={mergeSceneForm.int_ext}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, int_ext: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="INT.">INT.</option>
+											<option value="EXT.">EXT.</option>
+											<option value="INT./EXT.">INT./EXT.</option>
+										</select>
+									</div>
+								</div>
+
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Location <span className="sbn-required">*</span>
+										</label>
+										<select
+											value={mergeSceneForm.location}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, location: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="">Select Location...</option>
+											{locationList.map((loc) => (
+												<option key={loc.location_id || loc.location} value={loc.location}>
+													{loc.location}
+												</option>
+											))}
+										</select>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Set</label>
+										<select
+											value={mergeSceneForm.set}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, set: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="">Select Set...</option>
+											{locationList.map((loc) => (
+												<option key={loc.location_id || loc.location} value={loc.location}>
+													{loc.location}
+												</option>
+											))}
+										</select>
+									</div>
+								</div>
+
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Time <span className="sbn-required">*</span>
+										</label>
+										<select
+											value={mergeSceneForm.time}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, time: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="DAY">DAY</option>
+											<option value="NIGHT">NIGHT</option>
+											<option value="DAWN">DAWN</option>
+											<option value="DUSK">DUSK</option>
+											<option value="MORNING">MORNING</option>
+											<option value="AFTERNOON">AFTERNOON</option>
+											<option value="EVENING">EVENING</option>
+											<option value="CONTINUOUS">CONTINUOUS</option>
+											<option value="LATER">LATER</option>
+											<option value="MOMENTS LATER">MOMENTS LATER</option>
+										</select>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Page Eighths <span className="sbn-required">*</span>
+										</label>
+										<div className="sbn-page-eighths-input">
+											<span className="sbn-page-eighths-prefix">(</span>
+											<input
+												type="number"
+												min="1"
+												max="1000"
+												value={mergeSceneForm.page_eighths}
+												onChange={(e) =>
+													setMergeSceneForm({ ...mergeSceneForm, page_eighths: parseInt(e.target.value) || 1 })
+												}
+												className="sbn-form-input sbn-page-eighths-number"
+											/>
+											<span className="sbn-page-eighths-suffix">/8)</span>
+										</div>
+										<span className="sbn-page-eighths-hint">
+											{mergeSceneForm.page_eighths <= 8
+												? `= ${mergeSceneForm.page_eighths}/8 page`
+												: `= ${Math.floor(mergeSceneForm.page_eighths / 8)} ${
+														mergeSceneForm.page_eighths % 8 > 0 ? `${mergeSceneForm.page_eighths % 8}/8` : ""
+												  } pages`}
+										</span>
+									</div>
+								</div>
+
+								<div className="sbn-form-group sbn-form-group-full">
+									<label className="sbn-form-label">
+										Synopsis <span className="sbn-required">*</span>
+									</label>
+									<textarea
+										value={mergeSceneForm.synopsis}
+										onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, synopsis: e.target.value })}
+										placeholder="Brief description of the scene..."
+										className="sbn-form-textarea"
+										rows={3}
+									/>
+								</div>
+
+								<div className="sbn-form-divider">
+									<span>Additional Fields (Optional)</span>
+								</div>
+
+								<div className="sbn-form-group sbn-form-group-full">
+									<label className="sbn-form-label">Characters</label>
+									<CharacterTagInput
+										selectedIds={mergeSceneForm.selectedCharacterIds || []}
+										allCharacters={allCharacters}
+										onChange={(ids) => setMergeSceneForm({ ...mergeSceneForm, selectedCharacterIds: ids })}
+									/>
+								</div>
+
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Action Props</label>
+										<input
+											type="text"
+											value={mergeSceneForm.action_props}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, action_props: e.target.value })}
+											placeholder="e.g., Gun, Phone..."
+											className="sbn-form-input"
+										/>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Other Props</label>
+										<input
+											type="text"
+											value={mergeSceneForm.other_props}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, other_props: e.target.value })}
+											placeholder="e.g., Book, Lamp..."
+											className="sbn-form-input"
+										/>
+									</div>
+								</div>
+
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Picture Vehicles</label>
+										<input
+											type="text"
+											value={mergeSceneForm.picture_vehicles}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, picture_vehicles: e.target.value })}
+											placeholder="e.g., Police Car, Taxi..."
+											className="sbn-form-input"
+										/>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Animals</label>
+										<input
+											type="text"
+											value={mergeSceneForm.animals}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, animals: e.target.value })}
+											placeholder="e.g., Dog, Horse..."
+											className="sbn-form-input"
+										/>
+									</div>
+								</div>
+
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Extras</label>
+										<input
+											type="text"
+											value={mergeSceneForm.extras}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, extras: e.target.value })}
+											placeholder="e.g., Crowd, Waiters..."
+											className="sbn-form-input"
+										/>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Wardrobe</label>
+										<input
+											type="text"
+											value={mergeSceneForm.wardrobe}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, wardrobe: e.target.value })}
+											placeholder="e.g., Wedding Dress, Suit..."
+											className="sbn-form-input"
+										/>
+									</div>
+								</div>
+
+								<div className="sbn-form-group sbn-form-group-full">
+									<label className="sbn-form-label">Set Dressing</label>
+									<input
+										type="text"
+										value={mergeSceneForm.set_dressing}
+										onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, set_dressing: e.target.value })}
+										placeholder="e.g., Christmas Decorations, Office Furniture..."
+										className="sbn-form-input"
+									/>
+								</div>
+
+								{/* Custom Fields */}
+								{customFields.length > 0 &&
+									customFields.map((fieldKey) => (
+										<div key={fieldKey} className="sbn-form-group sbn-form-group-full">
+											<label className="sbn-form-label">{snakeCaseToTitleCase(fieldKey)}</label>
+											<input
+												type="text"
+												value={mergeSceneForm[fieldKey] || ""}
+												onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, [fieldKey]: e.target.value })}
+												placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
+												className="sbn-form-input"
+											/>
+										</div>
+									))}
+							</div>
+						</div>
+						<div className="sbn-merge-scene-modal-footer">
+							<button
+								className="sbn-element-cancel-btn"
+								onClick={() => {
+									setShowMergeSceneModal(false);
+									setSelectedScenesToMerge([]);
+								}}
+								disabled={isMergingScene}
+							>
+								Cancel
+							</button>
+							<button className="sbn-merge-scene-btn" onClick={handleMergeScene} disabled={isMergingScene}>
+								{isMergingScene ? "Merging..." : "Merge Scenes"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Add Scene Modal */}
 			{showAddSceneModal && (
 				<div className="sbn-overlay" onClick={() => setShowAddSceneModal(false)}>
@@ -1688,7 +3262,7 @@ const ScriptBreakdownNew = () => {
 								</div>
 
 								<div className="sbn-form-row">
-									<div className="sbn-form-group sbn-form-group-wide">
+									<div className="sbn-form-group">
 										<label className="sbn-form-label">
 											Location <span className="sbn-required">*</span>
 										</label>
@@ -1698,6 +3272,21 @@ const ScriptBreakdownNew = () => {
 											className="sbn-form-select"
 										>
 											<option value="">Select Location...</option>
+											{locationList.map((loc) => (
+												<option key={loc.location_id || loc.location} value={loc.location}>
+													{loc.location}
+												</option>
+											))}
+										</select>
+									</div>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">Set</label>
+										<select
+											value={newSceneForm.set}
+											onChange={(e) => setNewSceneForm({ ...newSceneForm, set: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="">Select Set...</option>
 											{locationList.map((loc) => (
 												<option key={loc.location_id || loc.location} value={loc.location}>
 													{loc.location}
@@ -2103,8 +3692,22 @@ const ScriptBreakdownNew = () => {
 										Cancel Selection
 									</button>
 								)}
-								<button className="sbn-action-btn">Split Scene</button>
-								<button className="sbn-action-btn">Merge Scene</button>
+								<button
+									className={`sbn-action-btn ${splitSceneMode ? "sbn-action-btn-active sbn-action-btn-split" : ""}`}
+									onClick={handleSplitSceneClick}
+								>
+									{splitSceneMode ? "Cancel Split" : "Split Scene"}
+								</button>
+								<button
+									className={`sbn-action-btn ${mergeSceneMode ? "sbn-action-btn-active sbn-action-btn-merge" : ""}`}
+									onClick={handleMergeSceneClick}
+								>
+									{mergeSceneMode
+										? selectedScenesToMerge.length > 0
+											? `Cancel (${selectedScenesToMerge.length}/2 selected)`
+											: "Cancel Merge"
+										: "Merge Scene"}
+								</button>
 							</div>
 						)}
 

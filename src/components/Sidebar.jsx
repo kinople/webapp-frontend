@@ -44,7 +44,7 @@ const Sidebar = () => {
 		{ label: "Scripts", icon: PiScroll, path: `/${user}/${id}/script` },
 		{ label: "Breakdown", icon: PiStack, path: `/${user}/${id}/script-breakdown` },
 		{ label: "Cast List", icon: PiUsersThree, path: `/${user}/${id}/cast-list` },
-		{ label: "Locations", icon: PiMapPinLine, path: `/${user}/${id}/locations` },
+		{ label: "Sets", icon: PiMapPinLine, path: `/${user}/${id}/locations` },
 		{ label: "Scheduling", icon: PiCalendarDots, path: `/${user}/${id}/scheduling/1` },
 	];
 

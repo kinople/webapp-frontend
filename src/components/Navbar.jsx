@@ -622,10 +622,12 @@ const Navbar = () => {
 								<PiGear className="navbar-menu-icon" />
 								<span className="navbar-menu-text">Settings</span>
 							</div>
-							<div className="navbar-menu-item" onClick={handleOrganizationClick}>
-								<PiUsersThree className="navbar-menu-icon" />
-								<span className="navbar-menu-text">Organization</span>
-							</div>
+							{currentOrg === "Personal" && (
+							<Link to={`/${user}/settings`} className="navbar-menu-item" style={{ textDecoration: 'none' }}>
+								<PiUser className="navbar-menu-icon" />
+								<span className="navbar-menu-text">Profile</span>
+							</Link>
+						)}
 						</div>
 					))}
 
@@ -722,13 +724,8 @@ const Navbar = () => {
 											<option value="" disabled>
 												Select type of project
 											</option>
-											<option value="Feature Film">Feature Film</option>
-											<option value="Short Film">Short Film</option>
-											<option value="Documentary">Documentary</option>
-											<option value="Web Series">Web Series</option>
-											<option value="TV Show">TV Show</option>
-											<option value="Commercial">Commercial</option>
-											<option value="Music Video">Music Video</option>
+											<option value="Film">Film</option>
+											<option value="Episodic">Episodic</option>
 										</select>
 									</div>
 								</div>

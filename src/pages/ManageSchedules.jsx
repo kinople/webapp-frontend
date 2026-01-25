@@ -170,7 +170,48 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 	);
 };
 
-function findContainer(days, id) {
+// Draggable scene card for unscheduled scenes
+const UnscheduledSceneCard = ({ scene, isEditing, characterNameToIdMap }) => {
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+		id: scene.id,
+		disabled: !isEditing,
+	});
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+		cursor: isEditing ? "grab" : "default",
+		userSelect: "none",
+		opacity: isDragging ? 0.5 : 1,
+	};
+
+	return (
+		<tr ref={setNodeRef} style={style} className="sched-data-row sched-unscheduled-drag-row" {...attributes} {...listeners}>
+			<td className="sched-data-cell sched-unscheduled-scene-number">{scene.scene_number}</td>
+			<td className="sched-data-cell">{scene.int_ext || "N/A"}</td>
+			<td className="sched-data-cell sched-location-synopsis-column">
+				{scene.location_name} <br /> <br />
+				Synopsis: {scene.synopsis || "N/A"}
+			</td>
+			<td className="sched-data-cell">{formatPageEights(scene.page_eighths) || "N/A"}</td>
+			<td className="sched-data-cell">{(scene.character_names || []).map((name) => characterNameToIdMap[name.toUpperCase()] || name).join(", ")}</td>
+		</tr>
+	);
+};
+
+
+function findContainer(days, id, unscheduledScenesWithIds = []) {
+	// Check if it's the unscheduled container itself
+	if (id === "unscheduled") {
+		return { id: "unscheduled", scenes: unscheduledScenesWithIds };
+	}
+
+	// Check if scene is in unscheduled scenes
+	if (unscheduledScenesWithIds.find((scene) => scene.id === id)) {
+		return { id: "unscheduled", scenes: unscheduledScenesWithIds };
+	}
+
+	// Check scheduled days
 	for (const day of days) {
 		if (day.id === id) {
 			return day;
@@ -301,6 +342,57 @@ const ManageSchedules = () => {
 			</div>
 		);
 	};
+
+	// Panel to display unscheduled scenes with drag-drop support
+const UnscheduledScenesPanel = ({ unscheduledScenesWithIds, isEditing, characterNameToIdMap }) => {
+	const { setNodeRef } = useDroppable({
+		id: "unscheduled",
+	});
+
+	const [isExpanded, setIsExpanded] = useState(true);
+
+	const hasScenes = unscheduledScenesWithIds && unscheduledScenesWithIds.length > 0;
+
+	return  (isEditing || hasScenes) && (
+		<div ref={setNodeRef} className={`sched-unscheduled-panel ${!isExpanded ? "sched-unscheduled-panel-collapsed" : ""}`}>
+			<div className="sched-unscheduled-panel-header">
+				<h4>
+					Unscheduled Scenes ({unscheduledScenesWithIds?.length || 0})
+					{isEditing && <span className="sched-drag-hint"> - Drag scenes to schedule or unschedule them</span>}
+				</h4>
+				<button onClick={() => setIsExpanded(!isExpanded)}>{isExpanded ? "▲" : "▼"}</button>
+			</div>
+			{isExpanded && (
+				<SortableContext items={hasScenes ? unscheduledScenesWithIds.map((s) => s.id) : []} strategy={verticalListSortingStrategy}>
+					{hasScenes ? (
+						<table className="sched-table">
+							<thead className="sched-thead">
+								<tr className="sched-header-row">
+									<th className="sched-header-cell">Scene</th>
+									<th className="sched-header-cell">Int./Ext.</th>
+									<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
+									<th className="sched-header-cell">Pgs</th>
+									<th className="sched-header-cell">Characters</th>
+								</tr>
+							</thead>
+							<tbody>
+								{unscheduledScenesWithIds.map((scene) => (
+									<UnscheduledSceneCard key={scene.id} scene={scene} isEditing={isEditing} characterNameToIdMap={characterNameToIdMap} />
+								))}
+							</tbody>
+						</table>
+					) : (
+						<div className="sched-unscheduled-empty">
+							{isEditing ? "Drag scenes here to unschedule them" : "All scenes are scheduled"}
+						</div>
+					)}
+				</SortableContext>
+			)}
+		</div>
+	);
+};
+
+
 	const handleSaveChanges = async () => {
 		try {
 			const filteredDays = scheduleDays.filter((day) => {
@@ -320,7 +412,7 @@ const ManageSchedules = () => {
 				};
 				return acc;
 			}, {});
-			console.log("schedule_by_day", schedule_by_day);
+			console.log("schedule_by_day-----------", schedule_by_day);
 
 			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`), {
 				method: "POST",
@@ -485,6 +577,43 @@ const ManageSchedules = () => {
 		return map;
 	}, [breakdownCharacters]);
 
+	// Calculate unscheduled scenes by comparing breakdown scenes with scheduled scenes
+	const unscheduledScenes = useMemo(() => {
+		if (!breakdownScenes || breakdownScenes.length === 0) return [];
+
+		// Get all scheduled scene IDs from scheduleDays
+		const scheduledSceneIds = new Set();
+		scheduleDays.forEach((day) => {
+			day.scenes.forEach((scene) => {
+				scheduledSceneIds.add(scene.scene_id);
+				scheduledSceneIds.add(parseInt(scene.scene_id));
+			});
+		});
+
+		// Find scenes from breakdown that are not scheduled
+		const unscheduled = breakdownScenes.filter((scene) => {
+			return !scheduledSceneIds.has(scene.id) && !scheduledSceneIds.has(String(scene.id));
+		});
+
+		return unscheduled;
+	}, [breakdownScenes, scheduleDays]);
+
+	// Create unscheduled scenes with unique drag IDs (prefixed with 'unsched-' to avoid conflicts)
+	const unscheduledScenesWithIds = useMemo(() => {
+		return unscheduledScenes.map((scene) => ({
+			id: `unsched-${scene.id}`,
+			scene_id: scene.id,
+			scene_number: scene.scene_number,
+			int_ext: scene.int_ext,
+			time_of_day: scene.time_of_day,
+			page_eighths: scene.page_eighths,
+			synopsis: scene.synopsis,
+			location_name: scene.location,
+			character_names: scene.characters || [],
+			character_ids: scene.characters_ids || [],
+		}));
+	}, [unscheduledScenes]);
+
 	// Get locked option info for the selected location
 	const selectedLocationLockedInfo = useMemo(() => {
 		if (elementType !== "location" || !element) return null;
@@ -510,6 +639,32 @@ const ManageSchedules = () => {
 			availableDates: lockedOption.available_dates || lockedOption.availableDates || [],
 		};
 	}, [elementType, element, locationList]);
+
+	// Get locked option info for the selected character
+	const selectedCharacterLockedInfo = useMemo(() => {
+		if (elementType !== "character" || !element) return null;
+
+		const selectedCharacter = castList.find((cast) => cast.character === element);
+		if (!selectedCharacter) return null;
+
+		const lockedOptionId = selectedCharacter.locked;
+		// Check if there's a locked option (locked is not -1 or "-1" or null)
+		if (lockedOptionId === -1 || lockedOptionId === "-1" || lockedOptionId === null || lockedOptionId === undefined) {
+			return null;
+		}
+
+		const castOptions = selectedCharacter.cast_options || {};
+		const lockedOption = castOptions[String(lockedOptionId)];
+
+		if (!lockedOption) return null;
+
+		return {
+			optionId: lockedOptionId,
+			actorName: lockedOption.actor_name || lockedOption.actorName || "Unknown",
+			contact: lockedOption.contact || "",
+			availableDates: lockedOption.available_dates || lockedOption.availableDates || [],
+		};
+	}, [elementType, element, castList]);
 
 	useEffect(() => {
 		if (scheduleData && scheduleData.schedule && scheduleData.schedule.schedule_by_day) {
@@ -626,13 +781,82 @@ const ManageSchedules = () => {
 		}
 
 		setScheduleDays((days) => {
-			const activeContainer = findContainer(days, activeId);
-			const overContainer = findContainer(days, overId);
+			const activeContainer = findContainer(days, activeId, unscheduledScenesWithIds);
+			const overContainer = findContainer(days, overId, unscheduledScenesWithIds);
 
 			if (!activeContainer || !overContainer) {
 				return days;
 			}
 
+			// Handle dropping scheduled scenes into unscheduled container
+			if (overContainer.id === "unscheduled" && activeContainer.id !== "unscheduled") {
+				// Find and remove the scene from its current day
+				const activeDayIndex = days.findIndex((d) => d.id === activeContainer.id);
+				if (activeDayIndex === -1) return days;
+
+				const activeSceneIndex = activeContainer.scenes.findIndex((s) => s.id === activeId);
+				if (activeSceneIndex === -1) return days;
+
+				const newDays = [...days];
+				newDays[activeDayIndex] = {
+					...newDays[activeDayIndex],
+					scenes: newDays[activeDayIndex].scenes.filter((s) => s.id !== activeId),
+				};
+
+				return newDays;
+			}
+
+			// Handle dragging from unscheduled to a schedule day
+			if (activeContainer.id === "unscheduled") {
+				const overDayIndex = days.findIndex((d) => d.id === overContainer.id);
+				if (overDayIndex === -1) return days;
+
+				// Find the unscheduled scene being dragged
+				const unscheduledScene = unscheduledScenesWithIds.find((s) => s.id === activeId);
+				if (!unscheduledScene) return days;
+
+				// Generate a new numeric ID for the scene (find max ID and add 1)
+				let maxId = 0;
+				days.forEach((day) => {
+					day.scenes.forEach((scene) => {
+						if (typeof scene.id === "number" && scene.id > maxId) {
+							maxId = scene.id;
+						}
+					});
+				});
+
+				// Create a new scene object with a numeric ID for the schedule
+				const newScene = {
+					id: maxId + 1,
+					scene_id: String(unscheduledScene.scene_id),
+					scene_number: unscheduledScene.scene_number,
+					int_ext: unscheduledScene.int_ext,
+					time_of_day: unscheduledScene.time_of_day,
+					page_eighths: unscheduledScene.page_eighths,
+					synopsis: unscheduledScene.synopsis,
+					location_name: unscheduledScene.location_name,
+					character_names: unscheduledScene.character_names,
+					character_ids: unscheduledScene.character_ids,
+				};
+				console.log( "newScene-----------", newScene);
+
+				const newDays = [...days];
+
+				// Find insertion index
+				let overSceneIndex = overContainer.scenes.findIndex((s) => s.id === overId);
+				if (overSceneIndex === -1) {
+					overSceneIndex = newDays[overDayIndex].scenes.length;
+				}
+
+				newDays[overDayIndex] = {
+					...newDays[overDayIndex],
+					scenes: [...newDays[overDayIndex].scenes.slice(0, overSceneIndex), newScene, ...newDays[overDayIndex].scenes.slice(overSceneIndex)],
+				};
+
+				return newDays;
+			}
+
+			// Handle reordering within the same day
 			if (activeContainer.id === overContainer.id) {
 				const activeIndex = activeContainer.scenes.findIndex((s) => s.id === activeId);
 				const overIndex = overContainer.scenes.findIndex((s) => s.id === overId);
@@ -647,6 +871,7 @@ const ManageSchedules = () => {
 					return newDays;
 				}
 			} else {
+				// Handle moving between different schedule days
 				const activeDayIndex = days.findIndex((d) => d.id === activeContainer.id);
 				const overDayIndex = days.findIndex((d) => d.id === overContainer.id);
 
@@ -697,8 +922,18 @@ const ManageSchedules = () => {
 		const datesSection = type === "location" ? "locations" : "characters";
 		const elementData = scheduleData.dates[datesSection]?.[name];
 
-		if (elementData?.dates) {
+		if (elementData?.dates && elementData.dates.length > 0) {
 			return parseDateRanges(elementData.dates);
+		}
+
+		// Fallback: If character has a locked option with dates, use those
+		if (type === "character" && selectedCharacterLockedInfo?.availableDates?.length > 0) {
+			return selectedCharacterLockedInfo.availableDates;
+		}
+
+		// Fallback: If location has a locked option with dates, use those
+		if (type === "location" && selectedLocationLockedInfo?.availableDates?.length > 0) {
+			return selectedLocationLockedInfo.availableDates;
 		}
 
 		return [];
@@ -725,14 +960,42 @@ const ManageSchedules = () => {
 			const elementData = scheduleData.dates[datesSection]?.[name];
 			console.log("Element Data:", elementData);
 
-			if (elementData?.dates) {
+			if (elementData?.dates && elementData.dates.length > 0) {
 				console.log("Found dates for:", name, elementData.dates);
 				const existingDates = parseDateRanges(elementData.dates);
 				setSelectedDates(existingDates);
 				setOriginalDates(existingDates);
 			} else {
-				setSelectedDates([]);
-				setOriginalDates([]);
+				// Check for locked option dates as fallback
+				let lockedDates = [];
+				if (type === "character") {
+					const selectedChar = castList.find((cast) => cast.character === name);
+					if (selectedChar && selectedChar.locked !== -1 && selectedChar.locked !== "-1") {
+						const castOptions = selectedChar.cast_options || {};
+						const lockedOption = castOptions[String(selectedChar.locked)];
+						if (lockedOption) {
+							lockedDates = lockedOption.available_dates || lockedOption.availableDates || [];
+						}
+					}
+				} else if (type === "location") {
+					const selectedLoc = locationList.find((loc) => loc.location === name);
+					if (selectedLoc && selectedLoc.locked !== -1 && selectedLoc.locked !== "-1") {
+						const locationOptions = selectedLoc.location_options || {};
+						const lockedOption = locationOptions[String(selectedLoc.locked)];
+						if (lockedOption) {
+							lockedDates = lockedOption.available_dates || lockedOption.availableDates || [];
+						}
+					}
+				}
+
+				if (lockedDates.length > 0) {
+					console.log("Using locked option dates for:", name, lockedDates);
+					setSelectedDates(lockedDates);
+					setOriginalDates(lockedDates);
+				} else {
+					setSelectedDates([]);
+					setOriginalDates([]);
+				}
 			}
 		} else {
 			setSelectedDates([]);
@@ -845,25 +1108,26 @@ const ManageSchedules = () => {
 				});
 			});
 		} else if (type === "character") {
-			// Use breakdownCharacters (already sorted by ID ascending) if available
-			if (breakdownCharacters.length > 0) {
-				breakdownCharacters.forEach((char) => {
-					options.push({
-						value: char.name,
-						label: `👤 ${char.name}`,
-						character_id: char.id,
-					});
-				});
-			} else if (castList.length > 0) {
-				// Fallback to castList if breakdownCharacters not available
+			// Track which characters we've added to avoid duplicates
+			const addedCharacters = new Set();
+
+			
+
+			// Then add any characters from castList that aren't already included
+			// This ensures newly added characters (with 0 scenes) also appear
+			
 				castList.forEach((cast) => {
-					options.push({
-						value: cast.character,
-						label: `👤 ${cast.character}`,
-						cast_id: cast.cast_id,
-					});
+					const normalizedName = cast.character?.toUpperCase();
+					if (normalizedName && !addedCharacters.has(normalizedName)) {
+						addedCharacters.add(normalizedName);
+						options.push({
+							value: cast.character,
+							label: `👤 ${cast.character}`,
+							cast_id: cast.cast_id,
+						});
+					}
 				});
-			}
+			
 		}
 
 		return options;
@@ -1334,7 +1598,7 @@ const ManageSchedules = () => {
 								}}
 								className="sched-element-dropdown"
 							>
-								<option value="location">Location Groups</option>
+								<option value="location">Sets </option>
 								<option value="character">Characters</option>
 							</select>
 						</div>
@@ -1389,14 +1653,44 @@ const ManageSchedules = () => {
 											</div>
 										)}
 									</div>
-									<div className="sched-locked-sync-note">
-										<small>📌 Changes to dates here will sync to the locked option</small>
-									</div>
 								</div>
 							) : (
 								<div className="sched-no-locked-option">
 									<span className="sched-unlocked-icon">🔓</span>
 									<span>No option locked for this location</span>
+								</div>
+							)}
+						</div>
+					)}
+
+					{/* Locked Option Info Display for Characters */}
+					{elementType === "character" && element && (
+						<div className="sched-locked-option-info">
+							{selectedCharacterLockedInfo ? (
+								<div className="sched-locked-option-card">
+									<div className="sched-locked-option-header">
+										<span className="sched-locked-icon">🔒</span>
+										<span className="sched-locked-label">Locked Option:</span>
+									</div>
+									<div className="sched-locked-option-details">
+										<div className="sched-locked-option-name">{selectedCharacterLockedInfo.actorName}</div>
+										{selectedCharacterLockedInfo.contact && (
+											<div className="sched-locked-option-address">📞 {selectedCharacterLockedInfo.contact}</div>
+										)}
+										{selectedCharacterLockedInfo.availableDates.length > 0 && (
+											<div className="sched-locked-option-dates">
+												<span className="sched-locked-dates-label">Available Dates: </span>
+												<span className="sched-locked-dates-count">
+													{selectedCharacterLockedInfo.availableDates.length} date(s)
+												</span>
+											</div>
+										)}
+									</div>
+								</div>
+							) : (
+								<div className="sched-no-locked-option">
+									<span className="sched-unlocked-icon">🔓</span>
+									<span>No option locked for this character</span>
 								</div>
 							)}
 						</div>
@@ -1601,6 +1895,7 @@ const ManageSchedules = () => {
 							<span className="sched-conflict-text">There are some conflicts in this schedule</span>
 						</div>
 					)}
+
 					<ConflictsModal />
 
 					<div className="sched-controls-section">
@@ -1731,6 +2026,12 @@ const ManageSchedules = () => {
 
 					{scheduleData?.schedule && (
 						<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+							{/* Unscheduled Scenes Panel - Always visible */}
+							<UnscheduledScenesPanel
+								unscheduledScenesWithIds={unscheduledScenesWithIds}
+								isEditing={isEditing}
+								characterNameToIdMap={characterNameToIdMap}
+							/>
 							<div className="sched-schedule-content">
 								{scheduleDays.map((day) => {
 									return (
