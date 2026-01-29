@@ -1,93 +1,49 @@
 import React, { useEffect, useState } from "react";
 
-export default function ProgressBar({ numScenes, isUploading, breakdownComplete, onComplete }) {
+export default function ProgressBar({ progress, numScenes, breakdownComplete, onComplete, statusMessage }) {
 	const [percent, setPercent] = useState(0);
-	const [message, setMessage] = useState("Uploading script...");
+	const [message, setMessage] = useState("Starting...");
 	const [hasCalledComplete, setHasCalledComplete] = useState(false);
 
-	// Calculate total time based on number of scenes (3 seconds per scene)
-	// Default to 60 seconds if numScenes is not provided
-	const TOTAL_MS = numScenes ? numScenes * 4000 : 60000;
-	const START_PERCENT = 20; // Start from 20% after upload
-	const TARGET = (numScenes + 8250)/90 > 100 ? 99 : (numScenes + 8250)/90;
-
+	// Update progress from prop (real-time from SSE)
 	useEffect(() => {
-		// If still uploading or numScenes not available yet, show 20% after upload completes
-		if (isUploading || !numScenes) {
-			setMessage("Uploading script...");
-			// Show 0% while uploading, 20% once upload is done but before breakdown starts
-			setPercent(isUploading ? 0 : START_PERCENT);
-			return;
+		if (progress !== undefined && progress !== null) {
+			setPercent(progress);
 		}
+	}, [progress]);
 
-		// Once upload is complete and we have numScenes, start the progress from 20%
-		const start = Date.now();
-		setMessage("Starting breakdown...");
-
-		const interval = setInterval(() => {
-			const elapsed = Date.now() - start;
-			const t = Math.min(1, elapsed / TOTAL_MS);
-			// Progress from START_PERCENT to TARGET
-			const next = Math.round((START_PERCENT + (TARGET - START_PERCENT) * t) * 100) / 100;
-			setPercent(next);
-		}, 200);
-
-		return () => clearInterval(interval);
-	}, [isUploading, numScenes, TOTAL_MS, START_PERCENT, TARGET]);
-
-	// Handle when breakdown is complete - animate to 100%
+	// Update message based on status from parent or progress percentage
 	useEffect(() => {
-		if (breakdownComplete && !hasCalledComplete) {
+		if (statusMessage) {
+			setMessage(statusMessage);
+		} else if (percent <= 10) {
+			setMessage("Uploading script...");
+		} else if (percent <= 15) {
+			setMessage("Reading script...");
+		} else if (percent < 50) {
+			setMessage("Identifying scenes...");
+		} else if (percent < 95) {
+			setMessage("Extracting elements...");
+		} else if (percent < 100) {
 			setMessage("Finalizing breakdown...");
-			
-			// Animate to 100% over 1 second
-			const currentPercent = percent;
-			const remainingPercent = 100 - currentPercent;
-			const animationDuration = 1000; // 1 second
-			const steps = 50;
-			const stepDuration = animationDuration / steps;
-			const percentPerStep = remainingPercent / steps;
-			
-			let step = 0;
-			const interval = setInterval(() => {
-				step++;
-				const newPercent = Math.min(100, currentPercent + (percentPerStep * step));
-				setPercent(newPercent);
-				
-				if (newPercent >= 100) {
-					clearInterval(interval);
-					setMessage("Complete!");
-					// Call the completion callback after a brief delay
-					setTimeout(() => {
-						if (onComplete && !hasCalledComplete) {
-							setHasCalledComplete(true);
-							onComplete();
-						}
-					}, 300);
+		} else {
+			setMessage("Complete!");
+		}
+	}, [percent, statusMessage]);
+
+	// Handle when breakdown is complete
+	useEffect(() => {
+		if (breakdownComplete && percent >= 100 && !hasCalledComplete) {
+			setMessage("Complete!");
+			// Call the completion callback after a brief delay
+			setTimeout(() => {
+				if (onComplete && !hasCalledComplete) {
+					setHasCalledComplete(true);
+					onComplete();
 				}
-			}, stepDuration);
-			
-			return () => clearInterval(interval);
+			}, 500);
 		}
 	}, [breakdownComplete, percent, onComplete, hasCalledComplete]);
-
-	useEffect(() => {
-		// Don't update message if we're still uploading or waiting for numScenes
-		if (isUploading || !numScenes) {
-			setMessage("Uploading script...");
-			return;
-		}
-
-		// Don't update message if breakdown is complete
-		if (breakdownComplete) {
-			return;
-		}
-
-		// Update message based on progress (starting from 20%)
-		if (percent <= 20) setMessage("Reading Script");
-		else if (percent < 50) setMessage("Identifying Scenes ...");
-		else setMessage("Extracting Elements ...");
-	}, [percent, isUploading, numScenes, breakdownComplete]);
 
 	// Inline styles
 	const container = {
@@ -119,10 +75,21 @@ export default function ProgressBar({ numScenes, isUploading, breakdownComplete,
 		transition: "width 0.3s ease",
 	};
 
-	const percentText = {
+	const metaRow = {
+		display: "flex",
+		justifyContent: "space-between",
+		alignItems: "center",
 		marginTop: "6px",
 		fontSize: "12px",
 		color: "#666",
+	};
+
+	const sceneText = {
+		flex: 1,
+	};
+
+	const percentText = {
+		marginLeft: "auto",
 	};
 
 	return (
@@ -133,7 +100,10 @@ export default function ProgressBar({ numScenes, isUploading, breakdownComplete,
 				<div style={barFill} />
 			</div>
 
-			<div style={percentText}>{parseInt(percent)}%</div>
+			<div style={metaRow}>
+				<div style={sceneText}>{numScenes ? `Scenes: ${numScenes}` : ""}</div>
+				<div style={percentText}>{parseInt(percent)}%</div>
+			</div>
 		</div>
 	);
 }

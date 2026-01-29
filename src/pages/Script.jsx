@@ -59,22 +59,36 @@ const Script = () => {
 		fetchScripts();
 	}, []); // Empty dependency array means this runs once on mount
 
-	// Function to handle the actual file upload logic
+	// Function to handle the actual file upload logic with SSE streaming
 	const uploadFile = async (file, fileName) => {
 		if (!file) return;
 
+		let eventSource = null;
+
+		// Reset per-run state
+		setBreakdownComplete(false);
+		setNumScenes(null);
+		setProgress(0);
+
 		try {
-			// Start upload phase
+			// Start processing
 			setIsUploading(true);
-			setIsGeneratingBreakdown(false);
-			setUploadStatus(`Uploading ${fileName}...`);
+			setIsGeneratingBreakdown(true);
+			setUploadStatus(`Processing ${fileName}...`);
 			setSelectedFile(null);
 
 			const formData = new FormData();
 			formData.append("scriptPdf", file);
 			formData.append("fileName", fileName);
 
-			const response = await fetch(getApiUrl(`/api/${id}/upload-script`), {
+			// Include model in the request if user is 2
+			const uploadUrl =
+				user === "2"
+					? getApiUrl(`/api/${id}/upload-and-breakdown?model=${selectedModel}`)
+					: getApiUrl(`/api/${id}/upload-and-breakdown`);
+
+			// Use fetch to upload the file first
+			const response = await fetch(uploadUrl, {
 				method: "POST",
 				body: formData,
 				credentials: "include",
@@ -86,55 +100,84 @@ const Script = () => {
 				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
 			}
 
-		const result = await response.json();
-		setUploadedScripts((prev) => [...prev, { name: fileName }]);
-		
-		// Store the number of scenes if available
-		if (result.num_scenes) {
-			setNumScenes(result.num_scenes);
-			console.log("num_scenes------------- ", result.num_scenes);
+			// Now listen to SSE stream for progress updates
+			const reader = response.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n');
+				
+				// Process complete lines
+				for (let i = 0; i < lines.length - 1; i++) {
+					const line = lines[i].trim();
+					if (line.startsWith('data: ')) {
+						try {
+							const data = JSON.parse(line.substring(6));
+							console.log('SSE data received:', data);
+
+							// Update progress
+							if (data.progress !== undefined) {
+								setProgress(data.progress);
+							}
+
+							// Update scene count when discovered
+							if (data.total_scenes !== undefined) {
+								setNumScenes(data.total_scenes);
+								console.log(`Total scenes discovered: ${data.total_scenes}`);
+							}
+
+							// Update status message
+							if (data.message) {
+								setUploadStatus(data.message);
+								setBreakdownMessage(data.message);
+							}
+
+							// Update current scene processing
+							if (data.current_scene !== undefined) {
+								setUploadStatus(`Processing scene ${data.current_scene} of ${data.total_scenes}...`);
+							}
+
+							// Handle completion
+							if (data.status === 'completed') {
+								console.log('Breakdown completed successfully!');
+								setProgress(100);
+								setBreakdownComplete(true);
+								setUploadStatus('Breakdown generated successfully!');
+								await fetchScripts();
+							}
+
+							// Handle errors
+							if (data.status === 'error') {
+								throw new Error(data.message || 'Failed to generate breakdown');
+							}
+						} catch (parseError) {
+							console.error('Error parsing SSE data:', parseError, 'Line:', line);
+						}
+					}
+				}
+				
+				// Keep the last incomplete line in the buffer
+				buffer = lines[lines.length - 1];
+			}
+		} catch (error) {
+			console.error("Upload/Breakdown error:", error);
+			setUploadStatus(`Error: ${error.message}`);
+			setProgress(0);
+			setTimeout(() => setUploadStatus(""), 5000);
+		} finally {
+			setIsUploading(false);
+			setIsGeneratingBreakdown(false);
+			setShowFileNameModal(false);
+			setNewFileName("");
+			setTempFile(null);
+			setSelectedModel("gpt-4.1-2025-04-14");
 		}
-		
-		await fetchScripts();
-
-		// Start breakdown generation phase
-		setIsUploading(false);
-		setIsGeneratingBreakdown(true);
-		setUploadStatus("Generating script breakdown...");
-
-			// Include model in the breakdown request if user is 2
-			const breakdownUrl =
-				user === "2"
-					? getApiUrl(`/api/${id}/generate-breakdown/${fileName}?model=${selectedModel}`)
-					: getApiUrl(`/api/${id}/generate-breakdown/${fileName}`);
-
-			const breakdownResponse = await fetch(breakdownUrl, {
-				method: "POST",
-				mode: "cors",
-			});
-
-		if (!breakdownResponse.ok) {
-			throw new Error("Failed to generate script breakdown");
-		}
-		
-		// Signal that breakdown is complete (progress bar will reach 100%)
-		setBreakdownComplete(true);
-		setUploadStatus("Breakdown generated successfully!");
-	} catch (error) {
-		console.error("Upload/Breakdown error:", error);
-		setUploadStatus(`Error: ${error.message}`);
-		setTimeout(() => setUploadStatus(""), 5000);
-	} finally {
-		setIsUploading(false);
-		setIsGeneratingBreakdown(false);
-		setShowFileNameModal(false);
-		setNewFileName("");
-		setTempFile(null);
-		setSelectedModel("gpt-4.1-2025-04-14"); // Reset model selection
-		setNumScenes(null); // Reset number of scenes
-		setBreakdownComplete(false); // Reset breakdown complete flag
-	}
-};
+	};
 
 // Callback function called when progress bar reaches 100%
 const handleBreakdownSuccess = () => {
@@ -339,9 +382,10 @@ const handleBreakdownSuccess = () => {
 		}
 	};
 
-	const handleScriptClick = async (script) => {
+	const handleScriptClick = async (scriptName) => {
 		try {
-			const response = await fetch(getApiUrl(`/api/${id}/script-view/${script}`), {
+			setUploadStatus("Loading script...");
+			const response = await fetch(getApiUrl(`/api/${id}/script-view/${scriptName}`), {
 				method: "GET",
 				mode: "cors",
 			});
@@ -352,10 +396,13 @@ const handleBreakdownSuccess = () => {
 
 			const data = await response.json();
 			setPdfUrl(data.url);
-			setSelectedScript(script);
+			setSelectedScript(scriptName);
+			setUploadStatus("");
 		} catch (error) {
 			console.error("Error fetching script:", error);
 			setUploadStatus("Failed to load the script");
+			setSelectedScript(null);
+			setPdfUrl(null);
 			setTimeout(() => setUploadStatus(""), 3000);
 		}
 	};
@@ -442,10 +489,11 @@ const handleBreakdownSuccess = () => {
 				<div style={styles.modal}>
 					{isProcessing ? (
 						<ProgressBar 
+							progress={progress}
 							numScenes={numScenes} 
-							isUploading={isUploading} 
 							breakdownComplete={breakdownComplete}
 							onComplete={handleBreakdownSuccess}
+							statusMessage={uploadStatus}
 						/>
 					) : (
 						<div>
