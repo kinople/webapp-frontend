@@ -77,87 +77,174 @@ const Script = () => {
 	const uploadFile = async (file, fileName) => {
 		if (!file) return;
 
+		// Refs to track progress state across async operations
+		let progressIntervalId = null;
+		let currentProgress = 0;
+		let breakdownComplete = false;
+
+		// Helper to animate progress smoothly from current to target over duration
+		const animateProgress = (startProgress, endProgress, duration) => {
+			return new Promise((resolve) => {
+				const updateInterval = 50; // ms
+				const steps = Math.max(Math.floor(duration / updateInterval), 1);
+				const increment = (endProgress - startProgress) / steps;
+				let current = startProgress;
+
+				const interval = setInterval(() => {
+					current = Math.min(current + increment, endProgress);
+					setProgress(Math.round(current));
+					if (current >= endProgress) {
+						clearInterval(interval);
+						resolve();
+					}
+				}, updateInterval);
+			});
+		};
+
+		// Progress messages at different stages
+		const getProgressMessage = (progress) => {
+			if (progress < 15) return "Uploading script...";
+			if (progress < 30) return "Parsing PDF...";
+			if (progress < 50) return "Extracting scenes...";
+			if (progress < 75) return "Generating breakdown...";
+			if (progress < 95) return "Processing scenes and elements...";
+			return "Finalizing breakdown...";
+		};
+
 		try {
 			setIsUploading(true);
 			setIsGeneratingBreakdown(false);
 			setUploadStatus(`Uploading ${fileName}...`);
-			setProgress(0);
+			setBreakdownMessage("Uploading script...");
+			
+			// Start progress immediately at 1% so user sees it right away
+			currentProgress = 1;
+			setProgress(1);
 
 			const formData = new FormData();
 			formData.append("scriptPdf", file);
 			formData.append("fileName", fileName);
 
+			// Phase 1: Upload (0% → 15%) - Gradual smooth animation during upload
+			// Start the progress animation FIRST before fetch
+			const uploadProgressInterval = setInterval(() => {
+				if (currentProgress < 14) {
+					// Small increment of 0.2 every 40ms for smooth gradual progress
+					currentProgress = Math.min(currentProgress + 0.2, 14);
+					setProgress(Math.round(currentProgress));
+					
+					// Update message based on progress
+					if (currentProgress < 5) {
+						setBreakdownMessage("Uploading script...");
+					} else if (currentProgress < 10) {
+						setBreakdownMessage("Processing file...");
+					} else {
+						setBreakdownMessage("Analyzing script...");
+					}
+				}
+			}, 40);
+
+			// Now start the actual upload
 			const response = await fetch(getApiUrl(`/api/${id}/upload-script`), {
 				method: "POST",
 				body: formData,
 				credentials: "include",
 				mode: "cors",
 			});
+			
+			clearInterval(uploadProgressInterval);
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({ message: "Upload failed" }));
 				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
 			}
 
-			await response.json();
+			const uploadResult = await response.json();
 			setUploadedScripts((prev) => [...prev, { name: fileName }]);
 			await fetchScripts();
 
-			// Start breakdown generation phase
+			// Complete upload phase - smoothly animate from current to 15%
+			await animateProgress(currentProgress, 15, 400);
+			currentProgress = 15;
+
+			// Phase 2: Breakdown (15% → 95%) - Time-based on sceneCount
 			setIsUploading(false);
 			setIsGeneratingBreakdown(true);
-			setBreakdownMessage("Starting breakdown generation...");
-			setProgress(0);
+			const sceneCount = uploadResult.scene_count || 0;
+			setBreakdownMessage(`Starting breakdown... (${sceneCount} scenes detected)`);
 
-			// Progress messages at different stages
-			const getProgressMessage = (progress) => {
-				if (progress < 10) return "Reading script from storage....";
-				if (progress < 25) return "Parsing PDF...";
-				if (progress < 50) return "Extracting scenes...";
-				if (progress < 75) return "Generating breakdown...";
-				if (progress < 95) return "Processing scenes and elements...";
-				return "Finalizing breakdown...";
+			// Calculate expected breakdown time: sceneCount × 4 seconds (minimum 8 seconds)
+			const timePerScene = 5000; // 4 seconds per scene
+			const totalExpectedTime = Math.max(sceneCount * timePerScene, 8000);
+			const breakdownStartTime = Date.now();
+
+			// Helper to get scene-based progress message
+			const getSceneProgressMessage = (elapsedTime, totalTime, totalScenes) => {
+				if (totalScenes === 0) return "Processing breakdown...";
+				// Calculate which scene we're on based on elapsed time
+				const progressRatio = Math.min(elapsedTime / totalTime, 1);
+				const currentScene = Math.min(Math.ceil(progressRatio * totalScenes), totalScenes);
+				return `Processing scene ${currentScene}/${totalScenes}...`;
 			};
 
-			// Animate progress from 0% to 95% over 10 minutes (600 seconds)
-			const totalDuration = 600000; // 10 minutes in milliseconds
-			const targetProgress = 95;
-			const updateInterval = 1000; // Update every second
-			const progressIncrement = targetProgress / (totalDuration / updateInterval);
-
-			let currentProgress = 0;
-			const progressInterval = setInterval(() => {
-				if (currentProgress < targetProgress) {
-					currentProgress = Math.min(currentProgress + progressIncrement, targetProgress);
-					setProgress(Math.round(currentProgress));
-					setBreakdownMessage(getProgressMessage(currentProgress));
-				}
-			}, updateInterval);
-
+			// Start breakdown API call (runs in parallel with progress animation)
 			const breakdownUrl =
 				user === "2"
 					? getApiUrl(`/api/${id}/generate-breakdown/${fileName}?model=${selectedModel}`)
 					: getApiUrl(`/api/${id}/generate-breakdown/${fileName}`);
 
-			const breakdownResponse = await fetch(breakdownUrl, {
+			const breakdownPromise = fetch(breakdownUrl, {
 				method: "POST",
+				credentials: "include",
 				mode: "cors",
+			}).then((res) => {
+				breakdownComplete = true;
+				return res;
 			});
 
-			// Stop the progress animation
-			clearInterval(progressInterval);
+			// Time-based progress animation (15% → 95%)
+			// Progress = 15 + (elapsedTime / totalExpectedTime) × 80
+			const updateInterval = 100; // ms
+			progressIntervalId = setInterval(() => {
+				if (!breakdownComplete) {
+					const elapsedTime = Date.now() - breakdownStartTime;
+					const timeBasedProgress = 15 + (elapsedTime / totalExpectedTime) * 80;
+					// Cap at 95% until breakdown completes
+					currentProgress = Math.min(timeBasedProgress, 95);
+					setProgress(Math.round(currentProgress));
+					setBreakdownMessage(getSceneProgressMessage(elapsedTime, totalExpectedTime, sceneCount));
+				}
+			}, updateInterval);
+
+			// Wait for breakdown to complete
+			const breakdownResponse = await breakdownPromise;
+			clearInterval(progressIntervalId);
+			progressIntervalId = null;
 
 			if (!breakdownResponse.ok) {
 				throw new Error("Failed to generate script breakdown");
 			}
 
+			// Phase 3: Completion (current% → 100%) - Smooth animation
+			// If breakdown finished early, animate from current position to 100%
+			// If breakdown finished at 95% or later, animate to 100%
+			const finalProgress = Math.round(currentProgress);
+			const completionDuration = finalProgress < 95 ? 1500 : 1000; // More time if finished early
+
+			await animateProgress(finalProgress, 100, completionDuration);
 			setProgress(100);
 			setBreakdownMessage("Breakdown completed!");
 		} catch (error) {
 			console.error("Upload/Breakdown error:", error);
+			if (progressIntervalId) {
+				clearInterval(progressIntervalId);
+			}
 			alert("Error in generating Breakdown, try again");
 			setUploadStatus(`Error: ${error.message}`);
 			setShowFileNameModal(false);
+			setIsGeneratingBreakdown(false);
+			setProgress(0);
+			setBreakdownMessage("");
 			setTimeout(() => setUploadStatus(""), 5000);
 		} finally {
 			setIsUploading(false);
@@ -379,10 +466,10 @@ const Script = () => {
 			{showFileNameModal && (
 				<div className="script-modal-overlay">
 					<div className="script-modal">
-						{isGeneratingBreakdown ? (
-							/* Progress Bar View */
+						{isUploading || isGeneratingBreakdown ? (
+							/* Progress Bar View - shows during upload AND breakdown phases */
 							<div className="script-progress-modal">
-								<h3 className="script-progress-title">{breakdownMessage || "Starting breakdown generation..."}</h3>
+								<h3 className="script-progress-title">{breakdownMessage || "Starting..."}</h3>
 								<div className="script-progress-bar-container">
 									<div className="script-progress-bar" style={{ width: `${progress}%` }} />
 								</div>
