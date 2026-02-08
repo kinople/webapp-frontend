@@ -1,0 +1,49 @@
+import { getAuthHeaders } from "./auth";
+
+// Environment-based API URL configuration
+const getBaseApiUrl = () => {
+	// In development, use relative path so Vite proxy forwards to backend (avoids CORS and 405 from direct call)
+	if (process.env.NODE_ENV === "development") {
+		return "";
+	}
+
+	// Production URL
+	return process.env.API_URL || "https://fnki5rlndb.execute-api.us-east-1.amazonaws.com";
+};
+
+const API_URL = getBaseApiUrl();
+
+// Function to build the full API URL
+export const getApiUrl = (path) => {
+	console.log(`API URL: ${API_URL}${path}`); // Debug log to see which URL is being used
+	return `${API_URL}${path}`;
+};
+
+export const fetchWithAuth = async (url, options = {}) => {
+	const defaultOptions = {
+		mode: "cors",
+		credentials: process.env.NODE_ENV === "development" ? "include" : "omit", // Include credentials for local development
+		headers: {
+			"Content-Type": "application/json",
+			...getAuthHeaders(), // Add auth headers automatically
+		},
+	};
+
+	try {
+		console.log(`Making request to: ${url}`); // Debug log
+		const response = await fetch(url, {
+			...defaultOptions,
+			...options,
+			headers: {
+				...defaultOptions.headers,
+				...options.headers,
+			},
+		});
+
+		console.log("Response status:", response.status);
+		return response;
+	} catch (error) {
+		console.error("Fetch error:", error);
+		throw error;
+	}
+};
