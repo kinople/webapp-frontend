@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { getApiUrl, fetchWithAuth } from "../utils/api";
+import "../css/UserSettings.css";
 
 const UserSettings = () => {
 	const { user } = useParams();
@@ -26,8 +27,6 @@ const UserSettings = () => {
 				if (!response.ok) throw new Error("Failed to fetch projects");
 
 				const data = await response.json();
-
-				//console.log("data---------------------------------- ", data);
 
 				if (data) {
 					setProjects(data);
@@ -72,139 +71,53 @@ const UserSettings = () => {
 		fetchUserData();
 	}, [user]);
 
-	const styles = {
-		page: {
-			background: "linear-gradient(135deg, #f5f7fa, #c3cfe2)",
-			minHeight: "100vh",
-			padding: "32px",
-			paddingLeft: `calc(270px + 32px)`,
-			fontFamily: "sans-serif",
-		},
-		header: {
-			marginBottom: "32px",
-		},
-		title: {
-			fontSize: "28px",
-			fontWeight: "bold",
-			color: "#1f2937",
-			marginBottom: "8px",
-		},
-		subtitle: {
-			fontSize: "16px",
-			color: "#6b7280",
-		},
-		card: {
-			backgroundColor: "#ffffff",
-			borderRadius: "12px",
-			boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-			padding: "24px",
-			marginBottom: "24px",
-		},
-		cardHeader: {
-			borderBottom: "1px solid #e5e7eb",
-			paddingBottom: "16px",
-			marginBottom: "16px",
-		},
-		cardTitle: {
-			fontSize: "20px",
-			fontWeight: "600",
-			color: "#1f2937",
-		},
-		cardSubtitle: {
-			fontSize: "14px",
-			color: "#6b7280",
-			marginTop: "4px",
-		},
-		label: {
-			display: "block",
-			fontSize: "14px",
-			fontWeight: "500",
-			color: "#374151",
-			marginBottom: "8px",
-		},
-		input: {
-			width: "90%",
-			padding: "10px 12px",
-			borderRadius: "8px",
-			border: "1px solid #d1d5db",
-			backgroundColor: "#f9fafb",
-			color: "#1f2937",
-			fontSize: "14px",
-		},
-		button: {
-			backgroundColor: "#4B9CD3",
-			color: "#ffffff",
-			padding: "10px 16px",
-			borderRadius: "8px",
-			border: "none",
-			fontSize: "14px",
-			fontWeight: "600",
-			cursor: "pointer",
-			transition: "background-color 0.3s",
-		},
-		table: {
-			width: "100%",
-			borderCollapse: "collapse",
-		},
-		tableHead: {
-			backgroundColor: "#f9fafb",
-		},
-		tableHeaderCell: {
-			padding: "12px 16px",
-			textAlign: "left",
-			fontSize: "12px",
-			fontWeight: "600",
-			color: "#6b7280",
-			textTransform: "uppercase",
-			borderBottom: "1px solid #e5e7eb",
-		},
-		tableRow: {
-			borderBottom: "1px solid #e5e7eb",
-		},
-		tableCell: {
-			padding: "16px",
-			fontSize: "14px",
-			color: "#374151",
-		},
-	};
-
 	const renderProfileContent = () => {
 		return (
 			<>
-				<div style={styles.card}>
-					<div style={styles.cardHeader}>
-						<h3 style={styles.cardTitle}>Profile</h3>
-						<p style={styles.cardSubtitle}>Manage your personal information.</p>
-					</div>
-					<div>
-						<div style={{ marginBottom: "16px" }}>
-							<label style={styles.label}>Email</label>
-							<input type="text" value={userData.email || ""} readOnly style={styles.input} />
+				<div className="user-settings-card">
+					<div className="user-settings-card-header">
+						<div className="user-settings-card-header-left">
+							<h3 className="user-settings-card-title">Profile</h3>
+							<p className="user-settings-card-subtitle">Manage your personal information.</p>
 						</div>
-						<button style={styles.button}>Update Profile</button>
 					</div>
+					<div className="user-settings-form-group">
+						<label className="user-settings-label">Email</label>
+						<input type="text" value={userData?.email || ""} readOnly className="user-settings-input" />
+					</div>
+					<button className="user-settings-btn user-settings-btn-primary">Update Profile</button>
 				</div>
-				<div style={styles.card}>
-					<div style={styles.cardHeader}>
-						<h3 style={styles.cardTitle}>Active Projects</h3>
-						<p style={styles.cardSubtitle}>{projects.length} active projects</p>
+				<div className="user-settings-card">
+					<div className="user-settings-card-header">
+						<div className="user-settings-card-header-left">
+							<h3 className="user-settings-card-title">Active Projects</h3>
+							<p className="user-settings-card-subtitle">{projects.length} active projects</p>
+						</div>
 					</div>
-					<table style={styles.table}>
-						<thead style={styles.tableHead}>
-							<tr>
-								<th style={styles.tableHeaderCell}>Project Name</th>
-								<th style={styles.tableHeaderCell}>Type</th>
-								<th style={styles.tableHeaderCell}>Created</th>
+					<table className="user-settings-table">
+						<thead className="user-settings-thead">
+							<tr className="user-settings-header-row">
+								<th className="user-settings-header-cell">Project Name</th>
+								<th className="user-settings-header-cell">Type</th>
+								<th className="user-settings-header-cell">Created</th>
 							</tr>
 						</thead>
 						<tbody>
-							{projects.map((p, idx) => (
-								<tr key={idx} style={styles.tableRow}>
-									<td style={styles.tableCell}>{p.projectName}</td>
-									<td style={styles.tableCell}>{p.projectType}</td>
-									<td style={styles.tableCell}>{new Date(p.createTime).toLocaleDateString()}</td>
+							{projects.length === 0 ? (
+								<tr>
+									<td colSpan="3" className="user-settings-empty-row">
+										No projects found
+									</td>
 								</tr>
-							))}
+							) : (
+								projects.map((p, idx) => (
+									<tr key={idx} className="user-settings-data-row">
+										<td className="user-settings-data-cell">{p.projectName}</td>
+										<td className="user-settings-data-cell">{p.projectType}</td>
+										<td className="user-settings-data-cell">{new Date(p.createTime).toLocaleDateString()}</td>
+									</tr>
+								))
+							)}
 						</tbody>
 					</table>
 				</div>
@@ -213,24 +126,25 @@ const UserSettings = () => {
 	};
 
 	const renderInvitationsContent = () => (
-		<div style={styles.card}>
-			<div style={styles.cardHeader}>
-				<h3 style={styles.cardTitle}>Invitations</h3>
-				<p style={styles.cardSubtitle}>Manage your pending invitations.</p>
+		<div className="user-settings-card">
+			<div className="user-settings-card-header">
+				<div className="user-settings-card-header-left">
+					<h3 className="user-settings-card-title">Invitations</h3>
+					<p className="user-settings-card-subtitle">Manage your pending invitations.</p>
+				</div>
 			</div>
-			<table style={styles.table}>
-				<thead style={styles.tableHead}>
-					<tr>
-						<th style={styles.tableHeaderCell}>Organization</th>
-						<th style={styles.tableHeaderCell}>Invited</th>
-						<th style={styles.tableHeaderCell}>Role</th>
-						<th style={styles.tableHeaderCell}>Actions</th>
+			<table className="user-settings-table">
+				<thead className="user-settings-thead">
+					<tr className="user-settings-header-row">
+						<th className="user-settings-header-cell">Organization</th>
+						<th className="user-settings-header-cell">Invited</th>
+						<th className="user-settings-header-cell">Role</th>
+						<th className="user-settings-header-cell">Actions</th>
 					</tr>
 				</thead>
 				<tbody>
-					{/* Placeholder for pending invites */}
 					<tr>
-						<td colSpan="4" style={{ ...styles.tableCell, textAlign: "center" }}>
+						<td colSpan="4" className="user-settings-empty-row">
 							No pending invites
 						</td>
 					</tr>
@@ -240,26 +154,31 @@ const UserSettings = () => {
 	);
 
 	const renderBillingContent = () => (
-		<div style={styles.card}>
-			<div style={styles.cardHeader}>
-				<h3 style={styles.cardTitle}>Billing</h3>
-				<p style={styles.cardSubtitle}>Manage your subscription and view invoices.</p>
+		<div className="user-settings-card">
+			<div className="user-settings-card-header">
+				<div className="user-settings-card-header-left">
+					<h3 className="user-settings-card-title">Billing</h3>
+					<p className="user-settings-card-subtitle">Manage your subscription and view invoices.</p>
+				</div>
 			</div>
-			<div>
-				<p>You are currently on the Free Plan.</p>
-				<button style={{ ...styles.button, backgroundColor: "#6b7280" }}>Upgrade Plan</button>
+			<div className="user-settings-billing-info">
+				<p>
+					You are currently on the
+					<span className="user-settings-billing-plan">Free Plan</span>
+				</p>
 			</div>
+			<button className="user-settings-btn user-settings-btn-secondary">Upgrade Plan</button>
 		</div>
 	);
 
-	if (loading) return <div style={{ paddingLeft: "270px", paddingTop: "2rem" }}>Loading projects...</div>;
-	if (error) return <div style={{ paddingLeft: "270px", paddingTop: "2rem", color: "red" }}>Error: {error}</div>;
+	if (loading) return <div className="user-settings-loading">Loading projects...</div>;
+	if (error) return <div className="user-settings-error">Error: {error}</div>;
 
 	return (
-		<div style={styles.page}>
-			<div style={styles.header}>
-				<h1 style={styles.title}>User Settings</h1>
-				<p style={styles.subtitle}>Manage your account settings.</p>
+		<div className="user-settings-page">
+			<div className="user-settings-header">
+				<h1 className="user-settings-title">User Settings</h1>
+				<p className="user-settings-subtitle">Manage your account settings.</p>
 			</div>
 
 			{currentSection === "profile" && renderProfileContent()}

@@ -1,0 +1,4 @@
+#root {
+    zoom: 85%; /* or 0.8 */
+    /* No need for width/height compensation or transforms */
+}

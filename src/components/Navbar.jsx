@@ -1,72 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { getApiUrl } from "../utils/api";
 import { removeToken } from "../utils/auth";
 import { fetchWithAuth } from "../utils/api";
+import { toggleNavbar } from "../redux/reducers/uiSlice";
+import { setCurrentOrganization, setOrganizations as setOrganizationsAction } from "../redux/reducers/organizationSlice";
+import { PiGear, PiUsersThree, PiSignOut, PiCaretDown, PiSidebarSimple, PiPlus, PiUser, PiX } from "react-icons/pi";
+import logoIcon from "../assets/logo-icon.svg";
+import "../css/Navbar.css";
 
 const Navbar = () => {
-	// Add CSS styles similar to Sidebar
-	React.useEffect(() => {
-		const style = document.createElement("style");
-		style.textContent = `
-      .nav-link {
-        display: flex;
-        align-items: center;
-        padding: 10px 12px;
-        border-radius: 8px;
-        color: #FFFFFF;
-        text-decoration: none;
-        font-size: 15px;
-        font-weight: 500;
-        transition: background-color 0.2s ease-in-out;
-        cursor: pointer;
-        font-family: 'Inter', sans-serif;
-      }
-
-      .nav-link:hover {
-        background-color: #4B9CD3;
-        color: white;
-      }
-
-      .nav-link.active {
-        background-color: #4B9CD3;
-        color: white;
-      }
-
-      .nav-item {
-        margin-bottom: 12px;
-        list-style: none;
-      }
-
-      .nav-list {
-        list-style: none;
-        padding: 0 16px;
-        margin: 0;
-      }
-
-      .nav-bottom {
-        margin-top: auto;
-        padding-bottom: 24px;
-      }
-
-      .icon-wrapper {
-        margin-right: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .nav-link > div {
-        display: flex;
-        flex-direction: column;
-      }
-    `;
-		document.head.appendChild(style);
-		return () => document.head.removeChild(style);
-	}, []);
-
 	const location = useLocation();
 	const navigate = useNavigate();
+	const dispatch = useDispatch();
+	const navbarCollapsed = useSelector((state) => state.ui.navbarCollapsed);
 
 	// Extract user and id from pathname since useParams won't work here
 	const getRouteParams = () => {
@@ -88,7 +36,10 @@ const Navbar = () => {
 	const [showOrgDropdown, setShowOrgDropdown] = useState(false);
 	const [organizations, setOrganizations] = useState([]);
 	const [orgLoading, setOrgLoading] = useState(false);
-	const [currentOrg, setCurrentOrg] = useState("Personal");
+	
+	// Get current organization from Redux
+	const currentOrganization = useSelector((state) => state.organization.currentOrganization);
+	const currentOrg = currentOrganization.name;
 
 	// Add state for organization menu dropdown
 
@@ -103,6 +54,33 @@ const Navbar = () => {
 
 	// Add state for user dropdown
 	const [showUserDropdown, setShowUserDropdown] = useState(false);
+
+	// Add state for New Project modal
+	const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+	const [newProjectForm, setNewProjectForm] = useState({
+		projectName: "",
+		projectType: "",
+	});
+	const [addAllMembers, setAddAllMembers] = useState(false);
+	// Dummy team members data
+	const [teamMembers, setTeamMembers] = useState([
+		{ id: 1, email: "samwilson@example.com", role: "Roles" },
+		{ id: 2, email: "maryjane@example.com", role: "Roles" },
+		{ id: 3, email: "johndoe@example.com", role: "Roles" },
+	]);
+	const [creatingProject, setCreatingProject] = useState(false);
+	const [createProjectError, setCreateProjectError] = useState("");
+
+	// State for New Organization modal
+	const [showNewOrgModal, setShowNewOrgModal] = useState(false);
+	const [newOrgName, setNewOrgName] = useState("");
+	const [orgMembers, setOrgMembers] = useState([
+		{ id: 1, email: "samwilson@example.com", role: "Roles" },
+		{ id: 2, email: "maryjane@example.com", role: "Roles" },
+		{ id: 3, email: "johndoe@example.com", role: "Roles" },
+	]);
+	const [creatingOrg, setCreatingOrg] = useState(false);
+	const [createOrgError, setCreateOrgError] = useState("");
 
 	// Add useEffect to detect if we're on a settings page
 	useEffect(() => {
@@ -119,7 +97,7 @@ const Navbar = () => {
 			const orgId = pathParts[2];
 			const org = organizations.find((o) => o.organization_id.toString() === orgId);
 			if (org && currentOrg !== org.organizationname) {
-				setCurrentOrg(org.organizationname);
+				dispatch(setCurrentOrganization({ id: org.organization_id, name: org.organizationname }));
 			}
 		}
 	}, [location.pathname, organizations]);
@@ -156,6 +134,7 @@ const Navbar = () => {
 
 			const data = await response.json();
 			setUserDetails(data);
+			console.log("userDetails: ", data);
 		} catch (err) {
 			setError(err.message);
 			console.error("Error fetching user details:", err);
@@ -200,20 +179,175 @@ const Navbar = () => {
 	};
 
 	const handleOrgSelect = (orgName, orgId = null) => {
-		setCurrentOrg(orgName);
+		// Update Redux store with selected organization
+		dispatch(setCurrentOrganization({ id: orgId, name: orgName }));
 		setShowOrgDropdown(false);
-		// Navigate to home page when organization is changed, passing org info
-		navigate(`/${user}`, {
-			state: {
-				organizationId: orgId,
-				organizationName: orgName,
-			},
-		});
+		// Navigate to home page when organization is changed
+		navigate(`/${user}`);
 	};
 
 	const handleCreateOrg = () => {
-		// Navigate to create organization page
-		navigate(`/${user}/create-organization`);
+		// Show the new organization modal
+		setShowNewOrgModal(true);
+		setShowOrgDropdown(false);
+	};
+
+	const handleCloseNewOrgModal = () => {
+		setShowNewOrgModal(false);
+		setNewOrgName("");
+		setCreateOrgError("");
+	};
+
+	const handleRemoveOrgMember = (id) => {
+		setOrgMembers(orgMembers.filter((member) => member.id !== id));
+	};
+
+	const handleAddOrgMember = () => {
+		// Dummy add member - just logs for now
+		console.log("Add Organization Member clicked");
+	};
+
+	const handleCreateOrganization = async () => {
+		// Validate form
+		if (!newOrgName.trim()) {
+			setCreateOrgError("Please enter an organization name");
+			return;
+		}
+
+		setCreatingOrg(true);
+		setCreateOrgError("");
+
+		try {
+			// Prepare data according to backend expectations
+			const requestData = {
+				organizationname: newOrgName.trim(),
+				organizationdetails: {
+					description: "",
+				},
+			};
+
+			const response = await fetchWithAuth(getApiUrl(`/api/${user}/organizations`), {
+				method: "POST",
+				credentials: "include",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(requestData),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.message || "Failed to create organization");
+			}
+
+			const data = await response.json();
+
+			if (data.status === "success") {
+				// Success - close modal, refresh organizations, and navigate
+				handleCloseNewOrgModal();
+				await fetchOrganizations();
+				// Set the newly created organization as current
+				if (data.organization) {
+					dispatch(setCurrentOrganization({ 
+						id: data.organization.organization_id, 
+						name: data.organization.organizationname 
+					}));
+				}
+				navigate(`/${user}`, {
+					state: {
+						create_org: "success",
+						refreshKey: Date.now(),
+					},
+				});
+			} else {
+				throw new Error(data.message || "Failed to create organization");
+			}
+		} catch (err) {
+			setCreateOrgError(err.message || "Failed to create organization. Please try again.");
+		} finally {
+			setCreatingOrg(false);
+		}
+	};
+
+	const handleNewProject = () => {
+		// Show the new project modal
+		setShowNewProjectModal(true);
+	};
+
+	const handleCloseNewProjectModal = () => {
+		setShowNewProjectModal(false);
+		setNewProjectForm({ projectName: "", projectType: "" });
+		setAddAllMembers(false);
+		setCreateProjectError("");
+	};
+
+	const handleNewProjectFormChange = (e) => {
+		setNewProjectForm({
+			...newProjectForm,
+			[e.target.name]: e.target.value,
+		});
+	};
+
+	const handleRemoveTeamMember = (id) => {
+		setTeamMembers(teamMembers.filter((member) => member.id !== id));
+	};
+
+	const handleAddMember = () => {
+		// Dummy add member - just logs for now
+		console.log("Add Member clicked");
+	};
+
+	const handleCreateProject = async () => {
+		// Validate form
+		if (!newProjectForm.projectName.trim()) {
+			setCreateProjectError("Please enter a project name");
+			return;
+		}
+		if (!newProjectForm.projectType) {
+			setCreateProjectError("Please select a project type");
+			return;
+		}
+
+		setCreatingProject(true);
+		setCreateProjectError("");
+
+		try {
+			// Get the current organization ID from Redux
+			const organizationId = currentOrganization.id;
+
+			// Prepare the request body
+			const requestBody = {
+				projectName: newProjectForm.projectName,
+				projectType: newProjectForm.projectType,
+				...(organizationId && { organizationId }),
+			};
+
+			const response = await fetch(getApiUrl(`/api/create-project/${user}`), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				credentials: "include",
+				body: JSON.stringify(requestBody),
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.message || "Failed to create project");
+			}
+
+			// Success - close modal and navigate to home
+			handleCloseNewProjectModal();
+			navigate(`/${user}`, {
+				state: {
+					refreshKey: Date.now(), // Force re-fetch of projects
+				},
+			});
+		} catch (err) {
+			setCreateProjectError(err.message || "Failed to create project. Please try again.");
+		} finally {
+			setCreatingProject(false);
+		}
 	};
 
 	const handleLogout = async () => {
@@ -258,16 +392,15 @@ const Navbar = () => {
 		}
 	};
 
+	const handleOrganizationClick = () => {
+		// Navigate to organization management
+		navigate(`/${user}/organizations`);
+	};
+
 	const handleBackFromSettings = () => {
 		setIsInSettings(false);
-		// Navigate back to organization home
-		const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-		navigate(`/${user}`, {
-			state: {
-				organizationId: orgId,
-				organizationName: currentOrg,
-			},
-		});
+		// Navigate back to home - organization is already in Redux
+		navigate(`/${user}`);
 	};
 
 	const closeModal = () => {
@@ -289,302 +422,449 @@ const Navbar = () => {
 		}
 	}, [location.state]);
 
+	// Get the first letter of current organization for badge
+	const getOrgBadgeLetter = () => {
+		if (currentOrg === "Personal") {
+			return userDetails?.email?.charAt(0).toUpperCase() || user?.charAt(0).toUpperCase() || "P";
+		}
+		return currentOrg.charAt(0).toUpperCase();
+	};
+
+	const handleToggleNavbar = () => {
+		dispatch(toggleNavbar());
+	};
+
 	return (
-		<div style={styles.container}>
-			<nav style={styles.sidebar}>
-				{/* Logo/Header Section - Always show Kinople */}
-				<div style={styles.logoSection}>
-					<div
-						style={{ ...styles.logo, cursor: "pointer" }}
+		<div className={`navbar-container${navbarCollapsed ? " collapsed" : ""}`}>
+			<nav className="navbar-sidebar">
+				{/* Header Section */}
+				<div className="navbar-header">
+					<img
+						src={logoIcon}
+						alt="Kinople"
+						className="navbar-logo-icon"
 						onClick={() => {
 							if (isInSettings) {
 								handleBackFromSettings();
 							} else {
-								const orgId =
-									currentOrg === "Personal"
-										? null
-										: organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-								navigate(`/${user}`, {
-									state: {
-										organizationId: orgId,
-										organizationName: currentOrg,
-									},
-								});
+								navigate(`/${user}`);
 							}
 						}}
-					>
-						Kinople
-					</div>
-				</div>
-
-				{/* Workspace/Organization/Settings Section */}
-				<div style={styles.workspaceSection}>
-					{isInSettings ? (
-						// Show Settings header with back arrow
-						<div
-							style={{
-								...styles.orgHeader,
-								...styles.workspaceActive,
-								cursor: "pointer",
-							}}
-							onClick={handleBackFromSettings}
-						>
-							<div style={styles.backButton} title="Back to organization">
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-									<path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-								</svg>
-							</div>
-							<div style={styles.orgTitle}>Settings</div>
-						</div>
-					) : currentOrg === "Personal" ? (
-						// Show user workspace when Personal is selected
-						<div
-							style={{
-								...styles.workspaceActive,
-								cursor: "pointer",
-							}}
-							onClick={() => handleOrgSelect("Personal", null)}
-						>
-							<div style={styles.workspaceLabel}>
-								{userDetails?.email ? `${userDetails.email}'s Workspace` : user ? `${user}'s Workspace` : "User's Workspace"}
-							</div>
-						</div>
-					) : (
-						// Show organization header with back arrow when org is selected
-						<div
-							style={{
-								...styles.orgHeader,
-								...styles.workspaceActive,
-								cursor: "pointer",
-							}}
+						style={{ cursor: "pointer" }}
+					/>
+					{!navbarCollapsed && (
+						<span
+							className="navbar-logo-text"
 							onClick={() => {
-								const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-								handleOrgSelect("Personal", null);
-								// navigate(`/${user}`, {
-								// 	state: {
-								// 		organizationId: orgId,
-								// 		organizationName: currentOrg,
-								// 	},
-								// });
+								if (isInSettings) {
+									handleBackFromSettings();
+								} else {
+									navigate(`/${user}`);
+								}
 							}}
 						>
-							<div
-								style={styles.backButton}
-								onClick={(e) => {
-									e.stopPropagation();
-									handleOrgSelect("Personal", null);
-								}}
-								title="Back to workspace"
-							>
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-									<path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-								</svg>
-							</div>
-							<div style={styles.orgTitle}>{currentOrg}</div>
-						</div>
+							Kinople
+						</span>
 					)}
+					<PiSidebarSimple className={`navbar-sidebar-toggle${navbarCollapsed ? " collapsed" : ""}`} onClick={handleToggleNavbar} />
 				</div>
 
-				{/* Middle Section - Flexible space */}
-				<div style={styles.middleSection}>
-					{isInPersonalSetting ? (
-						<ul className="nav-list">
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "profile" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("profile");
-										navigate(`/${user}/settings`, {
-											state: { section: "profile" },
-										});
-									}}
-								>
-									Profile
+				{/* New Project Button */}
+				{!navbarCollapsed && (
+					<div className="navbar-new-project-wrapper">
+						<div className="navbar-new-project-button" onClick={handleNewProject}>
+							<PiPlus className="navbar-new-project-icon" />
+							<span className="navbar-new-project-text">New Project</span>
+						</div>
+					</div>
+				)}
+
+				{/* Organization Selector */}
+				{!navbarCollapsed && (
+					<div className="navbar-org-selector-container">
+						<div className="navbar-org-selector" onClick={handleOrgDropdownClick}>
+							<div className="navbar-org-badge">
+								<span className="navbar-org-badge-text">{getOrgBadgeLetter()}</span>
+							</div>
+							<div className="navbar-org-name-wrapper">
+								<span className="navbar-org-name">{currentOrg === "Personal" ? "Personal workspace" : ((currentOrg.length > 15) ? currentOrg.substring(0, 15) + "..." : currentOrg)}</span>
+								<PiCaretDown className="navbar-org-caret" />
+							</div>
+						</div>
+
+						{/* Organization Dropdown */}
+						{showOrgDropdown && (
+							<div className="navbar-org-dropdown">
+								{/* Personal Workspace */}
+								<div className="navbar-org-dropdown-item" onClick={() => handleOrgSelect("Personal", null)}>
+									<div className="navbar-org-dropdown-badge">
+										<span className="navbar-org-dropdown-badge-text">
+											{userDetails?.email?.charAt(0).toUpperCase() || user?.charAt(0).toUpperCase() || "P"}
+										</span>
+									</div>
+									<span className="navbar-org-dropdown-name">{"Personal workspace"}</span>
 								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "invitations" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("invitations");
-										navigate(`/${user}/settings`, {
-											state: { section: "invitations" },
-										});
-									}}
-								>
-									Invitations
+								{/* Organizations */}
+								{organizations.map((org) => (
+									<div
+										key={org.organization_id}
+										className="navbar-org-dropdown-item"
+										onClick={() => handleOrgSelect(org.organizationname, org.organization_id)}
+									>
+										<div className="navbar-org-dropdown-badge">
+											<span className="navbar-org-dropdown-badge-text">{org.organizationname.charAt(0).toUpperCase()}</span>
+										</div>
+										<span className="navbar-org-dropdown-name">{org.organizationname}</span>
+									</div>
+								))}
+								{/* New Organization */}
+								<div className="navbar-org-dropdown-new" onClick={handleCreateOrg}>
+									<PiPlus className="navbar-org-dropdown-new-icon" />
+									<span className="navbar-org-dropdown-new-text">New Organization</span>
 								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "billing" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("billing");
-										navigate(`/${user}/settings`, {
-											state: { section: "billing" },
-										});
-									}}
-								>
-									Billing & Usage
-								</div>
-							</li>
-						</ul>
-					) : isInOrgSetting ? (
-						<ul className="nav-list">
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "general" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("general");
-										const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-										if (orgId) {
-											navigate(`/${user}/organizations/${orgId}`, {
-												state: { section: "general" },
+							</div>
+						)}
+					</div>
+				)}
+
+				{/* Menu Section */}
+				{!navbarCollapsed &&
+					(isInSettings ? (
+						// Settings Menu
+						<div className="navbar-menu-section">
+							{isInPersonalSetting ? (
+								<>
+									<div
+										className={`navbar-settings-menu-item${selectedSettingsSection === "profile" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("profile");
+											navigate(`/${user}/settings`, {
+												state: { section: "profile" },
 											});
-										}
-									}}
-								>
-									General
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "members" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("members");
-										const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-										if (orgId) {
-											navigate(`/${user}/organizations/${orgId}`, {
-												state: { section: "members" },
+										}}
+									>
+										Profile
+									</div>
+									<div
+										className={`navbar-settings-menu-item${selectedSettingsSection === "invitations" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("invitations");
+											navigate(`/${user}/settings`, {
+												state: { section: "invitations" },
 											});
-										}
-									}}
-								>
-									Org Members
-								</div>
-							</li>
-							<li className="nav-item">
-								<div
-									className={`nav-link${selectedSettingsSection === "billing" ? " active" : ""}`}
-									onClick={() => {
-										setSelectedSettingsSection("billing");
-										const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
-										if (orgId) {
-											navigate(`/${user}/organizations/${orgId}`, {
+										}}
+									>
+										Invitations
+									</div>
+									<div
+										className={`navbar-settings-menu-item${selectedSettingsSection === "billing" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("billing");
+											navigate(`/${user}/settings`, {
 												state: { section: "billing" },
 											});
-										}
-									}}
-								>
-									Billing & Usage
-								</div>
-							</li>
-						</ul>
-					) : currentOrg === "Personal" ? (
-						// Show Organizations Section when Personal is selected
-						<>
-							<div style={styles.createOrgButton} onClick={handleCreateOrg}>
-								Create Organization
-							</div>
-							<div style={styles.organizationsContent}>
-								<div style={styles.sectionHeader}>
-									<span>Organizations</span>
-								</div>
-
-								{/* Organization List */}
-								<ul className="nav-list">
-									{organizations.length > 0 ? (
-										organizations.map((org) => (
-											<li className="nav-item" key={org.organization_id}>
-												<div
-													className="nav-link"
-													onClick={() => handleOrgSelect(org.organizationname, org.organization_id)}
-												>
-													{org.organizationname}
-												</div>
-											</li>
-										))
-									) : (
-										<div style={styles.emptyOrgs}>No organizations yet</div>
-									)}
-								</ul>
-							</div>
-						</>
-					) : null}
-				</div>
-
-				{/* Settings Section at Bottom - Always visible */}
-				<div style={styles.settingsSection}>
-					<ul className="nav-list nav-bottom">
-						<li className="nav-item">
-							<div className="nav-link" onClick={handleSettingsClick}>
-								<span className="icon-wrapper">
-									<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-										<path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
-									</svg>
-								</span>
-								Settings
-							</div>
-						</li>
-
-						{/* User Info Display with Dropdown */}
-						<li className="nav-item">
-							<div className="nav-link" onClick={handleUserDropdownClick}>
-								<div>
-									<div style={styles.userLabel}>User Name</div>
-									<div style={styles.userEmailDisplay}>
-										{loading ? "Loading..." : error ? "Error loading user" : userDetails?.email || user || "Email ID"}
+										}}
+									>
+										Billing & Usage
 									</div>
-								</div>
+								</>
+							) : isInOrgSetting ? (
+								<>
+									<div
+										className={`navbar-settings-menu-item${selectedSettingsSection === "general" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("general");
+											const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+											if (orgId) {
+												navigate(`/${user}/organizations/${orgId}`, {
+													state: { section: "general" },
+												});
+											}
+										}}
+									>
+										General
+									</div>
+									<div
+										className={`navbar-settings-menu-item${selectedSettingsSection === "members" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("members");
+											const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+											if (orgId) {
+												navigate(`/${user}/organizations/${orgId}`, {
+													state: { section: "members" },
+												});
+											}
+										}}
+									>
+										Org Members
+									</div>
+									<div
+										className={`navbar-settings-menu-item${selectedSettingsSection === "billing" ? " active" : ""}`}
+										onClick={() => {
+											setSelectedSettingsSection("billing");
+											const orgId = organizations.find((org) => org.organizationname === currentOrg)?.organization_id;
+											if (orgId) {
+												navigate(`/${user}/organizations/${orgId}`, {
+													state: { section: "billing" },
+												});
+											}
+										}}
+									>
+										Billing & Usage
+									</div>
+								</>
+							) : null}
+						</div>
+					) : (
+						// Regular Menu
+						<div className="navbar-menu-section">
+							<div className="navbar-menu-item" onClick={handleSettingsClick}>
+								<PiGear className="navbar-menu-icon" />
+								<span className="navbar-menu-text">Settings</span>
 							</div>
+							{currentOrg === "Personal" && (
+							<Link to={`/${user}/settings`} className="navbar-menu-item" style={{ textDecoration: 'none' }}>
+								<PiUser className="navbar-menu-icon" />
+								<span className="navbar-menu-text">Profile</span>
+							</Link>
+						)}
+						</div>
+					))}
 
-							{/* User Dropdown */}
-							{showUserDropdown && (
-								<ul className="nav-list" style={{ marginTop: "4px" }}>
-									<li className="nav-item">
-										<div className="nav-link" onClick={handleLogout}>
-											{loggingOut ? "Logging out..." : "Logout"}
-										</div>
-									</li>
-								</ul>
-							)}
-						</li>
-					</ul>
-				</div>
+				{/* Spacer */}
+				<div className="navbar-spacer"></div>
+
+				{/* Log Out */}
+				{!navbarCollapsed && (
+					<div className="navbar-logout" onClick={handleLogout}>
+						<PiSignOut className="navbar-logout-icon" />
+						<span className="navbar-logout-text">{loggingOut ? "Logging out..." : "Log Out"}</span>
+					</div>
+				)}
 			</nav>
 
 			{/* Keep the existing modal */}
 			{showModal && (
-				<div style={styles.modalOverlay} onClick={closeModal}>
-					<div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-						<div style={styles.modalHeader}>
-							<h3 style={styles.modalTitle}>User Details</h3>
-							<button style={styles.closeButton} onClick={closeModal}>
+				<div className="navbar-modal-overlay" onClick={closeModal}>
+					<div className="navbar-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="navbar-modal-header">
+							<h3 className="navbar-modal-title">User Details</h3>
+							<button className="navbar-close-button" onClick={closeModal}>
 								×
 							</button>
 						</div>
-						<div style={styles.modalContent}>
+						<div className="navbar-modal-content">
 							{loading ? (
-								<div style={styles.loading}>Loading user details...</div>
+								<div className="navbar-loading">Loading user details...</div>
 							) : error ? (
-								<div style={styles.error}>Error: {error}</div>
+								<div className="navbar-error">Error: {error}</div>
 							) : userDetails ? (
-								<div style={styles.userInfoModal}>
+								<div className="navbar-user-info-modal">
 									<p>
 										<strong>Username:</strong> {userDetails.email || user}
 									</p>
 								</div>
 							) : (
-								<div style={styles.userInfoModal}>
+								<div className="navbar-user-info-modal">
 									<p>
 										<strong>Username:</strong> {user}
 									</p>
 									<p>Loading user details...</p>
 								</div>
 							)}
-							<div style={styles.modalActions}>
-								<button style={loggingOut ? styles.buttonDisabled : styles.logoutButton} onClick={handleLogout} disabled={loggingOut}>
+							<div className="navbar-modal-actions">
+								<button
+									className={loggingOut ? "navbar-button-disabled" : "navbar-logout-button"}
+									onClick={handleLogout}
+									disabled={loggingOut}
+								>
 									{loggingOut ? "Logging out..." : "Logout"}
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* New Project Modal */}
+			{showNewProjectModal && (
+				<div className="navbar-modal-overlay" onClick={handleCloseNewProjectModal}>
+					<div className="new-project-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="new-project-content">
+							{/* Title */}
+							<div className="new-project-title-section">
+								<h2 className="new-project-title">New Project</h2>
+							</div>
+
+							{/* Form Fields */}
+							<div className="new-project-form">
+								{/* Name Input */}
+								<div className="new-project-field">
+									<label className="new-project-label">Name of the project</label>
+									<input
+										type="text"
+										name="projectName"
+										value={newProjectForm.projectName}
+										onChange={handleNewProjectFormChange}
+										placeholder="Name your project..."
+										className="new-project-input"
+									/>
+								</div>
+
+								{/* Type Dropdown */}
+								<div className="new-project-field">
+									<label className="new-project-label">Type of project</label>
+									<div className="new-project-select-wrapper">
+										<select
+											name="projectType"
+											value={newProjectForm.projectType}
+											onChange={handleNewProjectFormChange}
+											className="new-project-select"
+										>
+											<option value="" disabled>
+												Select type of project
+											</option>
+											<option value="Film">Film</option>
+											<option value="Episodic">Episodic</option>
+										</select>
+									</div>
+								</div>
+							</div>
+
+							{/* Add Team Members Section */}
+							<div className="new-project-team-section">
+								<div className="new-project-team-header">
+									<span className="new-project-label">Add team members</span>
+									<button className="new-project-add-member-btn" onClick={handleAddMember}>
+										<PiPlus className="new-project-add-member-icon" />
+										<span>Add Member</span>
+									</button>
+								</div>
+
+								{/* Members Box */}
+								<div className="new-project-members-box">
+									<p className="new-project-members-title">Members</p>
+
+									{/* Add All Checkbox */}
+									<div className="new-project-add-all" onClick={() => setAddAllMembers(!addAllMembers)}>
+										<div className={`new-project-checkbox ${addAllMembers ? "checked" : ""}`}>
+											{addAllMembers && <span>✓</span>}
+										</div>
+										<span className="new-project-add-all-text">Add all member from organization</span>
+									</div>
+
+									{/* Team Members List */}
+									{teamMembers.map((member) => (
+										<div key={member.id} className="new-project-member-row">
+											<div className="new-project-member-icon-box">
+												<PiUser className="new-project-member-icon" />
+											</div>
+											<div className="new-project-member-email-box">
+												<span className="new-project-member-email">{member.email}</span>
+											</div>
+											<div className="new-project-member-roles">
+												<span className="new-project-member-roles-text">{member.role}</span>
+												<PiCaretDown className="new-project-member-roles-caret" />
+											</div>
+											<PiX className="new-project-member-remove" onClick={() => handleRemoveTeamMember(member.id)} />
+										</div>
+									))}
+								</div>
+							</div>
+
+							{/* Error Message */}
+							{createProjectError && <div className="new-project-error">{createProjectError}</div>}
+
+							{/* Action Buttons */}
+							<div className="new-project-actions">
+								<button className="new-project-cancel-btn" onClick={handleCloseNewProjectModal} disabled={creatingProject}>
+									Cancel
+								</button>
+								<button
+									className={`new-project-create-btn ${creatingProject ? "disabled" : ""}`}
+									onClick={handleCreateProject}
+									disabled={creatingProject}
+								>
+									{creatingProject ? "Creating..." : "Create"}
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* New Organization Modal */}
+			{showNewOrgModal && (
+				<div className="navbar-modal-overlay" onClick={handleCloseNewOrgModal}>
+					<div className="new-org-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="new-org-content">
+							{/* Title */}
+							<div className="new-org-title-section">
+								<h2 className="new-org-title">New Organization</h2>
+							</div>
+
+							{/* Form Fields */}
+							<div className="new-org-form">
+								{/* Name Input */}
+								<div className="new-org-field">
+									<label className="new-org-label">Name of the organization</label>
+									<input
+										type="text"
+										value={newOrgName}
+										onChange={(e) => setNewOrgName(e.target.value)}
+										placeholder="Name your organization..."
+										className="new-org-input"
+									/>
+								</div>
+							</div>
+
+							{/* Add Organization Members Section */}
+							<div className="new-org-members-section">
+								<div className="new-org-members-header">
+									<span className="new-org-label">Add organization members</span>
+									<button className="new-org-add-member-btn" onClick={handleAddOrgMember}>
+										<PiPlus className="new-org-add-member-icon" />
+										<span>Add Member</span>
+									</button>
+								</div>
+
+								{/* Members Box */}
+								<div className="new-org-members-box">
+									<p className="new-org-members-title">Members</p>
+
+									{/* Organization Members List */}
+									{orgMembers.map((member) => (
+										<div key={member.id} className="new-org-member-row">
+											<div className="new-org-member-icon-box">
+												<PiUser className="new-org-member-icon" />
+											</div>
+											<div className="new-org-member-email-box">
+												<span className="new-org-member-email">{member.email}</span>
+											</div>
+											<div className="new-org-member-roles">
+												<span className="new-org-member-roles-text">{member.role}</span>
+												<PiCaretDown className="new-org-member-roles-caret" />
+											</div>
+											<PiX className="new-org-member-remove" onClick={() => handleRemoveOrgMember(member.id)} />
+										</div>
+									))}
+								</div>
+							</div>
+
+							{/* Error Message */}
+							{createOrgError && <div className="new-org-error">{createOrgError}</div>}
+
+							{/* Action Buttons */}
+							<div className="new-org-actions">
+								<button className="new-org-cancel-btn" onClick={handleCloseNewOrgModal} disabled={creatingOrg}>
+									Cancel
+								</button>
+								<button
+									className={`new-org-create-btn ${creatingOrg ? "disabled" : ""}`}
+									onClick={handleCreateOrganization}
+									disabled={creatingOrg}
+								>
+									{creatingOrg ? "Creating..." : "Create"}
 								</button>
 							</div>
 						</div>
@@ -593,377 +873,6 @@ const Navbar = () => {
 			)}
 		</div>
 	);
-};
-
-const styles = {
-	container: {
-		height: "100vh",
-		width: "240px",
-		backgroundColor: "#2C3440",
-		boxShadow: "2px 0 8px rgba(0,0,0,0.1)",
-		borderLeft: "none",
-		fontFamily: "'Inter', sans-serif",
-		position: "fixed",
-		top: 0,
-		left: 0,
-		zIndex: 100,
-		display: "flex",
-		flexDirection: "column",
-	},
-	sidebar: {
-		width: "100%",
-		height: "100%",
-		display: "flex",
-		flexDirection: "column",
-	},
-	logoSection: {
-		padding: "1rem",
-		borderBottom: "1px solid rgba(255,255,255,0.1)",
-	},
-	logo: {
-		fontSize: "1.5rem",
-		fontWeight: "bold",
-		color: "white",
-		textDecoration: "none",
-		cursor: "pointer",
-	},
-	workspaceSection: {
-		borderBottom: "1px solid rgba(255,255,255,0.1)",
-		transition: "background-color 0.2s ease-in-out",
-	},
-	workspaceActive: {
-		backgroundColor: "#4B9CD3",
-		padding: "1rem",
-		color: "white",
-	},
-	workspaceLabel: {
-		fontSize: "15px",
-		color: "#FFFFFF",
-		fontWeight: "500",
-	},
-
-	// Add the missing middleSection style with flex: 1
-	middleSection: {
-		flex: 1,
-		overflow: "auto",
-		paddingTop: "24px",
-	},
-	organizationsContent: {
-		padding: "0 16px",
-	},
-	sectionHeader: {
-		display: "flex",
-		justifyContent: "space-between",
-		alignItems: "center",
-		marginBottom: "12px",
-		fontSize: "13px",
-		fontWeight: "600",
-		color: "rgba(255,255,255,0.7)",
-		textTransform: "uppercase",
-		letterSpacing: "0.5px",
-	},
-	userIconSmall: {
-		width: "20px",
-		height: "20px",
-		borderRadius: "50%",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	orgList: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "12px",
-		listStyle: "none",
-		padding: 0,
-		margin: 0,
-	},
-	orgItem: {
-		padding: "10px 12px",
-		borderRadius: "8px",
-		cursor: "pointer",
-		fontSize: "15px",
-		fontWeight: "500",
-		color: "#FFFFFF",
-		transition: "background-color 0.2s ease-in-out",
-		textDecoration: "none",
-		display: "flex",
-		alignItems: "center",
-		"&:hover": {
-			backgroundColor: "#4B9CD3",
-			color: "white",
-		},
-	},
-	orgItemActive: {
-		backgroundColor: "#4B9CD3",
-		color: "white",
-	},
-	settingsSection: {
-		marginTop: "auto",
-		paddingBottom: "24px",
-		borderTop: "1px solid rgba(255,255,255,0.1)",
-	},
-	settingsButton: {
-		display: "flex",
-		alignItems: "center",
-		gap: "12px",
-		padding: "10px 12px",
-		borderRadius: "8px",
-		cursor: "pointer",
-		fontSize: "15px",
-		fontWeight: "500",
-		color: "#FFFFFF",
-		transition: "background-color 0.2s ease-in-out",
-		marginBottom: "12px",
-		"&:hover": {
-			backgroundColor: "#4B9CD3",
-			color: "white",
-		},
-	},
-
-	// Update userInfo to be clickable
-	userInfoContainer: {
-		position: "relative",
-	},
-	userInfo: {
-		padding: "10px 12px",
-		cursor: "pointer",
-		borderRadius: "8px",
-		transition: "background-color 0.2s ease-in-out",
-		"&:hover": {
-			backgroundColor: "#4B9CD3",
-			color: "white",
-		},
-	},
-	userLabel: {
-		fontSize: "12px",
-		color: "rgba(255,255,255,0.7)",
-		fontWeight: "400",
-		marginBottom: "2px",
-	},
-	userEmailDisplay: {
-		fontSize: "14px",
-		color: "#FFFFFF",
-		fontWeight: "500",
-	},
-
-	// Keep existing modal styles
-	modalOverlay: {
-		position: "fixed",
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-		backgroundColor: "rgba(0, 0, 0, 0.5)",
-		display: "flex",
-		justifyContent: "center",
-		alignItems: "center",
-		zIndex: 1001,
-	},
-	modal: {
-		backgroundColor: "white",
-		borderRadius: "8px",
-		width: "90%",
-		maxWidth: "400px",
-		boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-	},
-	modalHeader: {
-		display: "flex",
-		justifyContent: "space-between",
-		alignItems: "center",
-		padding: "1rem 1.5rem",
-		borderBottom: "1px solid #eee",
-	},
-	modalTitle: {
-		margin: 0,
-		fontSize: "1.2rem",
-		color: "#333",
-	},
-	closeButton: {
-		background: "none",
-		border: "none",
-		fontSize: "1.5rem",
-		cursor: "pointer",
-		color: "#666",
-		padding: "0",
-		width: "24px",
-		height: "24px",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	modalContent: {
-		padding: "1.5rem",
-	},
-	loading: {
-		textAlign: "center",
-		color: "#666",
-		padding: "1rem",
-	},
-	error: {
-		textAlign: "center",
-		color: "#dc3545",
-		padding: "1rem",
-	},
-	userInfoModal: {
-		marginBottom: "1.5rem",
-		color: "#333",
-	},
-	modalActions: {
-		display: "flex",
-		gap: "1rem",
-		justifyContent: "flex-end",
-	},
-	logoutButton: {
-		padding: "0.5rem 1rem",
-		backgroundColor: "#dc3545",
-		color: "white",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "pointer",
-		fontSize: "0.9rem",
-	},
-	buttonDisabled: {
-		padding: "0.5rem 1rem",
-		backgroundColor: "#ccc",
-		color: "#666",
-		border: "none",
-		borderRadius: "4px",
-		cursor: "not-allowed",
-		fontSize: "0.9rem",
-	},
-	emptyOrgs: {
-		padding: "1rem",
-		color: "rgba(255,255,255,0.6)",
-		fontSize: "0.85rem",
-		fontStyle: "italic",
-		textAlign: "center",
-	},
-	createOrgButton: {
-		padding: "10px 12px",
-		borderRadius: "8px",
-		cursor: "pointer",
-		fontSize: "15px",
-		fontWeight: "500",
-		color: "#FFFFFF",
-		backgroundColor: "#4B9CD3",
-		textAlign: "center",
-		margin: "20px",
-		marginTop: "0px",
-
-		transition: "background-color 0.2s ease-in-out",
-		"&:hover": {
-			backgroundColor: "#3A7CA5",
-		},
-	},
-	orgMenuContainer: {
-		position: "relative",
-	},
-	threeDots: {
-		width: "20px",
-		height: "20px",
-		borderRadius: "4px",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		cursor: "pointer",
-		transition: "background-color 0.2s",
-		"&:hover": {
-			backgroundColor: "rgba(255,255,255,0.1)",
-		},
-	},
-	orgMenuDropdown: {
-		position: "absolute",
-		top: "100%",
-		right: 0,
-		backgroundColor: "white",
-		border: "1px solid #ddd",
-		borderRadius: "4px",
-		boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
-		zIndex: 1000,
-		marginTop: "4px",
-		minWidth: "120px",
-	},
-	orgMenuItem: {
-		padding: "0.75rem 1rem",
-		color: "#333",
-		cursor: "pointer",
-		fontSize: "0.9rem",
-		transition: "background-color 0.2s",
-		"&:hover": {
-			backgroundColor: "#f5f5f5",
-		},
-	},
-
-	// Organization header styles
-	orgHeader: {
-		display: "flex",
-		alignItems: "center",
-		gap: "0.5rem",
-	},
-	backButton: {
-		width: "24px",
-		height: "24px",
-		borderRadius: "4px",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		cursor: "pointer",
-		transition: "background-color 0.2s",
-	},
-	orgTitle: {
-		fontSize: "0.9rem",
-		fontWeight: "500",
-		color: "rgba(255,255,255,0.8)",
-		flex: 1,
-	},
-
-	// Add new styles for settings menu
-	settingsMenu: {
-		padding: "1rem",
-	},
-	settingsMenuItem: {
-		padding: "0.75rem 1rem",
-		borderRadius: "8px",
-		cursor: "pointer",
-		fontSize: "0.9rem",
-		marginBottom: "0.25rem",
-		transition: "background-color 0.2s",
-		border: "2px solid transparent",
-	},
-	settingsMenuItemActive: {
-		backgroundColor: "rgba(75, 156, 211, 0.2)",
-		border: "2px solid #4B9CD3",
-		color: "#4B9CD3",
-		fontWeight: "600",
-	},
-
-	// Add dropdown styles
-	userDropdown: {
-		position: "absolute",
-		bottom: "100%",
-		left: 0,
-		right: 0,
-		backgroundColor: "#2C3440",
-		border: "1px solid rgba(255,255,255,0.1)",
-		borderRadius: "8px",
-		boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
-		zIndex: 1000,
-		marginBottom: "4px",
-	},
-	userDropdownItem: {
-		padding: "10px 12px",
-		color: "#FFFFFF",
-		cursor: "pointer",
-		fontSize: "15px",
-		fontWeight: "500",
-		transition: "background-color 0.2s ease-in-out",
-		borderRadius: "8px",
-		"&:hover": {
-			backgroundColor: "#4B9CD3",
-			color: "white",
-		},
-	},
 };
 
 export default Navbar;

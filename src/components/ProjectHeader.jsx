@@ -14,7 +14,6 @@ const ProjectHeader = () => {
 	const [selectedRoleId, setSelectedRoleId] = useState(2); // Default to Member
 	const [projectName, setProjectName] = useState(useSelector((state) => state.project.projectName));
 	const navigate = useNavigate();
-	if (projectName === "") navigate(`/${user}/${id}`);
 
 	const [adding, setAdding] = useState(false);
 	//	const [projectLoading, setProjectLoading] = useState(false);
@@ -26,28 +25,32 @@ const ProjectHeader = () => {
 		{ id: 3, name: "Viewer", description: "Can see the projects" },
 	];
 
-	// const fetchProjectDetails = async () => {
-	// 	try {
-	// 		setProjectLoading(true);
-	// 		const response = await fetchWithAuth(getApiUrl(`/api/project-name/${id}`), {
-	// 			method: "GET",
-	// 		});
+	const fetchProjectDetails = async () => {
+		try {
+			//setProjectLoading(true);
+			const response = await fetchWithAuth(getApiUrl(`/api/project-name/${id}`), {
+				method: "GET",
+			});
 
-	// 		if (!response.ok) {
-	// 			console.error("Failed to fetch project details");
-	// 			setProjectName(`Project - ${id}`); // Fallback to ID if fetch fails
-	// 			return;
-	// 		}
+			if (!response.ok) {
+				console.error("Failed to fetch project details");
+				setProjectName(`Project - ${id}`); // Fallback to ID if fetch fails
+				return;
+			}
 
-	// 		const data = await response.json();
-	// 		setProjectName(data.projectName || data.name || `Project - ${id}`);
-	// 	} catch (err) {
-	// 		console.error("Error fetching project details:", err);
-	// 		setProjectName(`Project - ${id}`); // Fallback to ID if error occurs
-	// 	} finally {
-	// 		setProjectLoading(false);
-	// 	}
-	// };
+			const data = await response.json();
+			setProjectName(data.projectName || data.name || `Project - ${id}`);
+		} catch (err) {
+			console.error("Error fetching project details:", err);
+			setProjectName(`Project - ${id}`); // Fallback to ID if error occurs
+		} finally {
+			//setProjectLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		fetchProjectDetails();
+	}, []);
 
 	const fetchTeamMembers = async () => {
 		try {

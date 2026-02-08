@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { getApiUrl, fetchWithAuth } from "../utils/api";
+import "../css/OrganizationDashboard.css";
 
 const OrganizationDashboard = () => {
 	const { user, organizationid } = useParams();
@@ -98,215 +99,62 @@ const OrganizationDashboard = () => {
 		}
 	};
 
-	const styles = {
-		page: {
-			background: "linear-gradient(135deg, #f5f7fa, #c3cfe2)",
-			minHeight: "100vh",
-			padding: "32px",
-			paddingLeft: `calc(270px + 32px)`,
-			fontFamily: "sans-serif",
-		},
-		header: {
-			marginBottom: "32px",
-		},
-		title: {
-			fontSize: "28px",
-			fontWeight: "bold",
-			color: "#1f2937",
-			marginBottom: "8px",
-		},
-		subtitle: {
-			fontSize: "16px",
-			color: "#6b7280",
-		},
-		card: {
-			backgroundColor: "#ffffff",
-			borderRadius: "12px",
-			boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-			padding: "24px",
-			marginBottom: "24px",
-		},
-		cardHeader: {
-			borderBottom: "1px solid #e5e7eb",
-			paddingBottom: "16px",
-			marginBottom: "16px",
-		},
-		cardTitle: {
-			fontSize: "20px",
-			fontWeight: "600",
-			color: "#1f2937",
-		},
-		cardSubtitle: {
-			fontSize: "14px",
-			color: "#6b7280",
-			marginTop: "4px",
-		},
-		label: {
-			display: "block",
-			fontSize: "14px",
-			fontWeight: "500",
-			color: "#374151",
-			marginBottom: "8px",
-		},
-		input: {
-			width: "100%",
-			padding: "10px 12px",
-			borderRadius: "8px",
-			border: "1px solid #d1d5db",
-			backgroundColor: "#f9fafb",
-			color: "#1f2937",
-			fontSize: "14px",
-		},
-		button: {
-			backgroundColor: "#4B9CD3",
-			color: "#ffffff",
-			padding: "10px 16px",
-			borderRadius: "8px",
-			border: "none",
-			fontSize: "14px",
-			fontWeight: "600",
-			cursor: "pointer",
-			transition: "background-color 0.3s",
-		},
-		table: {
-			width: "100%",
-			borderCollapse: "collapse",
-		},
-		tableHead: {
-			backgroundColor: "#f9fafb",
-		},
-		tableHeaderCell: {
-			padding: "12px 16px",
-			textAlign: "left",
-			fontSize: "12px",
-			fontWeight: "600",
-			color: "#6b7280",
-			textTransform: "uppercase",
-			borderBottom: "1px solid #e5e7eb",
-		},
-		tableRow: {
-			borderBottom: "1px solid #e5e7eb",
-		},
-		tableCell: {
-			padding: "16px",
-			fontSize: "14px",
-			color: "#374151",
-		},
-		modalOverlay: {
-			position: "fixed",
-			top: 0,
-			left: 0,
-			right: 0,
-			bottom: 0,
-			backgroundColor: "rgba(0, 0, 0, 0.5)",
-			display: "flex",
-			justifyContent: "center",
-			alignItems: "center",
-			zIndex: 1000,
-		},
-		modal: {
-			backgroundColor: "#ffffff",
-			borderRadius: "12px",
-			boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-			width: "100%",
-			maxWidth: "500px",
-			padding: "24px",
-		},
-		modalHeader: {
-			display: "flex",
-			justifyContent: "space-between",
-			alignItems: "center",
-			marginBottom: "16px",
-		},
-		modalTitle: {
-			fontSize: "20px",
-			fontWeight: "600",
-			color: "#1f2937",
-		},
-		closeButton: {
-			backgroundColor: "transparent",
-			border: "none",
-			color: "#6b7280",
-			fontSize: "24px",
-			cursor: "pointer",
-		},
-		modalBody: {
-			paddingTop: "16px",
-		},
-		modalFooter: {
-			display: "flex",
-			justifyContent: "flex-end",
-			gap: "12px",
-			marginTop: "24px",
-		},
-		cancelButton: {
-			backgroundColor: "#e5e7eb",
-			color: "#374151",
-			padding: "10px 16px",
-			borderRadius: "8px",
-			border: "none",
-			fontSize: "14px",
-			fontWeight: "600",
-			cursor: "pointer",
-		},
-	};
-
 	const renderGeneralContent = () => {
 		const activeProjects = organization.projects?.filter((p) => !p.deletetime) || [];
 		const archivedProjects = organization.projects?.filter((p) => p.deletetime) || [];
 
 		return (
-			<div style={{ ...styles.card, display: "flex", justifyContent: "space-between", flexDirection: "column" }}>
-				<div style={styles.cardHeader}>
-					<h3 style={styles.cardTitle}>General Settings</h3>
-					<p style={styles.cardSubtitle}>View your organization's details.</p>
+			<div className="org-card org-card-flex">
+				<div className="org-card-header">
+					<h3 className="org-card-title">General Settings</h3>
+					<p className="org-card-subtitle">View your organization's details.</p>
 				</div>
-				<div style={{ marginBottom: "24px", width: "90%" }}>
-					<label style={styles.label}>Organization Name</label>
-					<input type="text" value={organization.organizationname || ""} readOnly style={styles.input} />
+				<div className="org-input-wrapper">
+					<label className="org-label">Organization Name</label>
+					<input type="text" value={organization.organizationname || ""} readOnly className="org-input" />
 				</div>
 
-				<div style={styles.cardHeader}>
-					<h3 style={styles.cardTitle}>Active Projects</h3>
-					<p style={styles.cardSubtitle}>{activeProjects.length} active projects</p>
+				<div className="org-card-header">
+					<h3 className="org-card-title">Active Projects</h3>
+					<p className="org-card-subtitle">{activeProjects.length} active projects</p>
 				</div>
-				<table style={styles.table}>
-					<thead style={styles.tableHead}>
+				<table className="org-table">
+					<thead className="org-table-head">
 						<tr>
-							<th style={styles.tableHeaderCell}>Project Name</th>
-							<th style={styles.tableHeaderCell}>Type</th>
-							<th style={styles.tableHeaderCell}>Created</th>
+							<th className="org-table-header-cell">Project Name</th>
+							<th className="org-table-header-cell">Type</th>
+							<th className="org-table-header-cell">Created</th>
 						</tr>
 					</thead>
 					<tbody>
 						{activeProjects.map((p, idx) => (
-							<tr key={idx} style={styles.tableRow}>
-								<td style={styles.tableCell}>{p.projectname}</td>
-								<td style={styles.tableCell}>{p.projecttype}</td>
-								<td style={styles.tableCell}>{new Date(p.createtime).toLocaleDateString()}</td>
+							<tr key={idx} className="org-table-row">
+								<td className="org-table-cell">{p.projectname}</td>
+								<td className="org-table-cell">{p.projecttype}</td>
+								<td className="org-table-cell">{new Date(p.createtime).toLocaleDateString()}</td>
 							</tr>
 						))}
 					</tbody>
 				</table>
 
-				<div style={{ ...styles.cardHeader, marginTop: "24px" }}>
-					<h3 style={styles.cardTitle}>Archived Projects</h3>
-					<p style={styles.cardSubtitle}>{archivedProjects.length} archived projects</p>
+				<div className="org-card-header org-card-header-mt">
+					<h3 className="org-card-title">Archived Projects</h3>
+					<p className="org-card-subtitle">{archivedProjects.length} archived projects</p>
 				</div>
-				<table style={styles.table}>
-					<thead style={styles.tableHead}>
+				<table className="org-table">
+					<thead className="org-table-head">
 						<tr>
-							<th style={styles.tableHeaderCell}>Project Name</th>
-							<th style={styles.tableHeaderCell}>Type</th>
-							<th style={styles.tableHeaderCell}>Archived On</th>
+							<th className="org-table-header-cell">Project Name</th>
+							<th className="org-table-header-cell">Type</th>
+							<th className="org-table-header-cell">Archived On</th>
 						</tr>
 					</thead>
 					<tbody>
 						{archivedProjects.map((p, idx) => (
-							<tr key={idx} style={styles.tableRow}>
-								<td style={styles.tableCell}>{p.projectname}</td>
-								<td style={styles.tableCell}>{p.projecttype}</td>
-								<td style={styles.tableCell}>{new Date(p.deletetime).toLocaleDateString()}</td>
+							<tr key={idx} className="org-table-row">
+								<td className="org-table-cell">{p.projectname}</td>
+								<td className="org-table-cell">{p.projecttype}</td>
+								<td className="org-table-cell">{new Date(p.deletetime).toLocaleDateString()}</td>
 							</tr>
 						))}
 					</tbody>
@@ -317,66 +165,54 @@ const OrganizationDashboard = () => {
 
 	const renderMembersContent = () => (
 		<>
-			<div style={styles.card}>
-				<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+			<div className="org-card">
+				<div className="org-card-header org-card-header-flex">
 					<div>
-						<h3 style={styles.cardTitle}>Active Members</h3>
-						<p style={styles.cardSubtitle}>{organization.members?.length || 0} active members</p>
+						<h3 className="org-card-title">Active Members</h3>
+						<p className="org-card-subtitle">{organization.members?.length || 0} active members</p>
 					</div>
-					<button onClick={handleAddMemberClick} style={styles.button}>
+					<button onClick={handleAddMemberClick} className="org-button">
 						+ Invite Member
 					</button>
 				</div>
-				<table style={styles.table}>
-					<thead style={styles.tableHead}>
+				<table className="org-table">
+					<thead className="org-table-head">
 						<tr>
-							<th style={styles.tableHeaderCell}>User</th>
-							<th style={styles.tableHeaderCell}>Joined</th>
-							<th style={styles.tableHeaderCell}>Role</th>
-							<th style={styles.tableHeaderCell}>Projects</th>
+							<th className="org-table-header-cell">User</th>
+							<th className="org-table-header-cell">Joined</th>
+							<th className="org-table-header-cell">Role</th>
+							<th className="org-table-header-cell">Projects</th>
 						</tr>
 					</thead>
 					<tbody>
-						<tr style={styles.tableRow}>
-							<td style={styles.tableCell}>Sujith Kumar</td>
-							<td style={styles.tableCell}>{"23 / 4 / 2003"}</td>
-							<td style={styles.tableCell}>{"Admin"}</td>
-							<td style={styles.tableCell}>{1}</td>
-						</tr>
-						<tr style={styles.tableRow}>
-							<td style={styles.tableCell}>Prathamesh</td>
-							<td style={styles.tableCell}>{"23 / 4 / 2003"}</td>
-							<td style={styles.tableCell}>{"Member"}</td>
-							<td style={styles.tableCell}>{1}</td>
-						</tr>
 						{organization.members?.map((m, idx) => (
-							<tr key={idx} style={styles.tableRow}>
-								<td style={styles.tableCell}>{m.username}</td>
-								<td style={styles.tableCell}>{new Date(m.createtime).toLocaleDateString()}</td>
-								<td style={styles.tableCell}>{m.role_name === "Owner" ? "Admin" : m.role_name}</td>
-								<td style={styles.tableCell}>{m.projects || 0}</td>
+							<tr key={idx} className="org-table-row">
+								<td className="org-table-cell">{m.username}</td>
+								<td className="org-table-cell">{new Date(m.createtime).toLocaleDateString()}</td>
+								<td className="org-table-cell">{m.role_name === "Owner" ? "Admin" : m.role_name}</td>
+								<td className="org-table-cell">{m.projects || 0}</td>
 							</tr>
 						))}
 					</tbody>
 				</table>
-				<div style={{ ...styles.cardHeader, display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px" }}>
+				<div className="org-card-header org-card-header-flex org-card-header-mt">
 					<div>
-						<h3 style={styles.cardTitle}>Pending Invites</h3>
-						<p style={styles.cardSubtitle}>0 pending invites</p>
+						<h3 className="org-card-title">Pending Invites</h3>
+						<p className="org-card-subtitle">0 pending invites</p>
 					</div>
 				</div>
-				<table style={styles.table}>
-					<thead style={styles.tableHead}>
+				<table className="org-table">
+					<thead className="org-table-head">
 						<tr>
-							<th style={styles.tableHeaderCell}>User</th>
-							<th style={styles.tableHeaderCell}>Invited</th>
-							<th style={styles.tableHeaderCell}>Role</th>
+							<th className="org-table-header-cell">User</th>
+							<th className="org-table-header-cell">Invited</th>
+							<th className="org-table-header-cell">Role</th>
 						</tr>
 					</thead>
 					<tbody>
 						{/* Placeholder for pending invites */}
 						<tr>
-							<td colSpan="3" style={{ ...styles.tableCell, textAlign: "center" }}>
+							<td colSpan="3" className="org-table-cell org-table-cell-center">
 								No pending invites
 							</td>
 						</tr>
@@ -384,68 +220,55 @@ const OrganizationDashboard = () => {
 				</table>
 			</div>
 
-			<button
-				style={{
-					backgroundColor: "#4B9CD3",
-					color: "white",
-					padding: "15px",
-					borderRadius: "5px",
-					border: "None",
-					marginLeft: "45%",
-					//height: "50px",
-					marginTop: "50px",
-				}}
-			>
-				<b>Leave Organisation</b>
-			</button>
+			<button className="org-leave-button">Leave Organisation</button>
 		</>
 	);
 
 	const renderBillingContent = () => (
-		<div style={styles.card}>
-			<div style={styles.cardHeader}>
-				<h3 style={styles.cardTitle}>Billing</h3>
-				<p style={styles.cardSubtitle}>Manage your subscription and view invoices.</p>
+		<div className="org-card">
+			<div className="org-card-header">
+				<h3 className="org-card-title">Billing</h3>
+				<p className="org-card-subtitle">Manage your subscription and view invoices.</p>
 			</div>
 			<div>
 				<p>Active Projects: {organization.projects?.length || 0}</p>
-				<table style={styles.table}>
-					<thead style={styles.tableHead}>
+				<table className="org-table">
+					<thead className="org-table-head">
 						<tr>
-							<th style={styles.tableHeaderCell}>Project Name</th>
-							<th style={styles.tableHeaderCell}>Type</th>
-							<th style={styles.tableHeaderCell}>Plan</th>
-							<th style={styles.tableHeaderCell}>Date of Purchase</th>
-							<th style={styles.tableHeaderCell}>Date of Expiry</th>
+							<th className="org-table-header-cell">Project Name</th>
+							<th className="org-table-header-cell">Type</th>
+							<th className="org-table-header-cell">Plan</th>
+							<th className="org-table-header-cell">Date of Purchase</th>
+							<th className="org-table-header-cell">Date of Expiry</th>
 						</tr>
 					</thead>
 					<tbody>
 						{organization.projects?.map((p, idx) => (
-							<tr key={idx} style={styles.tableRow}>
-								<td style={styles.tableCell}>{p.projectname}</td>
-								<td style={styles.tableCell}>{p.projecttype}</td>
-								<td style={styles.tableCell}>-</td>
-								<td style={styles.tableCell}>{new Date(p.createtime).toLocaleDateString()}</td>
-								<td style={styles.tableCell}>-</td>
+							<tr key={idx} className="org-table-row">
+								<td className="org-table-cell">{p.projectname}</td>
+								<td className="org-table-cell">{p.projecttype}</td>
+								<td className="org-table-cell">-</td>
+								<td className="org-table-cell">{new Date(p.createtime).toLocaleDateString()}</td>
+								<td className="org-table-cell">-</td>
 							</tr>
 						))}
 					</tbody>
 				</table>
 				<p>No enterprise plan opted for this organization</p>
-				<button style={{ ...styles.button, backgroundColor: "#6b7280" }}>Contact Support</button>
+				<button className="org-button org-button-gray">Contact Support</button>
 			</div>
 		</div>
 	);
 
-	if (loading) return <div style={{ paddingLeft: "270px", paddingTop: "2rem" }}>Loading organization...</div>;
-	if (error) return <div style={{ paddingLeft: "270px", paddingTop: "2rem", color: "red" }}>Error: {error}</div>;
-	if (!organization) return <div style={{ paddingLeft: "270px", paddingTop: "2rem" }}>Organization not found</div>;
+	if (loading) return <div className="org-loading">Loading organization...</div>;
+	if (error) return <div className="org-error">Error: {error}</div>;
+	if (!organization) return <div className="org-loading">Organization not found</div>;
 
 	return (
-		<div style={styles.page}>
-			<div style={styles.header}>
-				<h1 style={styles.title}>{organization.organizationname}</h1>
-				<p style={styles.subtitle}>Manage your organization settings and members.</p>
+		<div className="org-page">
+			<div className="org-header">
+				<h1 className="org-title">{organization.organizationname}</h1>
+				<p className="org-subtitle">Manage your organization settings and members.</p>
 			</div>
 
 			{currentSection === "general" && renderGeneralContent()}
@@ -453,42 +276,41 @@ const OrganizationDashboard = () => {
 			{currentSection === "billing" && renderBillingContent()}
 
 			{showAddMemberModal && (
-				<div style={styles.modalOverlay}>
-					<div style={styles.modal}>
-						<div style={styles.modalHeader}>
-							<h3 style={styles.modalTitle}>Invite New Member</h3>
-							<button onClick={handleCloseModal} style={styles.closeButton}>
+				<div className="org-modal-overlay">
+					<div className="org-modal">
+						<div className="org-modal-header">
+							<h3 className="org-modal-title">Invite New Member</h3>
+							<button onClick={handleCloseModal} className="org-close-button">
 								&times;
 							</button>
 						</div>
 						<form onSubmit={handleAddMemberSubmit}>
-							<div style={styles.modalBody}>
-								<div style={{ marginBottom: "16px" }}>
-									<label style={styles.label}>Username or Email</label>
+							<div className="org-modal-body">
+								<div className="org-input-wrapper-modal">
+									<label className="org-label">Username or Email</label>
 									<input
 										type="text"
 										name="username"
 										value={memberFormData.username}
 										onChange={handleMemberInputChange}
 										required
-										style={styles.input}
+										className="org-input"
 										placeholder="Enter username or email"
 									/>
 								</div>
 								<div>
-									<label style={styles.label}>Role</label>
-									<select name="role_id" value={memberFormData.role_id} onChange={handleMemberInputChange} style={styles.input}>
+									<label className="org-label">Role</label>
+									<select name="role_id" value={memberFormData.role_id} onChange={handleMemberInputChange} className="org-input">
 										<option value={1}>Admin</option>
 										<option value={2}>Member</option>
-										<option value={3}>Viewer</option>
 									</select>
 								</div>
 							</div>
-							<div style={styles.modalFooter}>
-								<button type="button" onClick={handleCloseModal} style={styles.cancelButton}>
+							<div className="org-modal-footer">
+								<button type="button" onClick={handleCloseModal} className="org-cancel-button">
 									Cancel
 								</button>
-								<button type="submit" disabled={addMemberLoading} style={styles.button}>
+								<button type="submit" disabled={addMemberLoading} className="org-button">
 									{addMemberLoading ? "Inviting..." : "Send Invite"}
 								</button>
 							</div>

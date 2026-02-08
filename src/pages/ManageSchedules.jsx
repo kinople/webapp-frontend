@@ -1,1508 +1,2153 @@
-import ProjectHeader from '../components/ProjectHeader'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useState, useEffect } from 'react'
-import { getApiUrl } from '../utils/api';
+import ProjectHeader from "../components/ProjectHeader";
+import { useNavigate, useParams } from "react-router-dom";
+import { eachDayOfInterval, format } from "date-fns";
+import { useState, useEffect, useMemo } from "react";
+import { getApiUrl } from "../utils/api";
+import { DndContext, closestCenter, useDroppable, PointerSensor, KeyboardSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import DOODSchedule from "../components/DOOD";
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
+import "../css/ManageSchedules.css";
+import React from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import Loader from "../components/Loader";
+import Chatbot from "../components/Chatbot";
+import { useSelector } from "react-redux";
 
-const ManageSchedules = () => {
-    const navigate = useNavigate();
-    const { user, id, scheduleId } = useParams();
-    const [selectedElement, setSelectedElement] = useState('');
-    const [maxScenes, setMaxScenes] = useState('');
-    const [scheduleData, setScheduleData] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [isSaving, setIsSaving] = useState(false); // Add saving state
-    const [selectedDates, setSelectedDates] = useState([]);
-    const [originalDates, setOriginalDates] = useState([]); // Track original dates for comparison
-    const [chatInput, setChatInput] = useState('');
-    const [chatMessages, setChatMessages] = useState([]);
-    const [isSendingMessage, setIsSendingMessage] = useState(false);
-    const [dateRangeStart, setDateRangeStart] = useState('');
-    const [dateRangeEnd, setDateRangeEnd] = useState('');
-    const [datePickerMode, setDatePickerMode] = useState('single'); // 'single' or 'range'
-
-    useEffect(() => {
-        const fetchScheduleData = async () => {
-            try {
-                setIsLoading(true);
-                const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
-                if (!response.ok) {
-                    throw new Error('Failed to fetch schedule data');
-                }
-                const data = await response.json();
-                
-                setScheduleData(data);
-                
-                // Set default selected element to first location if available
-                if (data.locations && data.locations.length > 0) {
-                    setSelectedElement(`location-${data.locations[0]}`);
-                }
-            } catch (error) {
-                console.error('Error fetching schedule data:', error);
-                setError(error.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchScheduleData();
-    }, [id, scheduleId]);
-
-    // Parse date ranges from the API response format
-    const parseDateRanges = (dateArray) => {
-        const dates = [];
-        dateArray.forEach(dateItem => {
-            if (dateItem.includes('-') && dateItem.split('-').length > 3) {
-                // This is a date range (e.g., "2025-07-05-2025-07-07")
-                const parts = dateItem.split('-');
-                const startDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
-                const endDate = `${parts[3]}-${parts[4]}-${parts[5]}`;
-                
-                const current = new Date(startDate);
-                const end = new Date(endDate);
-                
-                while (current <= end) {
-                    dates.push(current.toISOString().split('T')[0]);
-                    current.setDate(current.getDate() + 1);
-                }
-            } else {
-                // Single date
-                dates.push(dateItem);
-            }
-        });
-        return dates;
-    };
-
-    // Get existing dates for the selected element
-    const getExistingDates = () => {
-        if (!selectedElement || !scheduleData?.dates) return [];
-        
-        const [type, name] = selectedElement.split('::');
-        const datesSection = type === 'location' ? 'locations' : 'characters';
-        const elementData = scheduleData.dates[datesSection]?.[name];
-        
-        if (elementData?.dates) {
-            return parseDateRanges(elementData.dates);
-        }
-        
-        return [];
-    };
-
-    // Check if dates have changed
-    const hasChanges = () => {
-        if (selectedDates.length !== originalDates.length) return true;
-        
-        const sortedSelected = [...selectedDates].sort();
-        const sortedOriginal = [...originalDates].sort();
-        
-        return !sortedSelected.every((date, index) => date === sortedOriginal[index]);
-    };
-
-    // Reset selected dates when element changes and load existing dates
-    const handleElementChange = (value) => {
-        console.log('Element Changed:', value);
-        setSelectedElement(value);
-        setDateRangeStart('');
-        setDateRangeEnd('');
-        
-        // Load existing dates for the selected element
-        if (value && scheduleData?.dates) {
-            const [type, name] = value.split('::');
-            const datesSection = type === 'location' ? 'locations' : 'characters';
-            const elementData = scheduleData.dates[datesSection]?.[name];
-            console.log('Element Data:', elementData);
-            
-            if (elementData?.dates) {
-                console.log('Found dates for:', name, elementData.dates);
-                const existingDates = parseDateRanges(elementData.dates);
-                setSelectedDates(existingDates);
-                setOriginalDates(existingDates); // Set original dates for comparison
-            } else {
-                setSelectedDates([]);
-                setOriginalDates([]);
-            }
-        } else {
-            setSelectedDates([]);
-            setOriginalDates([]);
-        }
-    };
-
-    // Update the useEffect to load dates when schedule data changes
-    useEffect(() => {
-        if (selectedElement && scheduleData?.dates) {
-            const existingDates = getExistingDates();
-            setSelectedDates(existingDates);
-            setOriginalDates(existingDates); // Set original dates for comparison
-        }
-    }, [scheduleData, selectedElement]);
-
-    // Reload given dates section data
-    const reloadGivenDatesData = async () => {
-        if (!selectedElement) return;
-        
-        try {
-            const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
-            if (!response.ok) {
-                throw new Error('Failed to reload schedule data');
-            }
-            const data = await response.json();
-            
-            // Update only the dates section of schedule data
-            setScheduleData(prev => ({
-                ...prev,
-                dates: data.dates
-            }));
-            
-            // Reload dates for current element
-            const [type, name] = selectedElement.split('-');
-            const elementDates = data.dates[type === 'location' ? 'locations' : 'characters'];
-            
-            if (elementDates && elementDates[name] && elementDates[name].dates) {
-                const refreshedDates = parseDateRanges(elementDates[name].dates);
-                setSelectedDates(refreshedDates);
-                setOriginalDates(refreshedDates); // Update original dates after reload
-            } else {
-                setSelectedDates([]);
-                setOriginalDates([]);
-            }
-            
-        } catch (error) {
-            console.error('Error reloading given dates data:', error);
-        }
-    };
-
-    // Create dropdown options from schedule data
-    const getElementOptions = () => {
-        if (!scheduleData) return [];
-        
-        const options = [];
-        
-        // Add locations
-        if (scheduleData.locations && Array.isArray(scheduleData.locations)) {
-            scheduleData.locations.forEach(location => {
-                // Use location name as the value since we have it in the dates data
-                options.push({
-                    value: `location::${location}`,
-                    label: `📍 ${location}`,
-                    type: 'location'
-                });
-
-            });
-        }
-        
-        // Add characters
-        if (scheduleData.characters && Array.isArray(scheduleData.characters)) {
-            scheduleData.characters.forEach(character => {
-                // Use character name as the value since we have it in the dates data
-                options.push({
-                    value: `character::${character}`,
-                    label: `👤 ${character}`,
-                    type: 'character'
-                });
-
-            });
-        }
-        
-        return options;
-    };
-
-    const getSelectedElementName = () => {
-        if (!selectedElement) return 'Select Element';
-        
-        const options = getElementOptions();
-        const selected = options.find(opt => opt.value === selectedElement);
-        return selected ? selected.label : 'Select Element';
-    };
-
-    const handleGenerateSchedule = async () => {
-        if (!maxScenes || isNaN(maxScenes) || maxScenes <= 0) {
-            alert('Please enter a valid number of scenes per day');
-            return;
-        }
-
-        try {
-            setIsGenerating(true);
-            const response = await fetch(getApiUrl(`/api/${id}/generate-schedule/${scheduleId}`), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    max_scenes_per_day: parseInt(maxScenes)
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate schedule');
-            }
-
-            const result = await response.json();
-            console.log('Schedule generated successfully:', result);
-            
-            // Add a small delay before refreshing to ensure backend processing is complete
-            setTimeout(async () => {
-                try {
-                    // Refresh the schedule data to get the generated schedule
-                    const refreshResponse = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
-                    if (refreshResponse.ok) {
-                        const refreshedData = await refreshResponse.json();
-                        setScheduleData(refreshedData);
-                        alert('Schedule generated successfully!');
-                    } else {
-                        throw new Error('Failed to refresh schedule data');
-                    }
-                } catch (refreshError) {
-                    console.error('Error refreshing schedule:', refreshError);
-                    // Don't show error to user since schedule was generated successfully
-                }
-            }, 1000); // 1 second delay
-            
-        } catch (error) {
-            console.error('Error generating schedule:', error);
-            alert('Failed to generate schedule: ' + error.message);
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
-    const handleSingleDateChange = (e) => {
-        const selectedDate = e.target.value;
-        if (selectedDate) {
-            setSelectedDates(prev => {
-                if (prev.includes(selectedDate)) {
-                    // Remove date if already selected
-                    return prev.filter(d => d !== selectedDate);
-                } else {
-                    // Add date if not selected
-                    return [...prev, selectedDate].sort();
-                }
-            });
-        }
-    };
-
-    const handleRangeStartChange = (e) => {
-        setDateRangeStart(e.target.value);
-    };
-
-    const handleRangeEndChange = (e) => {
-        setDateRangeEnd(e.target.value);
-    };
-
-    const addDateRange = () => {
-        if (!dateRangeStart || !dateRangeEnd) {
-            alert('Please select both start and end dates for the range');
-            return;
-        }
-
-        if (dateRangeStart > dateRangeEnd) {
-            alert('Start date must be before end date');
-            return;
-        }
-
-        // Generate all dates in the range
-        const rangeDates = [];
-        const currentDate = new Date(dateRangeStart);
-        const endDate = new Date(dateRangeEnd);
-
-        while (currentDate <= endDate) {
-            rangeDates.push(currentDate.toISOString().split('T')[0]);
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-
-        // Add range dates to selected dates (avoiding duplicates)
-        setSelectedDates(prev => {
-            const newDates = [...prev];
-            rangeDates.forEach(date => {
-                if (!newDates.includes(date)) {
-                    newDates.push(date);
-                }
-            });
-            return newDates.sort();
-        });
-
-        // Clear range inputs
-        setDateRangeStart('');
-        setDateRangeEnd('');
-    };
-
-    const removeDate = (dateToRemove) => {
-        setSelectedDates(prev => prev.filter(d => d !== dateToRemove));
-    };
-
-    const clearAllDates = () => {
-        setSelectedDates([]);
-        // Don't reset originalDates here - keep them for comparison
-        // This way, clearing dates when there were original dates will show as a change
-    };
-
-    const formatDisplayDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric'
-        });
-    };
-
-    // Generate calendar days for display
-    const generateCalendarDays = () => {
-        if (!scheduleData?.first_date || !scheduleData?.last_date) return [];
-        
-        const startDate = new Date(scheduleData.first_date);
-        const endDate = new Date(scheduleData.last_date);
-        
-        // Get the first Sunday of the week containing the start date
-        const firstSunday = new Date(startDate);
-        firstSunday.setDate(startDate.getDate() - startDate.getDay());
-        
-        // Get the last Saturday of the week containing the end date
-        const lastSaturday = new Date(endDate);
-        lastSaturday.setDate(endDate.getDate() + (6 - endDate.getDay()));
-        
-        const days = [];
-        const currentDate = new Date(firstSunday);
-        
-        while (currentDate <= lastSaturday) {
-            days.push(new Date(currentDate));
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        return days;
-    };
-
-    // Determine if a date is part of a range
-    const isDateInRange = (date) => {
-        const dateStr = date.toISOString().split('T')[0];
-        if (!selectedDates.includes(dateStr)) return false;
-        
-        const sortedDates = [...selectedDates].sort();
-        const dateIndex = sortedDates.indexOf(dateStr);
-        
-        // Check if this date is part of a consecutive sequence
-        const hasConsecutiveBefore = dateIndex > 0 && 
-            new Date(sortedDates[dateIndex - 1]).getTime() === date.getTime() - 24 * 60 * 60 * 1000;
-        const hasConsecutiveAfter = dateIndex < sortedDates.length - 1 && 
-            new Date(sortedDates[dateIndex + 1]).getTime() === date.getTime() + 24 * 60 * 60 * 1000;
-        
-        return hasConsecutiveBefore || hasConsecutiveAfter;
-    };
-
-    // Get the month and year for calendar header
-    const getCalendarMonthYear = () => {
-        if (!scheduleData?.first_date || !scheduleData?.last_date) return '';
-        
-        const startDate = new Date(scheduleData.first_date);
-        const endDate = new Date(scheduleData.last_date);
-        
-        const startMonth = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        const endMonth = endDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        
-        return startMonth === endMonth ? startMonth : `${startMonth} - ${endMonth}`;
-    };
-
-    // Handle calendar date click
-    const handleCalendarDateClick = (date) => {
-        const dateStr = date.toISOString().split('T')[0];
-        const scheduleStart = new Date(scheduleData.first_date);
-        const scheduleEnd = new Date(scheduleData.last_date);
-        
-        // Only allow selection of dates within the schedule range
-        if (date < scheduleStart || date > scheduleEnd) return;
-        
-        setSelectedDates(prev => {
-            if (prev.includes(dateStr)) {
-                return prev.filter(d => d !== dateStr);
-            } else {
-                return [...prev, dateStr].sort();
-            }
-        });
-    };
-
-    const saveDates = async () => {
-        if (!selectedElement) {
-            alert('Please select an element');
-            return;
-        }
-
-        try {
-            setIsSaving(true); // Set saving state to true
-            const [type, name] = selectedElement.split('::');
-            const datesSection = type === 'location' ? 'locations' : 'characters';
-            
-            console.log('Schedule Data:', scheduleData);
-            console.log('Selected Type:', type);
-            console.log('Selected Name:', name);
-            console.log('Dates Section:', scheduleData.dates?.[datesSection]);
-            
-            const elementData = scheduleData.dates?.[datesSection]?.[name];
-            console.log('Element Data:', elementData);
-            
-            if (!elementData || !elementData.id) {
-                throw new Error(`Could not find data for ${type} "${name}"`);
-            }
-            
-            const elementId = elementData.id;
-            console.log('Element ID:', elementId);
-            
-            const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}/dates`), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    element_type: type,
-                    element_name: name,
-                    element_id: elementId,
-                    dates: selectedDates // Array of date strings (can be empty)
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to save dates');
-            }
-
-            const result = await response.json();
-            console.log('Dates saved successfully:', result);
-            
-            // Reload the given dates section
-            await reloadGivenDatesData();
-            
-            alert('Dates saved successfully!');
-            
-        } catch (error) {
-            console.error('Error saving dates:', error);
-            alert('Failed to save dates: ' + error.message);
-        } finally {
-            setIsSaving(false); // Reset saving state
-        }
-    };
-
-    // Get scheduled dates for the selected element
-    const getScheduledDates = () => {
-        if (!selectedElement || !scheduleData?.schedule?.actor_schedule) return [];
-        
-        const [type, name] = selectedElement.split('-');
-        
-        if (type === 'character') {
-            const actorSchedule = scheduleData.schedule.actor_schedule[name];
-            return actorSchedule ? actorSchedule.dates || [] : [];
-        } else if (type === 'location') {
-            // For locations, get all dates where this location is used
-            const scheduledDates = [];
-            const scheduleByDay = scheduleData.schedule.schedule_by_day;
-            
-            if (scheduleByDay) {
-                Object.values(scheduleByDay).forEach(daySchedule => {
-                    const hasLocation = daySchedule.scenes?.some(scene => 
-                        scene.location_name === name
-                    );
-                    if (hasLocation) {
-                        scheduledDates.push(daySchedule.date);
-                    }
-                });
-            }
-            
-            return scheduledDates;
-        }
-        
-        return [];
-    };
-
-    // Generate calendar for scheduled dates
-    const generateScheduledCalendar = () => {
-        const scheduledDates = getScheduledDates();
-        if (scheduledDates.length === 0) return null;
-        
-        return (
-            <div style={styles.scheduledCalendarContainer}>
-                <div style={styles.calendarHeader}>
-                    Scheduled Dates ({scheduledDates.length})
-                </div>
-                <div style={styles.calendarGrid}>
-                    <div style={styles.calendarDaysHeader}>
-                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                            <div key={day} style={styles.calendarDayHeader}>
-                                {day}
-                            </div>
-                        ))}
-                    </div>
-                    <div style={styles.calendarDaysGrid}>
-                        {generateCalendarDays().map((date, index) => {
-                            const dateStr = date.toISOString().split('T')[0];
-                            const isScheduled = scheduledDates.includes(dateStr);
-                            const isWithinSchedule = date >= new Date(scheduleData.first_date) && 
-                                                   date <= new Date(scheduleData.last_date);
-                            const isOtherMonth = date.getMonth() !== new Date(scheduleData.first_date).getMonth() && 
-                                               date.getMonth() !== new Date(scheduleData.last_date).getMonth();
-                            
-                            return (
-                                <div
-                                    key={index}
-                                    style={{
-                                        ...styles.calendarDay,
-                                        ...(isScheduled ? styles.calendarDayScheduled : {}),
-                                        ...(isOtherMonth ? styles.calendarDayOtherMonth : {}),
-                                        ...(!isWithinSchedule ? styles.calendarDayDisabled : {}),
-                                        cursor: 'default' // Remove pointer cursor for scheduled dates
-                                    }}
-                                >
-                                    {date.getDate()}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    // Format schedule for display
-    const formatScheduleForDisplay = (schedule) => {
-        if (typeof schedule === 'string') return schedule;
-        
-        if (schedule?.schedule_by_day) {
-            let formattedSchedule = '';
-            Object.values(schedule.schedule_by_day).forEach(day => {
-                formattedSchedule += `Date: ${day.date}\n`;
-                formattedSchedule += `Scenes:\n`;
-                day.scenes?.forEach(scene => {
-                    formattedSchedule += `  Scene ${scene.scene_number} at ${scene.location_name}\n`;
-                    formattedSchedule += `  Characters: ${scene.character_names.join(', ')}\n\n`;
-                });
-                formattedSchedule += '\n';
-            });
-            return formattedSchedule;
-        }
-        
-        return JSON.stringify(schedule, null, 2);
-    };
-
-    const handleSendMessage = async () => {
-        if (!chatInput.trim()) return;
-
-        try {
-            setIsSendingMessage(true);
-            
-            // Add user message to chat
-            const userMessage = {
-                type: 'user',
-                content: chatInput,
-                timestamp: new Date().toISOString()
-            };
-            setChatMessages(prev => [...prev, userMessage]);
-            
-            // Clear input
-            setChatInput('');
-
-            // Send message to backend
-            const response = await fetch(getApiUrl(`/api/${id}/generate-schedule/${scheduleId}/extra-constraints`), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: chatInput
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to process message');
-            }
-
-            const result = await response.json();
-            
-            // Add assistant response to chat
-            const assistantMessage = {
-                type: 'assistant',
-                content: result.message,
-                constraints: result.extra_constraints,
-                timestamp: new Date().toISOString()
-            };
-            setChatMessages(prev => [...prev, assistantMessage]);
-
-            // Always refresh schedule data after a message response
-            const refreshResponse = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
-            if (refreshResponse.ok) {
-                const refreshedData = await refreshResponse.json();
-                console.log('Refreshed Schedule Data:', refreshedData);
-                setScheduleData(refreshedData);
-            } else {
-                console.error('Failed to refresh schedule data');
-            }
-
-        } catch (error) {
-            console.error('Error sending message:', error);
-            // Add error message to chat
-            const errorMessage = {
-                type: 'error',
-                content: `Error: ${error.message}`,
-                timestamp: new Date().toISOString()
-            };
-            setChatMessages(prev => [...prev, errorMessage]);
-        } finally {
-            setIsSendingMessage(false);
-        }
-    };
-
-    return (
-        <div style={styles.pageContainer}>
-            <ProjectHeader />
-            <div style={styles.header}>
-                <div>
-                    <h2 style={styles.pageTitle}>Scheduling</h2>
-                </div>
-                <div style={styles.headerRight}>
-                    <div style={styles.dateInfo}>
-                        <div>Estd. Start Date: {scheduleData?.first_date || 'Not set'}</div>
-                        <div>Estd. End Date: {scheduleData?.last_date || 'Not set'}</div>
-                    </div>
-                </div>
-            </div>
-            <div style={styles.content}>
-                <div style={styles.leftPanel}>
-                    <div style={styles.elementSelector}>
-                        <div style={styles.selectorHeader}>
-                            <span>&lt;</span>
-                            <select 
-                                value={selectedElement}
-                                onChange={(e) => handleElementChange(e.target.value)}
-                                style={styles.elementDropdown}
-                            >
-                                <option value="">Select Element</option>
-                                {getElementOptions().map((option, index) => (
-                                    <option key={index} value={option.value}>
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
-                            <span>&gt;</span>
-                        </div>
-                    </div>
-                    
-                    <div style={styles.givenDates}>
-                        <div style={styles.sectionTitle}>Given Dates</div>
-                        {selectedElement ? (
-                            <div style={styles.datePickerContainer}>
-                                {selectedDates.length === 0 && !isSaving && (
-                                    <div style={styles.existingDatesInfo}>
-                                        <span style={styles.existingDatesLabel}>
-                                            {`No dates selected for ${getSelectedElementName()}`}
-                                        </span>
-                                    </div>
-                                )}
-                                
-                                <div style={styles.modeSelector}>
-                                    <label style={styles.modeLabel}>
-                                        <input
-                                            type="radio"
-                                            value="single"
-                                            checked={datePickerMode === 'single'}
-                                            onChange={(e) => setDatePickerMode(e.target.value)}
-                                            style={styles.radioInput}
-                                        />
-                                        Single Dates
-                                    </label>
-                                    <label style={styles.modeLabel}>
-                                        <input
-                                            type="radio"
-                                            value="range"
-                                            checked={datePickerMode === 'range'}
-                                            onChange={(e) => setDatePickerMode(e.target.value)}
-                                            style={styles.radioInput}
-                                        />
-                                        Date Range
-                                    </label>
-                                </div>
-
-                                {datePickerMode === 'single' ? (
-                                    <input
-                                        type="date"
-                                        min={scheduleData?.first_date}
-                                        max={scheduleData?.last_date}
-                                        onChange={handleSingleDateChange}
-                                        style={styles.datePicker}
-                                    />
-                                ) : (
-                                    <div style={styles.dateRangeContainer}>
-                                        <div style={styles.dateRangeInputs}>
-                                            <input
-                                                type="date"
-                                                value={dateRangeStart}
-                                                min={scheduleData?.first_date}
-                                                max={scheduleData?.last_date}
-                                                onChange={handleRangeStartChange}
-                                                style={styles.dateRangeInput}
-                                                placeholder="Start Date"
-                                            />
-                                            <span style={styles.dateRangeSeparator}>to</span>
-                                            <input
-                                                type="date"
-                                                value={dateRangeEnd}
-                                                min={dateRangeStart || scheduleData?.first_date}
-                                                max={scheduleData?.last_date}
-                                                onChange={handleRangeEndChange}
-                                                style={styles.dateRangeInput}
-                                                placeholder="End Date"
-                                            />
-                                        </div>
-                                        <button
-                                            onClick={addDateRange}
-                                            style={styles.addRangeButton}
-                                            disabled={!dateRangeStart || !dateRangeEnd}
-                                        >
-                                            Add Range
-                                        </button>
-                                    </div>
-                                )}
-
-                                {(selectedDates.length > 0 || hasChanges()) && (
-                                    <div style={styles.selectedDatesList}>
-                                        <div style={styles.selectedDatesHeader}>
-                                            <span>Selected Dates ({selectedDates.length}):</span>
-                                            <div style={styles.dateActions}>
-                                                {hasChanges() && (
-                                                    <button
-                                                        onClick={saveDates}
-                                                        style={styles.saveDatesButton}
-                                                        title="Save dates"
-                                                        disabled={isSaving}
-                                                    >
-                                                        {isSaving ? 'Saving...' : 'Save Dates'}
-                                                    </button>
-                                                )}
-                                                {selectedDates.length > 0 && (
-                                                    <button
-                                                        onClick={clearAllDates}
-                                                        style={styles.clearAllButton}
-                                                        title="Clear all dates"
-                                                    >
-                                                        Clear All
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {selectedDates.length > 0 && (
-                                            <div style={styles.calendarContainer}>
-                                                <div style={styles.calendarHeader}>
-                                                    {getCalendarMonthYear()}
-                                                </div>
-                                                <div style={styles.calendarGrid}>
-                                                    <div style={styles.calendarDaysHeader}>
-                                                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                                                            <div key={day} style={styles.calendarDayHeader}>
-                                                                {day}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    <div style={styles.calendarDaysGrid}>
-                                                        {generateCalendarDays().map((date, index) => {
-                                                            const dateStr = date.toISOString().split('T')[0];
-                                                            const isSelected = selectedDates.includes(dateStr);
-                                                            const isInRange = isDateInRange(date);
-                                                            const isWithinSchedule = date >= new Date(scheduleData.first_date) && 
-                                                                                    date <= new Date(scheduleData.last_date);
-                                                            const isOtherMonth = date.getMonth() !== new Date(scheduleData.first_date).getMonth() && 
-                                                                                date.getMonth() !== new Date(scheduleData.last_date).getMonth();
-                                                            
-                                                            return (
-                                                                <div
-                                                                    key={index}
-                                                                    style={{
-                                                                        ...styles.calendarDay,
-                                                                        ...(isSelected && isInRange ? styles.calendarDayRangeSelected : {}),
-                                                                        ...(isSelected && !isInRange ? styles.calendarDaySingleSelected : {}),
-                                                                        ...(isOtherMonth ? styles.calendarDayOtherMonth : {}),
-                                                                        ...(!isWithinSchedule ? styles.calendarDayDisabled : {})
-                                                                    }}
-                                                                    onClick={() => handleCalendarDateClick(date)}
-                                                                >
-                                                                    {date.getDate()}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div style={styles.calendarPlaceholder}>
-                                Select an element to choose dates
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={styles.scheduledDates}>
-                        <div style={styles.sectionTitle}>Scheduled Dates</div>
-                        {selectedElement && scheduleData?.schedule ? (
-                            generateScheduledCalendar() || (
-                                <div style={styles.datesPlaceholder}>
-                                    No scheduled dates for {getSelectedElementName()}
-                                </div>
-                            )
-                        ) : (
-                            <div style={styles.datesPlaceholder}>
-                                {selectedElement 
-                                    ? 'Generate schedule to see scheduled dates'
-                                    : 'Select an element to see scheduled dates'
-                                }
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div style={styles.centerPanel}>
-                    <div style={styles.scheduleHeader}>Rough Schedule</div>
-                    <div style={styles.maxPagesSection}>
-                        <label style={styles.maxPagesLabel}>
-                            Max. number of scenes per day - 
-                        </label>
-                        <input 
-                            type="number"
-                            value={maxScenes}
-                            onChange={(e) => setMaxScenes(e.target.value)}
-                            style={styles.pageInput}
-                            placeholder="5"
-                            min="1"
-                        />
-                        <button 
-                            style={styles.generateButton}
-                            onClick={handleGenerateSchedule}
-                            disabled={isGenerating}
-                        >
-                            {isGenerating ? 'GENERATING...' : 'GENERATE'}
-                        </button>
-                    </div>
-                    {scheduleData?.schedule ? (
-                        <div style={styles.scheduleContent}>
-                            <pre style={styles.scheduleDisplay}>
-                                {formatScheduleForDisplay(scheduleData.schedule)}
-                            </pre>
-                        </div>
-                    ) : (
-                        <div style={styles.emptyScheduleSection}>
-                            <div style={styles.emptyScheduleMessage}>
-                                Generate rough schedule
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div style={styles.rightPanel}>
-                    <div style={styles.scheduleHeader}>Scheduling Assistant</div>
-                    <div style={styles.chatContainer}>
-                        <div style={styles.chatMessages}>
-                            <div style={styles.welcomeMessage}>
-                                Hello! I'm Kino, your scheduling assistant. I can help you with:
-                                <ul style={styles.assistantList}>
-                                    <li>Understanding the current schedule</li>
-                                    <li>Suggesting optimal shooting dates</li>
-                                    <li>Adding scheduling constraints</li>
-                                </ul>
-                                How can I assist you today?
-                            </div>
-                            {chatMessages.map((message, index) => (
-                                <div 
-                                    key={index} 
-                                    style={{
-                                        ...styles.messageContainer,
-                                        ...(message.type === 'user' ? styles.userMessage : {}),
-                                        ...(message.type === 'assistant' ? styles.assistantMessage : {}),
-                                        ...(message.type === 'error' ? styles.errorMessage : {})
-                                    }}
-                                >
-                                    <div style={styles.messageContent}>
-                                        {message.content}
-                                    </div>
-                                    {message.constraints && (
-                                        <div style={styles.constraintsContainer}>
-                                            <div style={styles.constraintsHeader}>Added Constraints:</div>
-                                            <pre style={styles.constraints}>
-                                                {JSON.stringify(message.constraints, null, 2)}
-                                            </pre>
-                                        </div>
-                                    )}
-                                    <div style={styles.messageTimestamp}>
-                                        {new Date(message.timestamp).toLocaleTimeString()}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div style={styles.chatInputContainer}>
-                            <input 
-                                type="text" 
-                                value={chatInput}
-                                onChange={(e) => setChatInput(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                                placeholder="Type your message here..."
-                                style={styles.chatInput}
-                                disabled={isSendingMessage}
-                            />
-                            <button 
-                                style={{
-                                    ...styles.sendButton,
-                                    ...(isSendingMessage ? styles.sendButtonDisabled : {})
-                                }}
-                                onClick={handleSendMessage}
-                                disabled={isSendingMessage}
-                            >
-                                {isSendingMessage ? 'Sending...' : 'Send'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    )
+function formatPageEights(pageEights) {
+	if (!pageEights) return "N/A";
+	var whole = pageEights.split("/")[0];
+	whole = parseInt(whole);
+	if (whole > 8) {
+		whole = Math.floor(whole / 8);
+		var eighths = whole % 8;
+		return `${whole}  ${eighths}/8`;
+	}
+	return pageEights;
 }
 
-const styles = {
-    pageContainer: {
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        backgroundColor: '#fff',
-    },
-    header: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        padding: '1rem 2rem',
-        borderBottom: '1px solid #eee',
-        backgroundColor: '#fff',
-    },
-    pageTitle: {
-        fontSize: '1.1rem',
-        fontWeight: 'normal',
-        margin: '0.25rem 0 0 0',
-        color: '#555',
-    },
-    headerRight: {
-        textAlign: 'right',
-    },
-    dateInfo: {
-        fontSize: '0.9rem',
-        color: '#555',
-        lineHeight: '1.4',
-    },
-    content: {
-        display: 'flex',
-        flex: 1,
-        minHeight: 'calc(100vh - 120px)',
-    },
-    leftPanel: {
-        width: '280px',
-        borderRight: '1px solid #ccc',
-        backgroundColor: '#fff',
-        display: 'flex',
-        flexDirection: 'column',
-    },
-    elementSelector: {
-        padding: '15px',
-        borderBottom: '1px solid #ccc',
-        textAlign: 'center',
-    },
-    selectorHeader: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '10px',
-        fontSize: '0.9rem',
-    },
-    elementDropdown: {
-        padding: '4px 8px',
-        border: '1px solid #ccc',
-        borderRadius: '4px',
-        fontSize: '0.9rem',
-        backgroundColor: '#fff',
-        cursor: 'pointer',
-        minWidth: '140px',
-        textAlign: 'center',
-    },
-    elementName: {
-        fontWeight: '500',
-    },
-    givenDates: {
-        padding: '15px',
-        borderBottom: '1px solid #ccc',
-        flex: 1,
-    },
-    scheduledDates: {
-        padding: '15px',
-        flex: 1,
-    },
-    sectionTitle: {
-        fontSize: '0.9rem',
-        fontWeight: '500',
-        marginBottom: '10px',
-        textAlign: 'center',
-    },
-    dateColumns: {
-        display: 'flex',
-        marginBottom: '15px',
-    },
-    columnHeader: {
-        flex: 1,
-        textAlign: 'center',
-        fontSize: '0.9rem',
-        fontWeight: '500',
-        paddingBottom: '5px',
-        borderBottom: '1px solid #ccc',
-    },
-    datePickerContainer: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-    },
-    modeSelector: {
-        display: 'flex',
-        gap: '12px',
-        marginBottom: '10px',
-    },
-    modeLabel: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '4px',
-        fontSize: '0.8rem',
-        color: '#333',
-        cursor: 'pointer',
-    },
-    radioInput: {
-        margin: '0',
-        cursor: 'pointer',
-    },
-    datePicker: {
-        padding: '8px',
-        border: '1px solid #ccc',
-        borderRadius: '4px',
-        fontSize: '0.9rem',
-        backgroundColor: '#fff',
-        cursor: 'pointer',
-        width: '100%',
-    },
-    dateRangeContainer: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-    },
-    dateRangeInputs: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '4px',
-        flexWrap: 'wrap',
-    },
-    dateRangeInput: {
-        padding: '6px',
-        border: '1px solid #ccc',
-        borderRadius: '4px',
-        fontSize: '0.75rem',
-        backgroundColor: '#fff',
-        cursor: 'pointer',
-        minWidth: '100px',
-        flex: 1,
-    },
-    dateRangeSeparator: {
-        fontSize: '0.8rem',
-        color: '#666',
-        fontWeight: '500',
-    },
-    addRangeButton: {
-        padding: '6px 12px',
-        backgroundColor: '#007bff',
-        color: 'white',
-        border: 'none',
-        borderRadius: '4px',
-        fontSize: '0.8rem',
-        cursor: 'pointer',
-        alignSelf: 'flex-start',
-        '&:disabled': {
-            backgroundColor: '#ccc',
-            cursor: 'not-allowed',
-        }
-    },
-    selectedDatesList: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-    },
-    selectedDatesHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontSize: '0.8rem',
-        fontWeight: '500',
-        color: '#333',
-        marginBottom: '8px',
-    },
-    dateActions: {
-        display: 'flex',
-        gap: '8px',
-        alignItems: 'center',
-    },
-    saveDatesButton: {
-        background: '#28a745',
-        color: 'white',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '0.7rem',
-        fontWeight: '500',
-        padding: '4px 8px',
-        transition: 'background-color 0.2s',
-        '&:hover': {
-            backgroundColor: '#218838',
-        },
-        '&:disabled': {
-            backgroundColor: '#ccc',
-            cursor: 'not-allowed',
-        }
-    },
-    clearAllButton: {
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        fontSize: '0.7rem',
-        color: '#dc3545',
-        textDecoration: 'underline',
-        padding: '2px 4px',
-    },
-    selectedDatesContainer: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-        maxHeight: '150px',
-        overflowY: 'auto',
-    },
-    selectedDateItem: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '6px 8px',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '4px',
-        border: '1px solid #e9ecef',
-    },
-    selectedDateText: {
-        fontSize: '0.8rem',
-        color: '#333',
-    },
-    removeDateButton: {
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        fontSize: '16px',
-        fontWeight: 'bold',
-        color: '#dc3545',
-        padding: '2px 6px',
-        borderRadius: '3px',
-        transition: 'background-color 0.2s',
-        '&:hover': {
-            backgroundColor: 'rgba(220, 53, 69, 0.1)',
-        }
-    },
-    calendarPlaceholder: {
-        fontSize: '0.8rem',
-        color: '#999',
-        textAlign: 'center',
-        padding: '20px 5px',
-        fontStyle: 'italic',
-    },
-    datesPlaceholder: {
-        fontSize: '0.8rem',
-        color: '#999',
-        textAlign: 'center',
-        padding: '20px 5px',
-        fontStyle: 'italic',
-    },
-    centerPanel: {
-        width: '50%',
-        borderRight: '1px solid #ccc',
-        backgroundColor: '#fff',
-        display: 'flex',
-        flexDirection: 'column',
-    },
-    rightPanel: {
-        flex: 1,
-        backgroundColor: '#fff',
-        display: 'flex',
-        flexDirection: 'column',
-    },
-    chatContainer: {
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '15px',
-    },
-    chatMessages: {
-        flex: 1,
-        overflowY: 'auto',
-        marginBottom: '15px',
-    },
-    welcomeMessage: {
-        backgroundColor: '#f8f9fa',
-        padding: '15px',
-        borderRadius: '8px',
-        fontSize: '0.9rem',
-        color: '#333',
-        lineHeight: '1.4',
-    },
-    assistantList: {
-        marginTop: '10px',
-        paddingLeft: '20px',
-        fontSize: '0.85rem',
-        color: '#555',
-    },
-    chatInputContainer: {
-        display: 'flex',
-        gap: '10px',
-        padding: '10px',
-        borderTop: '1px solid #eee',
-    },
-    chatInput: {
-        flex: 1,
-        padding: '8px 12px',
-        border: '1px solid #ccc',
-        borderRadius: '4px',
-        fontSize: '0.9rem',
-        '&:focus': {
-            outline: 'none',
-            borderColor: '#007bff',
-        }
-    },
-    sendButton: {
-        padding: '8px 16px',
-        backgroundColor: '#007bff',
-        color: 'white',
-        border: 'none',
-        borderRadius: '4px',
-        fontSize: '0.9rem',
-        cursor: 'pointer',
-        '&:hover': {
-            backgroundColor: '#0056b3',
-        }
-    },
-    scheduleHeader: {
-        padding: '15px',
-        textAlign: 'center',
-        fontSize: '1rem',
-        fontWeight: '500',
-        borderBottom: '1px solid #ccc',
-        backgroundColor: '#f8f9fa',
-    },
-    maxPagesSection: {
-        padding: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        flexWrap: 'wrap',
-    },
-    maxPagesLabel: {
-        fontSize: '0.9rem',
-        color: '#333',
-    },
-    pageInput: {
-        width: '40px',
-        padding: '4px 6px',
-        border: '1px solid #ccc',
-        borderRadius: '3px',
-        fontSize: '0.9rem',
-        textAlign: 'center',
-    },
-    generateButton: {
-        padding: '6px 12px',
-        backgroundColor: '#007bff',
-        color: 'white',
-        border: 'none',
-        borderRadius: '3px',
-        fontSize: '0.8rem',
-        cursor: 'pointer',
-        fontWeight: '500',
-    },
-    emptyScheduleSection: {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-        padding: '40px 20px',
-    },
-    emptyScheduleMessage: {
-        fontSize: '1.1rem',
-        color: '#666',
-        marginBottom: '30px',
-        textAlign: 'center',
-    },
-    scheduleContent: {
-        flex: 1,
-        padding: '20px',
-        overflow: 'auto',
-    },
-    scheduleDisplay: {
-        fontSize: '0.9rem',
-        lineHeight: '1.4',
-        margin: 0,
-        whiteSpace: 'pre-wrap',
-        wordWrap: 'break-word',
-    },
-    existingDatesInfo: {
-        marginBottom: '10px',
-        padding: '8px',
-        backgroundColor: '#e8f4f8',
-        borderRadius: '4px',
-        border: '1px solid #bee5eb',
-    },
-    existingDatesLabel: {
-        fontSize: '0.75rem',
-        color: '#0c5460',
-        fontWeight: '500',
-    },
-    calendarContainer: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-    },
-    calendarHeader: {
-        textAlign: 'center',
-        fontSize: '0.9rem',
-        fontWeight: '500',
-        color: '#333',
-        padding: '8px',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '4px',
-    },
-    calendarGrid: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-    },
-    calendarDaysHeader: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(7, 1fr)',
-        gap: '2px',
-    },
-    calendarDayHeader: {
-        textAlign: 'center',
-        fontSize: '0.7rem',
-        fontWeight: '500',
-        color: '#666',
-        padding: '4px',
-    },
-    calendarDaysGrid: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(7, 1fr)',
-        gap: '2px',
-    },
-    calendarDay: {
-        textAlign: 'center',
-        fontSize: '0.7rem',
-        padding: '6px 4px',
-        borderRadius: '3px',
-        cursor: 'pointer',
-        border: '1px solid #e9ecef',
-        backgroundColor: '#fff',
-        transition: 'all 0.2s',
-        '&:hover': {
-            backgroundColor: '#f8f9fa',
-        }
-    },
-    calendarDaySingleSelected: {
-        backgroundColor: '#28a745',
-        color: 'white',
-        border: '1px solid #28a745',
-        '&:hover': {
-            backgroundColor: '#218838',
-        }
-    },
-    calendarDayRangeSelected: {
-        backgroundColor: '#007bff',
-        color: 'white',
-        border: '1px solid #007bff',
-        '&:hover': {
-            backgroundColor: '#0056b3',
-        }
-    },
-    calendarDayOtherMonth: {
-        color: '#ccc',
-        backgroundColor: '#f8f9fa',
-    },
-    calendarDayDisabled: {
-        backgroundColor: '#f8f9fa',
-        color: '#ccc',
-        cursor: 'not-allowed',
-        '&:hover': {
-            backgroundColor: '#f8f9fa',
-        }
-    },
-    calendarDayScheduled: {
-        backgroundColor: '#ffc107',
-        color: '#212529',
-        border: '1px solid #ffc107',
-        fontWeight: '500',
-    },
-    scheduledCalendarContainer: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-    },
-    messageContainer: {
-        padding: '12px',
-        marginBottom: '12px',
-        borderRadius: '8px',
-        maxWidth: '85%',
-    },
-    userMessage: {
-        backgroundColor: '#007bff',
-        color: 'white',
-        marginLeft: 'auto',
-    },
-    assistantMessage: {
-        backgroundColor: '#f8f9fa',
-        color: '#333',
-        marginRight: 'auto',
-        border: '1px solid #dee2e6',
-    },
-    errorMessage: {
-        backgroundColor: '#dc3545',
-        color: 'white',
-        marginRight: 'auto',
-    },
-    messageContent: {
-        fontSize: '0.9rem',
-        lineHeight: '1.4',
-        marginBottom: '4px',
-    },
-    messageTimestamp: {
-        fontSize: '0.7rem',
-        opacity: 0.8,
-        marginTop: '4px',
-    },
-    constraintsContainer: {
-        marginTop: '8px',
-        padding: '8px',
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        borderRadius: '4px',
-    },
-    constraintsHeader: {
-        fontSize: '0.8rem',
-        fontWeight: '500',
-        marginBottom: '4px',
-    },
-    constraints: {
-        fontSize: '0.8rem',
-        margin: 0,
-        whiteSpace: 'pre-wrap',
-        wordWrap: 'break-word',
-    },
-    sendButtonDisabled: {
-        backgroundColor: '#ccc',
-        cursor: 'not-allowed',
-        '&:hover': {
-            backgroundColor: '#ccc',
-        }
-    },
+const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, characterNameToIdMap }) => {
+	const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: scene.id, disabled: !isEditing });
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+		cursor: "grab",
+		userSelect: "none",
+	};
+
+	return (
+		<tr ref={setNodeRef} style={style} className="sched-data-row" {...attributes} {...listeners}>
+			<td className="sched-data-cell">{scene.scene_number}</td>
+
+			<td className="sched-data-cell">{scene.int_ext || "N/A"}</td>
+			<td className="sched-data-cell sched-location-synopsis-column">
+				{scene.location_name} <br /> <br />
+				Synopsis: {scene.synopsis || "N/A"}
+			</td>
+
+			<td className="sched-data-cell">{formatPageEights(scene.page_eighths) || "N/A"}</td>
+
+			<td className="sched-data-cell">{(scene.character_names || []).map((name) => characterNameToIdMap[name.toUpperCase()] || name).join(", ")}</td>
+			<td className="sched-data-cell">
+				<input
+					type="number"
+					className="sched-hours-input"
+					placeholder="HH"
+					value={sceneHours[scene.scene_number]?.hours ?? ""}
+					onChange={(e) => {
+						const newSceneHours = { ...sceneHours };
+						if (!newSceneHours[scene.scene_number]) {
+							newSceneHours[scene.scene_number] = { hours: "", minutes: "" };
+						}
+						const value = parseInt(e.target.value);
+						console.log(value);
+						if (value < 0) {
+							alert("Cannot have negative values for hours");
+							return;
+						}
+						newSceneHours[scene.scene_number].hours = value;
+						setSceneHours(newSceneHours);
+					}}
+				/>
+				<span>
+					:
+					<br />
+				</span>
+				<input
+					type="number"
+					className="sched-hours-input"
+					placeholder="MM"
+					value={sceneHours[scene.scene_number]?.minutes ?? ""}
+					onChange={(e) => {
+						const newSceneHours = { ...sceneHours };
+						if (!newSceneHours[scene.scene_number]) {
+							newSceneHours[scene.scene_number] = { hours: "", minutes: "" };
+						}
+						const value = parseInt(e.target.value);
+						console.log(value);
+						if (value < 0 || value > 60) {
+							alert("Enter a acceptable value for minutes");
+							return;
+						}
+						newSceneHours[scene.scene_number].minutes = value;
+						setSceneHours(newSceneHours);
+					}}
+				/>
+			</td>
+		</tr>
+	);
 };
 
-export default ManageSchedules
+const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHours, setScheduleDays, characterNameToIdMap }) => {
+	const { setNodeRef } = useDroppable({
+		id: day.id,
+	});
+
+	const [drop, setDrop] = useState(true);
+
+	const d = day.date.split("-");
+
+	return (
+		<div ref={setNodeRef} className={`sched-day-card ${!drop ? "sched-day-card-collapsed" : ""}`}>
+			<div className="sched-day-header">
+				<h4>{d[2] + "-" + d[1] + "-" + d[0]}</h4>
+				<button
+					onClick={() => {
+						setDrop(!drop);
+					}}
+				>
+					{drop ? "▲" : "▼"}
+				</button>
+				{isEditing && (
+					<button
+						onClick={() => {
+							setScheduleDays((prev) => prev.filter((d) => d.id !== day.id));
+						}}
+						disabled={day.scenes.length > 0}
+						className="sched-remove-day-btn"
+					>
+						Remove
+					</button>
+				)}
+			</div>
+			{drop && (
+				<SortableContext items={day.scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+					<table className="sched-table">
+						<thead className="sched-thead">
+							<tr className="sched-header-row">
+								<th className="sched-header-cell">Scene</th>
+
+								<th className="sched-header-cell">Int./Ext.</th>
+								<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
+								<th className="sched-header-cell">Pgs</th>
+
+								<th className="sched-header-cell">Characters</th>
+
+								<th className="sched-header-cell">Est. Hours</th>
+							</tr>
+						</thead>
+						<tbody>
+							{day.scenes.map((scene) => (
+								<SceneCard
+									key={scene.id}
+									scene={scene}
+									isEditing={isEditing}
+									scheduleMode={scheduleMode}
+									sceneHours={sceneHours}
+									setSceneHours={setSceneHours}
+									characterNameToIdMap={characterNameToIdMap}
+								/>
+							))}
+						</tbody>
+					</table>
+				</SortableContext>
+			)}
+		</div>
+	);
+};
+
+// Draggable scene card for unscheduled scenes
+const UnscheduledSceneCard = ({ scene, isEditing, characterNameToIdMap }) => {
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+		id: scene.id,
+		disabled: !isEditing,
+	});
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+		cursor: isEditing ? "grab" : "default",
+		userSelect: "none",
+		opacity: isDragging ? 0.5 : 1,
+	};
+
+	return (
+		<tr ref={setNodeRef} style={style} className="sched-data-row sched-unscheduled-drag-row" {...attributes} {...listeners}>
+			<td className="sched-data-cell sched-unscheduled-scene-number">{scene.scene_number}</td>
+			<td className="sched-data-cell">{scene.int_ext || "N/A"}</td>
+			<td className="sched-data-cell sched-location-synopsis-column">
+				{scene.location_name} <br /> <br />
+				Synopsis: {scene.synopsis || "N/A"}
+			</td>
+			<td className="sched-data-cell">{formatPageEights(scene.page_eighths) || "N/A"}</td>
+			<td className="sched-data-cell">{(scene.character_names || []).map((name) => characterNameToIdMap[name.toUpperCase()] || name).join(", ")}</td>
+		</tr>
+	);
+};
+
+
+function findContainer(days, id, unscheduledScenesWithIds = []) {
+	// Check if it's the unscheduled container itself
+	if (id === "unscheduled") {
+		return { id: "unscheduled", scenes: unscheduledScenesWithIds };
+	}
+
+	// Check if scene is in unscheduled scenes
+	if (unscheduledScenesWithIds.find((scene) => scene.id === id)) {
+		return { id: "unscheduled", scenes: unscheduledScenesWithIds };
+	}
+
+	// Check scheduled days
+	for (const day of days) {
+		if (day.id === id) {
+			return day;
+		}
+		if (day.scenes.find((scene) => scene.id === id)) {
+			return day;
+		}
+	}
+	return null;
+}
+
+const parseTSV = (tsvText) => {
+	try {
+		const lines = tsvText.split("\n");
+		if (lines.length < 2) return [];
+		const headers = lines[0].split("\t").map((h) => h.trim());
+		return lines
+			.slice(1)
+			.filter((l) => l.trim() !== "")
+			.map((line) => {
+				const values = line.split("\t").map((v) => v.trim());
+				return headers.reduce((obj, header, idx) => {
+					obj[header] = values[idx] || "";
+					return obj;
+				}, {});
+			});
+	} catch (e) {
+		console.error("Error parsing TSV", e);
+		return [];
+	}
+};
+
+const ManageSchedules = () => {
+	const navigate = useNavigate();
+	const { user, id, scheduleId } = useParams();
+	const [elementType, setElementType] = useState("location");
+	const [element, setElement] = useState("");
+	const [selectedElement, setSelectedElement] = useState("");
+	const [maxScenes, setMaxScenes] = useState("");
+	const [scheduleData, setScheduleData] = useState(null);
+	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState(null);
+	const [isGenerating, setIsGenerating] = useState(false);
+	const [isSaving, setIsSaving] = useState(false);
+	const [selectedDates, setSelectedDates] = useState([]);
+	const [originalDates, setOriginalDates] = useState([]);
+
+	const [dateRangeStart, setDateRangeStart] = useState("");
+	const [dateRangeEnd, setDateRangeEnd] = useState("");
+	const [datePickerMode, setDatePickerMode] = useState("single");
+	const [datePickerValue, setDatePickerValue] = useState("single");
+	const [scheduleDays, setScheduleDays] = useState([]);
+	const [originalScheduleDays, setOriginalScheduleDays] = useState([]);
+	const [isEditing, setIsEditing] = useState(false);
+	const [scenes, setScenes] = useState([]);
+	const [scheduleMode, setScheduleMode] = useState("scenes");
+	const [maxHours, setMaxHours] = useState({ hours: "", minutes: "" });
+	const [maxPageEights, setMaxPageEights] = useState({ pages: "", eighths: "" });
+	const [newScheduleDayInput, setNewScheduleDayInput] = useState("");
+	const [sceneHours, setSceneHours] = useState({});
+	const [DOODSelected, setDOODselected] = useState(false);
+	const [generatedMaxScenes, setGeneratedMaxScenes] = useState("");
+	const [scheduleDates, setScheduleDates] = useState({ start: "N/A", end: "N/A" });
+	const [HoursSaved, setHoursSaved] = useState(false);
+
+	const [conflicts, setConflicts] = useState([]);
+	const [showConflictModal, setShowConflictModal] = useState(false);
+
+	// Cast and Location lists from APIs
+	const [castList, setCastList] = useState([]);
+	const [locationList, setLocationList] = useState([]);
+
+	// Characters from breakdown data (for dropdown and character mapping)
+	const [breakdownCharacters, setBreakdownCharacters] = useState([]);
+	const [breakdownScenes, setBreakdownScenes] = useState([]);
+
+	const ConflictsModal = () => {
+		if (!showConflictModal) return null;
+		console.log("conflicts are : ", conflicts);
+
+		return (
+			<div
+				className="sched-conflicts-modal-overlay"
+				onClick={() => {
+					setShowConflictModal(false);
+				}}
+			>
+				<div className="sched-conflicts-modal" onClick={(e) => e.stopPropagation()}>
+					<div className="sched-conflicts-modal-header">
+						<h2 className="sched-conflicts-modal-heading">Conflicts in the Schedule</h2>
+						<button
+							className="sched-conflicts-modal-close-button"
+							onClick={() => {
+								setShowConflictModal(false);
+							}}
+						>
+							×
+						</button>
+					</div>
+
+					<div className="sched-conflicts-modal-content">
+						{conflicts.length > 0 ? (
+							<>
+								<p className="sched-conflicts-count">
+									Found {conflicts.length} scene
+									{conflicts.length !== 1 ? "s" : ""} with conflicts
+								</p>
+
+								{conflicts.map((sceneConflict, index) => (
+									<div key={index} className="sched-conflict-scene-container">
+										<div className="sched-conflict-scene-header">
+											Scene {sceneConflict.scene_number} scheduled on – {sceneConflict.date}
+										</div>
+
+										{sceneConflict.conflicts.map((msg, i) => (
+											<div key={i} className="sched-conflict-item">
+												{msg}
+											</div>
+										))}
+									</div>
+								))}
+							</>
+						) : (
+							<div className="sched-no-conflicts">✓ No conflicts found in the schedule</div>
+						)}
+					</div>
+				</div>
+			</div>
+		);
+	};
+
+	// Panel to display unscheduled scenes with drag-drop support
+const UnscheduledScenesPanel = ({ unscheduledScenesWithIds, isEditing, characterNameToIdMap }) => {
+	const { setNodeRef } = useDroppable({
+		id: "unscheduled",
+	});
+
+	const [isExpanded, setIsExpanded] = useState(true);
+
+	const hasScenes = unscheduledScenesWithIds && unscheduledScenesWithIds.length > 0;
+
+	return  (isEditing || hasScenes) && (
+		<div ref={setNodeRef} className={`sched-unscheduled-panel ${!isExpanded ? "sched-unscheduled-panel-collapsed" : ""}`}>
+			<div className="sched-unscheduled-panel-header">
+				<h4>
+					Unscheduled Scenes ({unscheduledScenesWithIds?.length || 0})
+					{isEditing && <span className="sched-drag-hint"> - Drag scenes to schedule or unschedule them</span>}
+				</h4>
+				<button onClick={() => setIsExpanded(!isExpanded)}>{isExpanded ? "▲" : "▼"}</button>
+			</div>
+			{isExpanded && (
+				<SortableContext items={hasScenes ? unscheduledScenesWithIds.map((s) => s.id) : []} strategy={verticalListSortingStrategy}>
+					{hasScenes ? (
+						<table className="sched-table">
+							<thead className="sched-thead">
+								<tr className="sched-header-row">
+									<th className="sched-header-cell">Scene</th>
+									<th className="sched-header-cell">Int./Ext.</th>
+									<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
+									<th className="sched-header-cell">Pgs</th>
+									<th className="sched-header-cell">Characters</th>
+								</tr>
+							</thead>
+							<tbody>
+								{unscheduledScenesWithIds.map((scene) => (
+									<UnscheduledSceneCard key={scene.id} scene={scene} isEditing={isEditing} characterNameToIdMap={characterNameToIdMap} />
+								))}
+							</tbody>
+						</table>
+					) : (
+						<div className="sched-unscheduled-empty">
+							{isEditing ? "Drag scenes here to unschedule them" : "All scenes are scheduled"}
+						</div>
+					)}
+				</SortableContext>
+			)}
+		</div>
+	);
+};
+
+
+	const handleSaveChanges = async () => {
+		try {
+			const filteredDays = scheduleDays.filter((day) => {
+				return day.scenes && day.scenes.length > 0;
+			});
+
+			const schedule_by_day = filteredDays.reduce((acc, day) => {
+				acc[day.date] = {
+					date: day.date,
+					scenes: day.scenes.map((scene) => ({
+						scene_id: scene.scene_id,
+						scene_number: scene.scene_number,
+						location_name: scene.location_name,
+						character_names: scene.character_names,
+						character_ids: scene.character_ids,
+					})),
+				};
+				return acc;
+			}, {});
+			console.log("schedule_by_day-----------", schedule_by_day);
+
+			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ schedule_by_day }),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+
+				throw new Error(errorData.message || "Failed to save schedule");
+			} else {
+				setScheduleDays(filteredDays);
+			}
+			fetchScheduleData();
+			alert("Schedule saved successfully!");
+			setIsEditing(false);
+		} catch (error) {
+			console.error("Error saving schedule:", error);
+			alert("Failed to save schedule: " + error.message);
+			setScheduleDays(originalScheduleDays);
+		}
+	};
+
+	useEffect(() => {
+		const fetchScenes = async () => {
+			try {
+				const scriptsResponse = await fetch(getApiUrl(`/api/${id}/script-list`));
+				if (!scriptsResponse.ok) {
+					throw new Error("Failed to fetch script list");
+				}
+				const scripts = await scriptsResponse.json();
+				const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
+
+				if (sortedScripts.length > 0) {
+					// Use master script (oldest/first uploaded) for scheduling
+					const masterScript = sortedScripts[sortedScripts.length - 1];
+
+					const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?script_id=${masterScript.id}`));
+					if (!breakdownResponse.ok) {
+						if (breakdownResponse.status === 404) {
+							return;
+						}
+						throw new Error("Failed to fetch breakdown");
+					}
+					const breakdownData = await breakdownResponse.json();
+					console.log("breakdownData ------------ ", breakdownData);
+
+					if (breakdownData.tsv_content) {
+						const parsedScenes = parseTSV(breakdownData.tsv_content);
+						setScenes(parsedScenes);
+
+						console.log("break-down------------- ", parsedScenes);
+					}
+
+					// Store breakdown characters (sorted by ID ascending) and scenes
+					if (breakdownData.characters) {
+						const sortedCharacters = [...breakdownData.characters].sort((a, b) => a.id - b.id);
+						setBreakdownCharacters(sortedCharacters);
+						console.log("breakdown characters: ", sortedCharacters);
+					}
+
+					if (breakdownData.scene_breakdowns) {
+						setBreakdownScenes(breakdownData.scene_breakdowns);
+						console.log("breakdown scenes: ", breakdownData.scene_breakdowns);
+					}
+
+					if (breakdownData.hours) {
+						setHoursSaved(true);
+						setSceneHours(breakdownData.hours);
+					}
+				}
+			} catch (error) {
+				console.error("Error fetching scenes:", error);
+			}
+		};
+
+		fetchScenes();
+	}, [id, scheduleId]);
+
+	// Fetch cast list from API
+	useEffect(() => {
+		const fetchCastList = async () => {
+			try {
+				const response = await fetch(getApiUrl(`/api/${id}/cast-list`));
+				if (response.ok) {
+					const data = await response.json();
+					setCastList(data.cast_list || []);
+				}
+			} catch (error) {
+				console.error("Error fetching cast list:", error);
+			}
+		};
+		fetchCastList();
+	}, [id]);
+
+	// Fetch location list from API
+	useEffect(() => {
+		const fetchLocationList = async () => {
+			try {
+				const response = await fetch(getApiUrl(`/api/${id}/locations`));
+				if (response.ok) {
+					const data = await response.json();
+					setLocationList(data.locations || []);
+					console.log("location list ------------ ", data);
+				}
+			} catch (error) {
+				console.error("Error fetching location list:", error);
+			}
+		};
+		fetchLocationList();
+	}, [id]);
+
+	const sensors = useSensors(useSensor(PointerSensor));
+
+	const parseHours = (time) => {
+		if (!time || (!time.hours && !time.minutes)) return 0;
+		const hours = parseInt(time.hours, 10) || 0;
+		const minutes = parseInt(time.minutes, 10) || 0;
+		return hours + minutes / 60;
+	};
+
+	const formatHours = (totalHours) => {
+		if (totalHours === null || totalHours === undefined) return { hours: "", minutes: "" };
+		const h = Math.floor(totalHours);
+		const m = Math.round((totalHours - h) * 60);
+		return { hours: h.toString(), minutes: m.toString().padStart(2, "0") };
+	};
+	const fetchScheduleData = async () => {
+		try {
+			setIsLoading(true);
+			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
+			if (!response.ok) {
+				throw new Error("Failed to fetch schedule data");
+			}
+			const data = await response.json();
+			console.log("schedule-data ------------ ", data);
+			setScheduleData(data);
+			setGeneratedMaxScenes(data["generated_schedule"]["max_scenes_per_day"] || "N/A");
+		} catch (error) {
+			console.error("Error fetching schedule data:", error);
+			setError(error.message);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		fetchScheduleData();
+	}, [id, scheduleId]);
+
+	// Create character name to ID map from breakdown characters
+	const characterNameToIdMap = useMemo(() => {
+		const map = {};
+		breakdownCharacters.forEach((char) => {
+			if (char.id && char.name) {
+				map[char.name.toUpperCase()] = char.id;
+			}
+		});
+		return map;
+	}, [breakdownCharacters]);
+
+	// Calculate unscheduled scenes by comparing breakdown scenes with scheduled scenes
+	const unscheduledScenes = useMemo(() => {
+		if (!breakdownScenes || breakdownScenes.length === 0) return [];
+
+		// Get all scheduled scene IDs from scheduleDays
+		const scheduledSceneIds = new Set();
+		scheduleDays.forEach((day) => {
+			day.scenes.forEach((scene) => {
+				scheduledSceneIds.add(scene.scene_id);
+				scheduledSceneIds.add(parseInt(scene.scene_id));
+			});
+		});
+
+		// Find scenes from breakdown that are not scheduled
+		const unscheduled = breakdownScenes.filter((scene) => {
+			return !scheduledSceneIds.has(scene.id) && !scheduledSceneIds.has(String(scene.id));
+		});
+
+		return unscheduled;
+	}, [breakdownScenes, scheduleDays]);
+
+	// Create unscheduled scenes with unique drag IDs (prefixed with 'unsched-' to avoid conflicts)
+	const unscheduledScenesWithIds = useMemo(() => {
+		return unscheduledScenes.map((scene) => ({
+			id: `unsched-${scene.id}`,
+			scene_id: scene.id,
+			scene_number: scene.scene_number,
+			int_ext: scene.int_ext,
+			time_of_day: scene.time_of_day,
+			page_eighths: scene.page_eighths,
+			synopsis: scene.synopsis,
+			location_name: scene.location,
+			character_names: scene.characters || [],
+			character_ids: scene.characters_ids || [],
+		}));
+	}, [unscheduledScenes]);
+
+	// Get locked option info for the selected location
+	const selectedLocationLockedInfo = useMemo(() => {
+		if (elementType !== "location" || !element) return null;
+
+		const selectedLocation = locationList.find((loc) => loc.location === element);
+		if (!selectedLocation) return null;
+
+		const lockedOptionId = selectedLocation.locked;
+		// Check if there's a locked option (locked is not -1 or "-1" or null)
+		if (lockedOptionId === -1 || lockedOptionId === "-1" || lockedOptionId === null || lockedOptionId === undefined) {
+			return null;
+		}
+
+		const locationOptions = selectedLocation.location_options || {};
+		const lockedOption = locationOptions[String(lockedOptionId)];
+
+		if (!lockedOption) return null;
+
+		return {
+			optionId: lockedOptionId,
+			optionName: lockedOption.locationName || lockedOption.location_name || "Unknown",
+			address: lockedOption.address || "",
+			availableDates: lockedOption.available_dates || lockedOption.availableDates || [],
+		};
+	}, [elementType, element, locationList]);
+
+	// Get locked option info for the selected character
+	const selectedCharacterLockedInfo = useMemo(() => {
+		if (elementType !== "character" || !element) return null;
+
+		const selectedCharacter = castList.find((cast) => cast.character === element);
+		if (!selectedCharacter) return null;
+
+		const lockedOptionId = selectedCharacter.locked;
+		// Check if there's a locked option (locked is not -1 or "-1" or null)
+		if (lockedOptionId === -1 || lockedOptionId === "-1" || lockedOptionId === null || lockedOptionId === undefined) {
+			return null;
+		}
+
+		const castOptions = selectedCharacter.cast_options || {};
+		const lockedOption = castOptions[String(lockedOptionId)];
+
+		if (!lockedOption) return null;
+
+		return {
+			optionId: lockedOptionId,
+			actorName: lockedOption.actor_name || lockedOption.actorName || "Unknown",
+			contact: lockedOption.contact || "",
+			availableDates: lockedOption.available_dates || lockedOption.availableDates || [],
+		};
+	}, [elementType, element, castList]);
+
+	useEffect(() => {
+		if (scheduleData && scheduleData.schedule && scheduleData.schedule.schedule_by_day) {
+			// Build character name to ID mapping from castList API data (fallback)
+			const charNameToId = {};
+			castList.forEach((cast) => {
+				if (cast.character && cast.cast_id) {
+					charNameToId[cast.character] = cast.cast_id;
+				}
+			});
+
+			if (scenes.length > 0) {
+				let id = 0;
+				const days = Object.values(scheduleData.schedule.schedule_by_day).map((day) => ({
+					id: String(day.date),
+					date: day.date,
+					scenes: day.scenes
+						.map((scheduledScene, index) => {
+							// Find breakdown scene by matching the 'id' field
+							const breakdownScene = breakdownScenes.find(
+								(bs) => bs.id === scheduledScene.scene_id || bs.id === parseInt(scheduledScene.scene_id)
+							);
+
+							const newScene = {};
+
+							if (breakdownScene) {
+								newScene.id = id++;
+								newScene.scene_id = scheduledScene.scene_id;
+								newScene.scene_number = scheduledScene.scene_number || breakdownScene.scene_number;
+								newScene.int_ext = breakdownScene.int_ext;
+								newScene.time_of_day = breakdownScene.time_of_day;
+								newScene.page_eighths = breakdownScene.page_eighths;
+								newScene.synopsis = breakdownScene.synopsis;
+
+								newScene.location_name = breakdownScene.location;
+
+								newScene.character_names = breakdownScene.characters || [];
+
+								// Use character_ids from breakdown data if available, otherwise map from names
+								if (breakdownScene.characters_ids) {
+									newScene.character_ids = breakdownScene.characters_ids;
+								} else {
+									newScene.character_ids = newScene.character_names.map((name) => charNameToId[name] || null);
+								}
+							} else {
+								// Fallback to TSV scenes data if breakdown scene not found
+								const fullScene = scenes.find((s) => (s["Scene Number"] || s["Scene No."]) === String(scheduledScene.scene_number));
+								if (fullScene) {
+									newScene.id = id++;
+									newScene.scene_id = scheduledScene.scene_id;
+									newScene.scene_number = scheduledScene.scene_number || fullScene["Scene Number"];
+									newScene.int_ext = fullScene["Int./Ext."];
+									newScene.time_of_day = fullScene["Time of Day"] || fullScene["Time"];
+									newScene.page_eighths = fullScene["Page Eighths"] || fullScene["Pgs"];
+									newScene.synopsis = fullScene["Synopsis"];
+
+									newScene.location_name = fullScene["Location"];
+
+									newScene.character_names = fullScene["Characters"] ? fullScene["Characters"].split(",").map((c) => c.trim()) : [];
+									newScene.character_ids = newScene.character_names.map((name) => charNameToId[name] || null);
+								} else {
+									// Scene not found in breakdown data - it may have been deleted
+									// Return null to filter it out
+									console.log(
+										`Scene ${scheduledScene.scene_number} (id: ${scheduledScene.scene_id}) not found in breakdown - may have been deleted`
+									);
+									return null;
+								}
+							}
+
+							return newScene;
+						})
+						.filter((scene) => scene !== null && scene.scene_number), // Filter out deleted/missing scenes
+				}));
+				console.log("days -- ", days);
+				const dates = days.map((item) => new Date(item.date));
+				const startDate = new Date(Math.min(...dates));
+				const endDate = new Date(Math.max(...dates));
+				const formatDate = (d) =>
+					d.toLocaleDateString("en-US", {
+						year: "numeric",
+						month: "long",
+						day: "numeric",
+					});
+
+				setScheduleDates({ start: formatDate(startDate), end: formatDate(endDate) });
+				setScheduleDays(days);
+			} else {
+				const days = Object.values(scheduleData.schedule.schedule_by_day).map((day) => ({
+					id: String(day.date),
+					date: day.date,
+					scenes: day.scenes.map((scene, index) => ({
+						...scene,
+						id: scene.scene_id ? String(scene.scene_id) : `${day.date}-${index}-${scene.scene_number}`,
+					})),
+				}));
+				setScheduleDays(days);
+			}
+		}
+	}, [scheduleData, scenes, castList, breakdownScenes]);
+
+	const handleDragEnd = (event) => {
+		const { active, over } = event;
+
+		if (!over) {
+			return;
+		}
+
+		const activeId = active.id;
+		const overId = over.id;
+
+		if (activeId === overId) {
+			return;
+		}
+
+		setScheduleDays((days) => {
+			const activeContainer = findContainer(days, activeId, unscheduledScenesWithIds);
+			const overContainer = findContainer(days, overId, unscheduledScenesWithIds);
+
+			if (!activeContainer || !overContainer) {
+				return days;
+			}
+
+			// Handle dropping scheduled scenes into unscheduled container
+			if (overContainer.id === "unscheduled" && activeContainer.id !== "unscheduled") {
+				// Find and remove the scene from its current day
+				const activeDayIndex = days.findIndex((d) => d.id === activeContainer.id);
+				if (activeDayIndex === -1) return days;
+
+				const activeSceneIndex = activeContainer.scenes.findIndex((s) => s.id === activeId);
+				if (activeSceneIndex === -1) return days;
+
+				const newDays = [...days];
+				newDays[activeDayIndex] = {
+					...newDays[activeDayIndex],
+					scenes: newDays[activeDayIndex].scenes.filter((s) => s.id !== activeId),
+				};
+
+				return newDays;
+			}
+
+			// Handle dragging from unscheduled to a schedule day
+			if (activeContainer.id === "unscheduled") {
+				const overDayIndex = days.findIndex((d) => d.id === overContainer.id);
+				if (overDayIndex === -1) return days;
+
+				// Find the unscheduled scene being dragged
+				const unscheduledScene = unscheduledScenesWithIds.find((s) => s.id === activeId);
+				if (!unscheduledScene) return days;
+
+				// Generate a new numeric ID for the scene (find max ID and add 1)
+				let maxId = 0;
+				days.forEach((day) => {
+					day.scenes.forEach((scene) => {
+						if (typeof scene.id === "number" && scene.id > maxId) {
+							maxId = scene.id;
+						}
+					});
+				});
+
+				// Create a new scene object with a numeric ID for the schedule
+				const newScene = {
+					id: maxId + 1,
+					scene_id: String(unscheduledScene.scene_id),
+					scene_number: unscheduledScene.scene_number,
+					int_ext: unscheduledScene.int_ext,
+					time_of_day: unscheduledScene.time_of_day,
+					page_eighths: unscheduledScene.page_eighths,
+					synopsis: unscheduledScene.synopsis,
+					location_name: unscheduledScene.location_name,
+					character_names: unscheduledScene.character_names,
+					character_ids: unscheduledScene.character_ids,
+				};
+				console.log( "newScene-----------", newScene);
+
+				const newDays = [...days];
+
+				// Find insertion index
+				let overSceneIndex = overContainer.scenes.findIndex((s) => s.id === overId);
+				if (overSceneIndex === -1) {
+					overSceneIndex = newDays[overDayIndex].scenes.length;
+				}
+
+				newDays[overDayIndex] = {
+					...newDays[overDayIndex],
+					scenes: [...newDays[overDayIndex].scenes.slice(0, overSceneIndex), newScene, ...newDays[overDayIndex].scenes.slice(overSceneIndex)],
+				};
+
+				return newDays;
+			}
+
+			// Handle reordering within the same day
+			if (activeContainer.id === overContainer.id) {
+				const activeIndex = activeContainer.scenes.findIndex((s) => s.id === activeId);
+				const overIndex = overContainer.scenes.findIndex((s) => s.id === overId);
+				if (activeIndex !== -1 && overIndex !== -1) {
+					const newScenes = arrayMove(activeContainer.scenes, activeIndex, overIndex);
+					const newDays = days.map((day) => {
+						if (day.id === activeContainer.id) {
+							return { ...day, scenes: newScenes };
+						}
+						return day;
+					});
+					return newDays;
+				}
+			} else {
+				// Handle moving between different schedule days
+				const activeDayIndex = days.findIndex((d) => d.id === activeContainer.id);
+				const overDayIndex = days.findIndex((d) => d.id === overContainer.id);
+
+				const activeSceneIndex = activeContainer.scenes.findIndex((s) => s.id === activeId);
+
+				const newDays = [...days];
+				const [movedScene] = newDays[activeDayIndex].scenes.splice(activeSceneIndex, 1);
+
+				let overSceneIndex = overContainer.scenes.findIndex((s) => s.id === overId);
+				if (overSceneIndex === -1) {
+					overSceneIndex = newDays[overDayIndex].scenes.length;
+				}
+
+				newDays[overDayIndex].scenes.splice(overSceneIndex, 0, movedScene);
+
+				return newDays;
+			}
+			return days;
+		});
+	};
+
+	const parseDateRanges = (dateArray) => {
+		const dates = [];
+		dateArray.forEach((dateItem) => {
+			if (dateItem.includes("-") && dateItem.split("-").length > 3) {
+				const parts = dateItem.split("-");
+				const startDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
+				const endDate = `${parts[3]}-${parts[4]}-${parts[5]}`;
+
+				const current = new Date(startDate);
+				const end = new Date(endDate);
+
+				while (current <= end) {
+					dates.push(current.toISOString().split("T")[0]);
+					current.setDate(current.getDate() + 1);
+				}
+			} else {
+				dates.push(dateItem);
+			}
+		});
+		return dates;
+	};
+
+	const getExistingDates = () => {
+		if (!selectedElement || !scheduleData?.dates) return [];
+
+		const [type, name] = selectedElement.split("::");
+		const datesSection = type === "location" ? "locations" : "characters";
+		const elementData = scheduleData.dates[datesSection]?.[name];
+
+		if (elementData?.dates && elementData.dates.length > 0) {
+			return parseDateRanges(elementData.dates);
+		}
+
+		// Fallback: If character has a locked option with dates, use those
+		if (type === "character" && selectedCharacterLockedInfo?.availableDates?.length > 0) {
+			return selectedCharacterLockedInfo.availableDates;
+		}
+
+		// Fallback: If location has a locked option with dates, use those
+		if (type === "location" && selectedLocationLockedInfo?.availableDates?.length > 0) {
+			return selectedLocationLockedInfo.availableDates;
+		}
+
+		return [];
+	};
+
+	const hasChanges = () => {
+		if (selectedDates.length !== originalDates.length) return true;
+
+		const sortedSelected = [...selectedDates].sort();
+		const sortedOriginal = [...originalDates].sort();
+
+		return !sortedSelected.every((date, index) => date === sortedOriginal[index]);
+	};
+
+	const handleElementChange = (value) => {
+		console.log("Element Changed:", value);
+		setSelectedElement(value);
+		setDateRangeStart("");
+		setDateRangeEnd("");
+
+		if (value && scheduleData?.dates) {
+			const [type, name] = value.split("::");
+			const datesSection = type === "location" ? "locations" : "characters";
+			const elementData = scheduleData.dates[datesSection]?.[name];
+			console.log("Element Data:", elementData);
+
+			if (elementData?.dates && elementData.dates.length > 0) {
+				console.log("Found dates for:", name, elementData.dates);
+				const existingDates = parseDateRanges(elementData.dates);
+				setSelectedDates(existingDates);
+				setOriginalDates(existingDates);
+			} else {
+				// Check for locked option dates as fallback
+				let lockedDates = [];
+				if (type === "character") {
+					const selectedChar = castList.find((cast) => cast.character === name);
+					if (selectedChar && selectedChar.locked !== -1 && selectedChar.locked !== "-1") {
+						const castOptions = selectedChar.cast_options || {};
+						const lockedOption = castOptions[String(selectedChar.locked)];
+						if (lockedOption) {
+							lockedDates = lockedOption.available_dates || lockedOption.availableDates || [];
+						}
+					}
+				} else if (type === "location") {
+					const selectedLoc = locationList.find((loc) => loc.location === name);
+					if (selectedLoc && selectedLoc.locked !== -1 && selectedLoc.locked !== "-1") {
+						const locationOptions = selectedLoc.location_options || {};
+						const lockedOption = locationOptions[String(selectedLoc.locked)];
+						if (lockedOption) {
+							lockedDates = lockedOption.available_dates || lockedOption.availableDates || [];
+						}
+					}
+				}
+
+				if (lockedDates.length > 0) {
+					console.log("Using locked option dates for:", name, lockedDates);
+					setSelectedDates(lockedDates);
+					setOriginalDates(lockedDates);
+				} else {
+					setSelectedDates([]);
+					setOriginalDates([]);
+				}
+			}
+		} else {
+			setSelectedDates([]);
+			setOriginalDates([]);
+		}
+	};
+
+	useEffect(() => {
+		if (elementType && element) {
+			setSelectedElement(`${elementType}::${element}`);
+		} else {
+			setSelectedElement("");
+		}
+	}, [elementType, element]);
+
+	useEffect(() => {
+		if (selectedElement && scheduleData?.dates) {
+			const existingDates = getExistingDates();
+			setSelectedDates(existingDates);
+			setOriginalDates(existingDates);
+		}
+	}, [scheduleData, selectedElement]);
+
+	useEffect(() => {
+		const detectConflicts = () => {
+			const sceneConflicts = {};
+			const scheduleByDay = scheduleData?.schedule?.schedule_by_day || {};
+			const characterDates = scheduleData?.dates?.characters || {};
+			const locationDates = scheduleData?.dates?.locations || {};
+
+			Object.entries(scheduleByDay).forEach(([date, dayData]) => {
+				const scenes = dayData.scenes || [];
+
+				scenes.forEach((scene) => {
+					const { scene_id, scene_number } = scene;
+					const conflictList = [];
+
+					// Find breakdown scene by matching the 'id' field
+					const breakdownScene = breakdownScenes.find((bs) => bs.id === scene_id || bs.id === parseInt(scene_id));
+
+					// Skip if scene doesn't exist in breakdown (may have been deleted)
+					if (!breakdownScene) {
+						// console.log(
+						// 	`Scene ${scene_number} (id: ${scene_id}) not found in breakdown for conflict detection - may have been deleted`,
+						// 	breakdownScene
+						// );
+						return; // Skip this scene
+					}
+
+					const character_names = breakdownScene?.characters || scene.character_names || [];
+					const character_ids = breakdownScene?.characters_ids || scene.character_ids || [];
+					const location_name = breakdownScene?.location || scene.location_name;
+
+					character_ids?.forEach((charId, index) => {
+						const charName = character_names?.[index];
+						const charData = characterDates[charName];
+
+						if (charData && charData.dates.length > 0) {
+							if (!charData.dates.includes(dayData.date)) {
+								conflictList.push(`Character "${charName}" is not available on ${dayData.date}`);
+							}
+						}
+					});
+
+					const locationData = locationDates[location_name];
+					if (locationData && locationData.dates.length > 0) {
+						if (!locationData.dates.includes(dayData.date)) {
+							conflictList.push(`Location "${location_name}" is not available on ${dayData.date}`);
+						}
+					}
+
+					if (conflictList.length > 0) {
+						if (!sceneConflicts[scene_id]) {
+							sceneConflicts[scene_id] = {
+								scene_number,
+								date: dayData.date,
+								conflicts: [],
+							};
+						}
+						sceneConflicts[scene_id].conflicts.push(...conflictList);
+					}
+				});
+			});
+
+			const newConflicts = Object.entries(sceneConflicts).map(([scene_id, { scene_number, date, conflicts }]) => ({
+				scene_id,
+				scene_number,
+				date,
+				conflicts,
+			}));
+
+			setConflicts(newConflicts);
+		};
+
+		if (scheduleData) {
+			detectConflicts();
+			console.log("conflicts----------", conflicts);
+		}
+	}, [scheduleData, breakdownScenes]);
+
+	const getElementOptions = (type) => {
+		const options = [];
+
+		if (type === "location" && locationList.length > 0) {
+			locationList.forEach((loc) => {
+				options.push({
+					value: loc.location,
+					label: `📍 ${loc.location}`,
+					location_id: loc.location_id,
+				});
+			});
+		} else if (type === "character") {
+			// Track which characters we've added to avoid duplicates
+			const addedCharacters = new Set();
+
+			
+
+			// Then add any characters from castList that aren't already included
+			// This ensures newly added characters (with 0 scenes) also appear
+			
+				castList.forEach((cast) => {
+					const normalizedName = cast.character?.toUpperCase();
+					if (normalizedName && !addedCharacters.has(normalizedName)) {
+						addedCharacters.add(normalizedName);
+						options.push({
+							value: cast.character,
+							label: `👤 ${cast.character}`,
+							cast_id: cast.cast_id,
+						});
+					}
+				});
+			
+		}
+
+		return options;
+	};
+
+	const getSelectedElementName = () => {
+		if (!selectedElement) return "Select Element";
+
+		const options = getElementOptions(elementType);
+		const selected = options.find((opt) => opt.value === element);
+		return selected ? selected.label : "Select Element";
+	};
+
+	const handleGenerateSchedule = async () => {
+		let payload = {};
+		let alertMessage = "";
+
+		if (scheduleMode === "scenes") {
+			if (!maxScenes || isNaN(maxScenes) || maxScenes <= 0) {
+				alertMessage = "Please enter a valid number of scenes per day";
+			} else {
+				payload = { max_scenes_per_day: parseInt(maxScenes) };
+			}
+		} else if (scheduleMode === "page-eights") {
+			const pages = parseInt(maxPageEights.pages, 10) || 0;
+			const eighths = parseInt(maxPageEights.eighths, 10) || 0;
+			const totalEighths = pages * 8 + eighths;
+			if (totalEighths <= 0) {
+				alertMessage = "Please enter a valid number of page-eights per day";
+			} else {
+				payload = { max_page_eighths_per_day: totalEighths };
+			}
+		} else if (scheduleMode === "hours") {
+			const parsedHours = parseHours(maxHours);
+			if (!HoursSaved) {
+				alertMessage = "Please save Hours for each scene before generating schedule";
+			}
+			if (parsedHours <= 0) {
+				alertMessage = "Please enter a valid number of hours per day";
+			} else {
+				payload = { max_hours_per_day: parsedHours };
+			}
+		}
+
+		if (alertMessage) {
+			alert(alertMessage);
+			return;
+		}
+
+		try {
+			setIsGenerating(true);
+			const response = await fetch(getApiUrl(`/api/${id}/generate-schedule/${scheduleId}`), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(payload),
+			});
+
+			const result = await response.json();
+			if (!response.ok) {
+				throw new Error(`${result.message} \n Try changing constraints`);
+			}
+			console.log("Schedule generated successfully:", result);
+
+			setTimeout(async () => {
+				try {
+					const refreshResponse = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
+					if (refreshResponse.ok) {
+						const refreshedData = await refreshResponse.json();
+						setScheduleData(refreshedData);
+						setGeneratedMaxScenes(refreshedData["generated_schedule"]["max_scenes_per_day"] || "N/A");
+
+						alert("Schedule generated successfully!");
+					} else {
+						throw new Error("Failed to refresh schedule data");
+					}
+				} catch (refreshError) {
+					console.error("Error refreshing schedule:", refreshError);
+				}
+			}, 1000);
+		} catch (error) {
+			console.error("Error generating schedule:", error);
+			alert("Failed to generate schedule  - " + error.message);
+		} finally {
+			setIsGenerating(false);
+		}
+	};
+
+	const handleSingleDateChange = (e) => {
+		const selectedDate = e.target.value;
+		if (selectedDate) {
+			setSelectedDates((prev) => {
+				if (prev.includes(selectedDate)) {
+					return prev;
+				} else {
+					return [...prev, selectedDate].sort();
+				}
+			});
+		}
+	};
+
+	const handleRangeStartChange = (e) => {
+		setDateRangeStart(e.target.value);
+	};
+
+	const handleRangeEndChange = (e) => {
+		setDateRangeEnd(e.target.value);
+	};
+
+	const addDateRange = async (t = "range") => {
+		let start = dateRangeStart;
+		let end = dateRangeEnd;
+
+		if (!start || !end) {
+			alert("Please select both start and end dates for the range");
+			return;
+		}
+
+		if (start > end) {
+			alert("Start date must be before end date");
+			return;
+		}
+
+		const rangeDates = [];
+		const currentDate = new Date(start);
+		const endDate = new Date(end);
+
+		while (currentDate <= endDate) {
+			rangeDates.push(currentDate.toISOString().split("T")[0]);
+			currentDate.setDate(currentDate.getDate() + 1);
+		}
+
+		await setSelectedDates(rangeDates);
+
+		setDateRangeStart("");
+		setDateRangeEnd("");
+	};
+
+	const removeDate = (dateToRemove) => {
+		setSelectedDates((prev) => prev.filter((d) => d !== dateToRemove));
+	};
+
+	const clearAllDates = () => {
+		setSelectedDates([]);
+	};
+
+	const formatDisplayDate = (dateString) => {
+		const date = new Date(dateString);
+		return date.toLocaleDateString("en-US", {
+			weekday: "short",
+			month: "short",
+			day: "numeric",
+		});
+	};
+
+	const generateCalendarDays = () => {
+		if (!scheduleData?.first_date || !scheduleData?.last_date) return [];
+
+		const startDate = new Date(scheduleData.first_date);
+		const endDate = new Date(scheduleData.last_date);
+
+		const days = [];
+		const currentDate = new Date(startDate);
+
+		while (currentDate <= endDate) {
+			days.push(new Date(currentDate));
+			currentDate.setDate(currentDate.getDate() + 1);
+		}
+
+		return days;
+	};
+
+	const isDateInRange = (date) => {
+		const dateStr = date.toISOString().split("T")[0];
+		if (!selectedDates.includes(dateStr)) return false;
+
+		const sortedDates = [...selectedDates].sort();
+		const dateIndex = sortedDates.indexOf(dateStr);
+
+		const hasConsecutiveBefore = dateIndex > 0 && new Date(sortedDates[dateIndex - 1]).getTime() === date.getTime() - 24 * 60 * 60 * 1000;
+		const hasConsecutiveAfter =
+			dateIndex < sortedDates.length - 1 && new Date(sortedDates[dateIndex + 1]).getTime() === date.getTime() + 24 * 60 * 60 * 1000;
+
+		return hasConsecutiveBefore || hasConsecutiveAfter;
+	};
+
+	const getCalendarMonthYear = () => {
+		if (!scheduleData?.first_date || !scheduleData?.last_date) return "";
+
+		const startDate = new Date(scheduleData.first_date);
+		const endDate = new Date(scheduleData.last_date);
+
+		const startMonth = startDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+		const endMonth = endDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+		return startMonth === endMonth ? startMonth : `${startMonth} - ${endMonth}`;
+	};
+
+	const handleCalendarDateClick = (date) => {
+		const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
+
+		console.log("clicked on ", dateStr);
+
+		setSelectedDates((prev) => {
+			if (prev.includes(dateStr)) {
+				console.log("removed");
+				return prev.filter((d) => d !== dateStr);
+			} else {
+				console.log("added");
+				return [...prev, dateStr].sort();
+			}
+		});
+	};
+
+	const saveDates = async (f = "") => {
+		if (!selectedElement) {
+			alert("Please select an element");
+			return;
+		}
+
+		try {
+			setIsSaving(true);
+			const [type, name] = selectedElement.split("::");
+			const datesSection = type === "location" ? "locations" : "characters";
+
+			console.log("Schedule Data:", scheduleData);
+			console.log("Selected Type:", type);
+			console.log("Selected Name:", name);
+			console.log("Dates Section:", scheduleData.dates?.[datesSection]);
+			if (!name) {
+				alert("select an element to save dates");
+				return;
+			}
+			const elementData = scheduleData.dates?.[datesSection]?.[name];
+			console.log("Element Data:", elementData);
+
+			if (!elementData || !elementData.id) {
+				throw new Error(`Could not find data for ${type} "${name}"`);
+			}
+
+			const elementId = elementData.id;
+			console.log("Element ID:", elementId);
+			console.log("selected dates  --------------", selectedDates);
+
+			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}/dates`), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					element_type: type,
+					element_name: name,
+					element_id: elementId,
+					flexible: f === "Flexible",
+					dates: f === "Flexible" ? [] : selectedDates,
+				}),
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to save dates");
+			}
+
+			const result = await response.json();
+			console.log("Dates saved successfully:", result);
+			alert("Dates saved successfully!");
+			fetchScheduleData();
+		} catch (error) {
+			console.error("Error saving dates:", error);
+			alert("Failed to save dates: " + error.message);
+		} finally {
+			setIsSaving(false);
+			console.log("lastly -- ----------------", selectedDates);
+		}
+	};
+
+	const getScheduledDates = () => {
+		if (!selectedElement || !scheduleData?.schedule?.schedule_by_day) return [];
+
+		const [type, name] = selectedElement.split("::");
+		const scheduledDates = [];
+		const scheduleByDay = scheduleData.schedule.schedule_by_day;
+
+		if (scheduleByDay) {
+			Object.values(scheduleByDay).forEach((dayData) => {
+				const dayDate = dayData.date;
+				const scenes = dayData.scenes || [];
+
+				for (const scheduledScene of scenes) {
+					// Find breakdown scene by matching the 'id' field
+					const breakdownScene = breakdownScenes.find((bs) => bs.id === scheduledScene.scene_id || bs.id === parseInt(scheduledScene.scene_id));
+
+					// Skip if scene doesn't exist in breakdown (may have been deleted)
+					if (!breakdownScene) {
+						console.warn(
+							`Scene ${scheduledScene.scene_number} (id: ${scheduledScene.scene_id}) not found for scheduled dates - may have been deleted`
+						);
+						continue;
+					}
+
+					if (type === "character") {
+						// Check if the character is in this breakdown scene's characters array
+						const hasCharacter = breakdownScene.characters?.some((charName) => charName.toUpperCase() === name.toUpperCase());
+						if (hasCharacter && !scheduledDates.includes(dayDate)) {
+							scheduledDates.push(dayDate);
+						}
+					} else if (type === "location") {
+						// Check if the location matches this breakdown scene's location
+						if (breakdownScene.location?.toUpperCase() === name.toUpperCase()) {
+							if (!scheduledDates.includes(dayDate)) {
+								scheduledDates.push(dayDate);
+							}
+						}
+					}
+				}
+			});
+		}
+
+		return scheduledDates.sort();
+	};
+
+	const generateScheduledCalendar = () => {
+		const scheduledDates = getScheduledDates();
+
+		const tileClassNameforScheduledDates = ({ date, view }) => {
+			if (view === "month") {
+				const formattedDate = date.toLocaleDateString("en-CA").split("T")[0];
+				const scheduledDates = getScheduledDates();
+
+				if (scheduledDates.includes(formattedDate)) {
+					return "highlight-green";
+				}
+			}
+		};
+		return (
+			<div className="sched-scheduled-calendar-container">
+				<Calendar tileDisabled={() => true} tileClassName={tileClassNameforScheduledDates} />
+			</div>
+		);
+	};
+
+	const handleAddScheduleDay = () => {
+		if (!newScheduleDayInput) {
+			alert("Please select a date to add.");
+			return;
+		}
+
+		const dateRegex = /^(\d{4})-(\d{2})-(\d{2})$/;
+		if (!dateRegex.test(newScheduleDayInput)) {
+			alert("Invalid date format. Please use yyyy-mm-dd.");
+			return;
+		}
+
+		const parts = newScheduleDayInput.split("-");
+		const year = parseInt(parts[0], 10);
+		const month = parseInt(parts[1], 10);
+		const day = parseInt(parts[2], 10);
+
+		const dateObj = new Date(year, month - 1, day);
+
+		if (dateObj.getFullYear() !== year || dateObj.getMonth() + 1 !== month || dateObj.getDate() !== day) {
+			alert("Invalid date. Please enter a real date.");
+			return;
+		}
+
+		const yyyyMMdd = newScheduleDayInput;
+
+		setScheduleDays((prevDays) => {
+			if (prevDays.some((d) => d.date === yyyyMMdd)) {
+				alert("This date already exists in the schedule.");
+				return prevDays;
+			}
+			return [...prevDays, { id: yyyyMMdd, date: yyyyMMdd, scenes: [] }].sort((a, b) => new Date(a.date) - new Date(b.date));
+		});
+		setNewScheduleDayInput("");
+	};
+
+	const handleSaveHours = async () => {
+		for (let day of scheduleDays) {
+			for (let scene of day.scenes) {
+				if (!(scene.scene_number in sceneHours)) {
+					alert(`Enter estimated Hours and minutes for scene ${scene.scene_number} before saving `);
+					return;
+				}
+			}
+		}
+
+		try {
+			const scriptsResponse = await fetch(getApiUrl(`/api/${id}/script-list`));
+			if (!scriptsResponse.ok) {
+				throw new Error("Failed to fetch script list");
+			}
+			const scripts = await scriptsResponse.json();
+			const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
+
+			if (sortedScripts.length > 0) {
+				// Use master script (oldest/first uploaded) for scheduling
+				const masterScript = sortedScripts[sortedScripts.length - 1];
+
+				const SaveResponse = await fetch(getApiUrl(`/api/save-hours?script_id=${masterScript.id}`), {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						sceneHours,
+					}),
+				});
+				if (!SaveResponse.ok) {
+					throw new Error("Failed to save hours");
+				}
+				alert("Est. hours saved successlfully");
+			}
+		} catch (error) {
+			alert("Error while saving hours ", error);
+		}
+	};
+
+	const tileClassName = ({ date, view }) => {
+		if (view === "month") {
+			const formattedDate = date.toLocaleDateString("en-CA").split("T")[0];
+
+			if (selectedDates.includes(formattedDate)) {
+				return "highlight-blue";
+			}
+		}
+	};
+	const projectName = useSelector((state) => state.project.projectName);
+
+	return (
+		<div className="sched-page-container">
+			{isGenerating && (
+				<div className="sched-modal-overlay">
+					<div className="sched-modal">
+						<div className="sched-spinner"></div>
+						<p className="sched-loading-text">Generating Schedule...</p>
+					</div>
+				</div>
+			)}
+
+			<div className="sched-header">
+				<div className="sched-header-left">
+					<h2 className="sched-page-title">Project : {projectName}</h2>
+				</div>
+				<div className="sched-header-right">
+					<div className="sched-date-info">
+						<div>Schedule Start Date: {scheduleDates.start || "Not set"}</div>
+						<div>Schedule End Date: {scheduleDates.end || "Not set"}</div>
+					</div>
+				</div>
+			</div>
+			<div className="sched-content">
+				<div className="sched-left-panel">
+					<div className="sched-left-panel-header">Availability dates</div>
+					<div className="sched-element-selector">
+						<div className="sched-selector-header">
+							<select
+								value={elementType}
+								onChange={(e) => {
+									if (
+										datePickerMode === "flexible" &&
+										scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element] &&
+										!scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element]["flexible"]
+									) {
+										alert(` You have not saved flexible dates for ${element}`);
+									}
+									setElementType(e.target.value);
+								}}
+								className="sched-element-dropdown"
+							>
+								<option value="location">Sets </option>
+								<option value="character">Characters</option>
+							</select>
+						</div>
+						<div className="sched-selector-header sched-selector-header-margin">
+							<span>&lt;</span>
+							<select
+								value={element}
+								onChange={(e) => {
+									if (
+										datePickerMode === "flexible" &&
+										scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element] &&
+										!scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element]["flexible"]
+									) {
+										alert(` You have not saved flexible dates for ${element}`);
+									}
+									setElement(e.target.value);
+									console.log(scheduleData);
+								}}
+								className="sched-element-dropdown"
+							>
+								<option value="">Select Element</option>
+								{getElementOptions(elementType).map((option, index) => (
+									<option key={index} value={option.value}>
+										{option.label}
+									</option>
+								))}
+							</select>
+							<span>&gt;</span>
+						</div>
+					</div>
+
+					{/* Locked Option Info Display */}
+					{elementType === "location" && element && (
+						<div className="sched-locked-option-info">
+							{selectedLocationLockedInfo ? (
+								<div className="sched-locked-option-card">
+									<div className="sched-locked-option-header">
+										<span className="sched-locked-icon">🔒</span>
+										<span className="sched-locked-label">Locked Option:</span>
+									</div>
+									<div className="sched-locked-option-details">
+										<div className="sched-locked-option-name">{selectedLocationLockedInfo.optionName}</div>
+										{selectedLocationLockedInfo.address && (
+											<div className="sched-locked-option-address">📍 {selectedLocationLockedInfo.address}</div>
+										)}
+										{selectedLocationLockedInfo.availableDates.length > 0 && (
+											<div className="sched-locked-option-dates">
+												<span className="sched-locked-dates-label">Available Dates: </span>
+												<span className="sched-locked-dates-count">
+													{selectedLocationLockedInfo.availableDates.length} date(s)
+												</span>
+											</div>
+										)}
+									</div>
+								</div>
+							) : (
+								<div className="sched-no-locked-option">
+									<span className="sched-unlocked-icon">🔓</span>
+									<span>No option locked for this location</span>
+								</div>
+							)}
+						</div>
+					)}
+
+					{/* Locked Option Info Display for Characters */}
+					{elementType === "character" && element && (
+						<div className="sched-locked-option-info">
+							{selectedCharacterLockedInfo ? (
+								<div className="sched-locked-option-card">
+									<div className="sched-locked-option-header">
+										<span className="sched-locked-icon">🔒</span>
+										<span className="sched-locked-label">Locked Option:</span>
+									</div>
+									<div className="sched-locked-option-details">
+										<div className="sched-locked-option-name">{selectedCharacterLockedInfo.actorName}</div>
+										{selectedCharacterLockedInfo.contact && (
+											<div className="sched-locked-option-address">📞 {selectedCharacterLockedInfo.contact}</div>
+										)}
+										{selectedCharacterLockedInfo.availableDates.length > 0 && (
+											<div className="sched-locked-option-dates">
+												<span className="sched-locked-dates-label">Available Dates: </span>
+												<span className="sched-locked-dates-count">
+													{selectedCharacterLockedInfo.availableDates.length} date(s)
+												</span>
+											</div>
+										)}
+									</div>
+								</div>
+							) : (
+								<div className="sched-no-locked-option">
+									<span className="sched-unlocked-icon">🔓</span>
+									<span>No option locked for this character</span>
+								</div>
+							)}
+						</div>
+					)}
+
+					<div className="sched-given-dates">
+						<div className="sched-section-title">Given Dates</div>
+
+						<div className="sched-mode-selector">
+							<label className="sched-mode-label">
+								<input
+									type="radio"
+									value="flexible"
+									checked={datePickerMode === "flexible"}
+									onChange={(e) => {
+										setDatePickerMode(e.target.value);
+									}}
+									className="sched-radio-input"
+								/>
+								Flexible Dates
+							</label>
+							<label className="sched-mode-label">
+								<input
+									type="radio"
+									value="fixed"
+									checked={datePickerMode === "fixed"}
+									onChange={(e) => {
+										setDatePickerMode(e.target.value);
+									}}
+									className="sched-radio-input"
+								/>
+								Fixed Dates
+							</label>
+						</div>
+						{selectedElement &&
+							scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element] &&
+							scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element]["flexible"] && (
+								<div className="sched-existing-dates-info">
+									<span> ✅ Flexible dates saved for {element}</span>
+								</div>
+							)}
+						{selectedElement ? (
+							<div className="sched-date-picker-container">
+								{scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element] &&
+									selectedDates.length === 0 &&
+									!isSaving &&
+									!scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element]["flexible"] &&
+									datePickerMode !== "flexible" && (
+										<div className="sched-existing-dates-info">
+											<span className="sched-existing-dates-label">{`No dates selected for ${getSelectedElementName()}`}</span>
+										</div>
+									)}
+
+								{datePickerMode === "flexible" &&
+									!(
+										scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element] &&
+										scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element]["flexible"]
+									) && (
+										<>
+											<button
+												onClick={() => {
+													saveDates("Flexible");
+												}}
+												className="sched-add-range-button"
+												disabled={!selectedElement}
+											>
+												Save Flexible dates
+											</button>
+										</>
+									)}
+
+								{datePickerMode === "fixed" && datePickerValue === "single" && (
+									<input type="date" onChange={handleSingleDateChange} className="sched-date-picker" />
+								)}
+
+								{datePickerValue === "range" && datePickerMode === "fixed" && (
+									<div className="sched-date-range-container">
+										<div className="sched-date-range-inputs">
+											<input
+												type="date"
+												value={dateRangeStart}
+												onChange={handleRangeStartChange}
+												className="sched-date-range-input"
+												placeholder="Start Date"
+											/>
+											<span className="sched-date-range-separator">to</span>
+											<input
+												type="date"
+												value={dateRangeEnd}
+												min={dateRangeStart}
+												onChange={handleRangeEndChange}
+												className="sched-date-range-input"
+												placeholder="End Date"
+											/>
+										</div>
+										<button onClick={addDateRange} className="sched-add-range-button" disabled={!dateRangeStart || !dateRangeEnd}>
+											Add Range
+										</button>
+									</div>
+								)}
+
+								{datePickerMode === "fixed" && (
+									<div className="sched-mode-selector">
+										<label className="sched-mode-label">
+											<input
+												type="radio"
+												value="range"
+												checked={datePickerValue === "range"}
+												onChange={(e) => setDatePickerValue(e.target.value)}
+												className="sched-radio-input"
+											/>
+											Range
+										</label>
+										<label className="sched-mode-label">
+											<input
+												type="radio"
+												value="single"
+												checked={datePickerValue === "single"}
+												onChange={(e) => setDatePickerValue(e.target.value)}
+												className="sched-radio-input"
+											/>
+											Single
+										</label>
+									</div>
+								)}
+
+								{(selectedDates.length > 0 || hasChanges()) && (
+									<div className="sched-selected-dates-list">
+										<div className="sched-selected-dates-header">
+											<span>Selected Dates ({selectedDates.length}):</span>
+											<div className="sched-date-actions">
+												{hasChanges() && (
+													<button
+														onClick={saveDates}
+														className="sched-save-dates-button"
+														title="Save dates"
+														disabled={isSaving}
+													>
+														{isSaving ? "Saving..." : "Save Dates"}
+													</button>
+												)}
+												{selectedDates.length > 0 && (
+													<button onClick={clearAllDates} className="sched-clear-all-button" title="Clear all dates">
+														Clear All
+													</button>
+												)}
+											</div>
+										</div>
+										{scheduleData?.first_date && scheduleData?.last_date && selectedDates.length > 0 && (
+											<div className="sched-calendar-container">
+												<Calendar
+													selectRange={false}
+													activeStartDate={null}
+													onClickDay={handleCalendarDateClick}
+													tileClassName={tileClassName}
+												/>
+											</div>
+										)}
+									</div>
+								)}
+							</div>
+						) : (
+							<div className="sched-calendar-placeholder">Select an element to choose dates</div>
+						)}
+					</div>
+
+					<div className="sched-scheduled-dates">
+						<div className="sched-section-title">Scheduled Dates</div>
+						{selectedElement && scheduleData?.schedule ? (
+							generateScheduledCalendar() || (
+								<div className="sched-dates-placeholder">No scheduled dates for {getSelectedElementName()}</div>
+							)
+						) : (
+							<div className="sched-dates-placeholder">
+								{selectedElement ? "Generate schedule to see scheduled dates" : "Select an element to see scheduled dates"}
+							</div>
+						)}
+					</div>
+				</div>
+
+				<div className="sched-center-panel">
+					<div className="sched-schedule-header">
+						Schedule
+						{scheduleData?.schedule && (
+							<span className="sched-schedule-header-generated">
+								&nbsp;– Generated Schedule for {generatedMaxScenes || "N/A"} max scenes per day
+							</span>
+						)}
+					</div>
+
+					{conflicts.length > 0 && (
+						<div className="sched-schedule-header sched-schedule-header-conflict">
+							<button
+								className="sched-conflict-button"
+								onClick={() => {
+									setShowConflictModal(true);
+								}}
+							>
+								Show conflicts
+							</button>
+
+							<span className="sched-conflict-text">There are some conflicts in this schedule</span>
+						</div>
+					)}
+
+					<ConflictsModal />
+
+					<div className="sched-controls-section">
+						<div className="sched-controls-group">
+							<label className="sched-controls-label">
+								Schedule By:
+								<select value={scheduleMode} onChange={(e) => setScheduleMode(e.target.value)} className="sched-mode-dropdown">
+									<option value="scenes">Max Scenes Per Day</option>
+									<option value="page-eights">Max Page-Eights Per Day</option>
+									<option value="hours">Max Shooting Hours Per Day</option>
+								</select>
+							</label>
+						</div>
+
+						{scheduleMode === "scenes" && (
+							<div className="sched-controls-group">
+								<label className="sched-controls-label">Max scenes:</label>
+								<input
+									type="number"
+									value={maxScenes}
+									onChange={(e) => setMaxScenes(e.target.value)}
+									className="sched-page-input"
+									placeholder="5"
+									min="1"
+								/>
+							</div>
+						)}
+
+						{scheduleMode === "page-eights" && (
+							<div className="sched-controls-group">
+								<label className="sched-controls-label">Max page-eights:</label>
+								<input
+									type="number"
+									value={maxPageEights.pages}
+									onChange={(e) => setMaxPageEights({ ...maxPageEights, pages: e.target.value })}
+									className="sched-page-input"
+									placeholder="2"
+									min="0"
+								/>
+
+								<input
+									type="number"
+									value={maxPageEights.eighths}
+									onChange={(e) => setMaxPageEights({ ...maxPageEights, eighths: e.target.value })}
+									className="sched-page-input"
+									placeholder="3"
+									min="0"
+									max="7"
+								/>
+								<span>/8</span>
+							</div>
+						)}
+
+						{scheduleMode === "hours" && (
+							<div className="sched-controls-group">
+								<label className="sched-controls-label">Max hours:</label>
+								<input
+									type="number"
+									className="sched-page-input"
+									placeholder="HH"
+									value={maxHours.hours}
+									onChange={(e) => setMaxHours({ ...maxHours, hours: e.target.value })}
+								/>
+								<span>:</span>
+								<input
+									type="number"
+									className="sched-page-input"
+									placeholder="MM"
+									value={maxHours.minutes}
+									onChange={(e) => setMaxHours({ ...maxHours, minutes: e.target.value })}
+								/>
+							</div>
+						)}
+
+						<div className="sched-controls-group">
+							<button className="sched-generate-button" onClick={handleGenerateSchedule} disabled={isGenerating}>
+								{isGenerating ? "GENERATING..." : "GENERATE"}
+							</button>
+
+							<div className="sched-flex-grow" />
+
+							{scheduleData?.schedule &&
+								(isEditing ? (
+									<div className="sched-flex-row sched-gap-10" style={{ alignItems: "center" }}>
+										<button onClick={handleSaveChanges} className="sched-action-btn-success">
+											Save
+										</button>
+
+										<input
+											label="Add a date"
+											type="date"
+											value={newScheduleDayInput}
+											onChange={(e) => setNewScheduleDayInput(e.target.value)}
+											className="sched-date-picker"
+										/>
+										<button onClick={handleAddScheduleDay} className="sched-action-btn-primary" disabled={!newScheduleDayInput}>
+											Add Day
+										</button>
+										<button
+											onClick={() => {
+												setScheduleDays(originalScheduleDays);
+												setIsEditing(false);
+											}}
+											className="sched-action-btn-danger"
+										>
+											Cancel
+										</button>
+									</div>
+								) : (
+									<button
+										onClick={() => {
+											setOriginalScheduleDays(JSON.parse(JSON.stringify(scheduleDays)));
+											setIsEditing(true);
+										}}
+										className="sched-action-btn"
+									>
+										Edit
+									</button>
+								))}
+
+							{scheduleMode == "hours" && (
+								<button className="sched-action-btn" onClick={handleSaveHours}>
+									Save Est. Hours
+								</button>
+							)}
+						</div>
+					</div>
+
+					{scheduleData?.schedule && (
+						<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+							{/* Unscheduled Scenes Panel - Always visible */}
+							<UnscheduledScenesPanel
+								unscheduledScenesWithIds={unscheduledScenesWithIds}
+								isEditing={isEditing}
+								characterNameToIdMap={characterNameToIdMap}
+							/>
+							<div className="sched-schedule-content">
+								{scheduleDays.map((day) => {
+									return (
+										<ScheduleColumn
+											key={day.id}
+											day={day}
+											isEditing={isEditing}
+											scheduleMode={scheduleMode}
+											sceneHours={sceneHours}
+											setSceneHours={setSceneHours}
+											setScheduleDays={setScheduleDays}
+											characterNameToIdMap={characterNameToIdMap}
+										/>
+									);
+								})}
+							</div>
+						</DndContext>
+					)}
+					{!scheduleData?.schedule && scenes.length > 0 && (
+						<div className="sched-all-scenes-container">
+							<h4>All Scenes</h4>
+							<table className="sched-table">
+								<thead className="sched-thead">
+									<tr className="sched-header-row">
+										<th className="sched-header-cell">Scene</th>
+
+										<th className="sched-header-cell">Int./Ext.</th>
+										<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
+
+										<th className="sched-header-cell">Pgs</th>
+
+										<th className="sched-header-cell">Characters</th>
+										<th className="sched-header-cell">Est. Hours</th>
+									</tr>
+								</thead>
+								<tbody>
+									{scenes.map((scene, index) => (
+										<tr key={index} className="sched-data-row">
+											<td className="sched-data-cell">{scene["Scene Number"] || scene["Scene No."] || ""}</td>
+
+											<td className="sched-data-cell">{scene["Int./Ext."]}</td>
+											<td className="sched-data-cell sched-location-synopsis-column">
+												{scene["Location"]}
+												<br />
+												<br /> Synopsis: {scene["Synopsis"]}
+											</td>
+											<td className="sched-data-cell">{formatPageEights(scene["Page Eighths"] || scene["Pgs"])}</td>
+											<td className="sched-data-cell"> {scene["Characters"]}</td>
+											<td className="sched-data-cell">
+												<input
+													type="number"
+													className="sched-hours-input"
+													placeholder="HH"
+													value={sceneHours[scene["Scene Number"] ?? scene["Scene No."]]?.hours ?? ""}
+													onChange={(e) => {
+														const newSceneHours = { ...sceneHours };
+														if (!newSceneHours[scene["Scene Number"] || scene["Scene No."]]) {
+															newSceneHours[scene["Scene Number"] || scene["Scene No."]] = {
+																hours: "",
+																minutes: "",
+															};
+														}
+														const value = parseInt(e.target.value);
+														console.log(value);
+														if (value < 0) {
+															alert("Cannot have negative values for hours");
+															return;
+														}
+														newSceneHours[scene["Scene Number"] || scene["Scene No."]].hours = value;
+														setSceneHours(newSceneHours);
+													}}
+												/>
+												<span>
+													:<br />
+												</span>
+												<input
+													type="number"
+													className="sched-hours-input"
+													placeholder="MM"
+													value={sceneHours[scene["Scene Number"] ?? scene["Scene No."]]?.minutes ?? ""}
+													onChange={(e) => {
+														const newSceneHours = { ...sceneHours };
+														if (!newSceneHours[scene["Scene Number"] || scene["Scene No."]]) {
+															newSceneHours[scene["Scene Number"] || scene["Scene No."]] = {
+																hours: "",
+																minutes: "",
+															};
+														}
+														const value = parseInt(e.target.value);
+														console.log(value);
+														if (value < 0 || value > 60) {
+															alert("Enter a acceptable value for minutes");
+															return;
+														}
+														newSceneHours[scene["Scene Number"] || scene["Scene No."]].minutes = value;
+														setSceneHours(newSceneHours);
+													}}
+												/>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					)}
+					{!scheduleData?.schedule && scenes.length === 0 && (
+						<div className="sched-empty-section">
+							<div className="sched-empty-message">Generate rough schedule</div>
+						</div>
+					)}
+				</div>
+
+				<Chatbot scheduleData={scheduleData} scheduleDays={scheduleDays} scenes={scenes} id={id} fetchScheduleData={fetchScheduleData} />
+			</div>
+		</div>
+	);
+};
+
+export default ManageSchedules;

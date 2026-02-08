@@ -1,0 +1,314 @@
+/* UserSettings.css - Matching app design language */
+
+/* Page Container */
+.user-settings-page {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	background-color: #f7f8fa;
+	font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+	color: #0f1724;
+	padding: 24px;
+	padding-left: calc(270px + 24px);
+}
+
+/* Header */
+.user-settings-header {
+	margin-bottom: 24px;
+	padding-bottom: 16px;
+	border-bottom: 1px solid #e6ecf8;
+}
+
+.user-settings-title {
+	font-size: 24px;
+	font-weight: 700;
+	color: #0f1724;
+	margin: 0 0 8px 0;
+}
+
+.user-settings-subtitle {
+	font-size: 14px;
+	font-weight: 500;
+	color: #6b7280;
+	margin: 0;
+}
+
+/* Cards */
+.user-settings-card {
+	background: #fff;
+	border-radius: 16px;
+	border: 1px solid #e2e6ed;
+	padding: 24px;
+	margin-bottom: 20px;
+	box-shadow: 0 4px 20px rgba(15, 23, 36, 0.08), 0 2px 6px rgba(15, 23, 36, 0.04);
+}
+
+.user-settings-card-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	padding-bottom: 16px;
+	margin-bottom: 16px;
+	border-bottom: 1px solid #e6ecf8;
+}
+
+.user-settings-card-header-left {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.user-settings-card-title {
+	font-size: 18px;
+	font-weight: 700;
+	color: #0f1724;
+	margin: 0;
+}
+
+.user-settings-card-subtitle {
+	font-size: 13px;
+	color: #6b7280;
+	font-weight: 500;
+	margin: 0;
+}
+
+/* Form Elements */
+.user-settings-form-group {
+	margin-bottom: 20px;
+}
+
+.user-settings-label {
+	display: block;
+	font-size: 13px;
+	font-weight: 600;
+	color: #0f1724;
+	margin-bottom: 8px;
+}
+
+.user-settings-input {
+	width: 100%;
+	max-width: 400px;
+	padding: 10px 14px;
+	border-radius: 8px;
+	border: 1px solid #e6ecf8;
+	background-color: #f8f9fb;
+	color: #0f1724;
+	font-size: 14px;
+	font-family: "Inter", sans-serif;
+	transition: border-color 0.15s ease;
+}
+
+.user-settings-input:focus {
+	outline: none;
+	border-color: #ff6758;
+}
+
+.user-settings-input:read-only {
+	background-color: #f3f4f6;
+	color: #6b7280;
+	cursor: default;
+}
+
+/* Buttons */
+.user-settings-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 10px 18px;
+	border-radius: 8px;
+	border: 1px solid #ff6758;
+	background: transparent;
+	font-family: "Inter", sans-serif;
+	font-size: 13px;
+	font-weight: 600;
+	color: #ff6758;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.user-settings-btn:hover {
+	background: rgba(255, 103, 88, 0.08);
+}
+
+.user-settings-btn-primary {
+	background: linear-gradient(180deg, #ff6454 0%, #ff4c3a 100%);
+	border-color: #ca2212;
+	color: #fff;
+	box-shadow: 0px 3px 6px -1px rgba(202, 34, 18, 0.1), inset 0px 1px 0px 1px #ee1500;
+}
+
+.user-settings-btn-primary:hover {
+	background: linear-gradient(180deg, #ff5040 0%, #ff3828 100%);
+}
+
+.user-settings-btn-secondary {
+	background-color: #f3f4f6;
+	border-color: #e2e6ed;
+	color: #374151;
+}
+
+.user-settings-btn-secondary:hover {
+	background-color: #e5e7eb;
+}
+
+.user-settings-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Table */
+.user-settings-table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0 6px;
+}
+
+.user-settings-thead {
+	position: sticky;
+	top: 0;
+	z-index: 5;
+}
+
+.user-settings-header-row {
+	background: #f3f5f9;
+}
+
+.user-settings-header-cell {
+	padding: 10px 14px;
+	font-family: "Inter", sans-serif;
+	font-size: 11px;
+	font-weight: 700;
+	color: #6b7280;
+	white-space: nowrap;
+	text-align: left;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	background: #f5f6f8;
+	border-top: 1px solid #e6ecf8;
+	border-bottom: 1px solid #e6ecf8;
+}
+
+.user-settings-header-cell:first-child {
+	border-left: 1px solid #e6ecf8;
+	border-top-left-radius: 8px;
+	border-bottom-left-radius: 8px;
+}
+
+.user-settings-header-cell:last-child {
+	border-right: 1px solid #e6ecf8;
+	border-top-right-radius: 8px;
+	border-bottom-right-radius: 8px;
+}
+
+.user-settings-data-row {
+	background: #fff;
+	transition: all 0.15s ease;
+}
+
+.user-settings-data-row:hover {
+	background-color: #fff8f7;
+}
+
+.user-settings-data-row:hover .user-settings-data-cell {
+	background-color: #fff8f7;
+	border-color: #ffd6d2;
+}
+
+.user-settings-data-cell {
+	padding: 12px 14px;
+	font-family: "Inter", sans-serif;
+	font-size: 13px;
+	font-weight: 400;
+	color: #0f1724;
+	vertical-align: middle;
+	background: #fff;
+	border-top: 1px solid #eaecf0;
+	border-bottom: 1px solid #eaecf0;
+	transition: all 0.15s ease;
+}
+
+.user-settings-data-cell:first-child {
+	border-left: 1px solid #e6ecf8;
+	border-top-left-radius: 8px;
+	border-bottom-left-radius: 8px;
+}
+
+.user-settings-data-cell:last-child {
+	border-right: 1px solid #e6ecf8;
+	border-top-right-radius: 8px;
+	border-bottom-right-radius: 8px;
+}
+
+.user-settings-empty-row {
+	text-align: center;
+	color: #9ca3af;
+	font-style: italic;
+	padding: 24px 16px;
+	background: #fafbfc;
+}
+
+/* Billing Section */
+.user-settings-billing-info {
+	font-size: 14px;
+	color: #0f1724;
+	margin-bottom: 16px;
+}
+
+.user-settings-billing-plan {
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 12px;
+	background: linear-gradient(180deg, #ff6454 0%, #ff4c3a 100%);
+	color: white;
+	border-radius: 20px;
+	font-size: 12px;
+	font-weight: 600;
+	margin-left: 8px;
+}
+
+/* Loading / Error States */
+.user-settings-loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 200px;
+	padding-left: 270px;
+	font-size: 14px;
+	color: #6b7280;
+}
+
+.user-settings-error {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 200px;
+	padding-left: 270px;
+	font-size: 14px;
+	color: #dc2626;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+	.user-settings-page {
+		padding: 16px;
+		padding-left: 16px;
+	}
+
+	.user-settings-card {
+		padding: 16px;
+	}
+
+	.user-settings-card-header {
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.user-settings-input {
+		max-width: 100%;
+	}
+
+	.user-settings-loading,
+	.user-settings-error {
+		padding-left: 16px;
+	}
+}

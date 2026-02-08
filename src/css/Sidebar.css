@@ -1,0 +1,356 @@
+/* Sidebar.css - Styles for Sidebar component (Figma Design) */
+
+/* Container */
+.sidebar-container {
+	height: 100%;
+	width: 238px;
+	background-color: #fbfbfb;
+	border-right: 2px solid #ebebed;
+	font-family: "Inter", sans-serif;
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 100;
+	display: flex;
+	flex-direction: column;
+	padding: 7px 0 12px 0;
+	box-sizing: border-box;
+	transition: width 0.3s ease;
+}
+
+/* Collapsed Sidebar */
+.sidebar-container.collapsed {
+	width: 60px;
+	padding: 7px 8px 12px 8px;
+}
+
+.sidebar-nav {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Header Section */
+.sidebar-header {
+	display: flex;
+	align-items: center;
+	gap: 11.5px;
+	padding: 0 8px 10px 8px;
+}
+
+.sidebar-logo-icon {
+	width: 28px;
+	height: 28.75px;
+	flex-shrink: 0;
+	cursor: pointer;
+}
+
+.sidebar-logo-text {
+	font-size: 23.414px;
+	font-weight: 500;
+	letter-spacing: -0.9366px;
+	line-height: 22.582px;
+	color: black;
+	cursor: pointer;
+}
+
+.sidebar-toggle {
+	width: 28.75px;
+	height: 28.75px;
+	transform: rotate(180deg) scaleY(-1);
+	cursor: pointer;
+	margin-left: auto;
+	color: grey;
+	transition: transform 0.3s ease;
+}
+
+.sidebar-toggle:hover {
+	color: #ff4533;
+}
+
+.sidebar-toggle.collapsed {
+	transform: rotate(0deg) scaleY(-1);
+}
+
+/* Collapsed Header */
+.sidebar-container.collapsed .sidebar-header {
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding-bottom: 12px;
+}
+
+.sidebar-container.collapsed .sidebar-logo-icon {
+	width: 24px;
+	height: 24.75px;
+}
+
+.sidebar-container.collapsed .sidebar-toggle {
+	margin-left: 0;
+	width: 24px;
+	height: 24px;
+}
+
+/* Project Name Button */
+.sidebar-project-wrapper {
+	padding: 10px 8px 10px 8px;
+	border-bottom: 2px solid #ebebed;
+	border-top: 2px solid #ebebed;
+}
+
+.sidebar-project-button {
+	width: 100%;
+	height: 42px;
+	background-color: transparent;
+	border: 1.078px solid #ca2212;
+	border-radius: 6.469px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 7px 14px;
+	cursor: pointer;
+	position: relative;
+	overflow: hidden;
+	box-sizing: border-box;
+}
+
+.sidebar-project-button::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
+	pointer-events: none;
+}
+
+.sidebar-project-name {
+	font-family: "Arial", sans-serif;
+	font-size: 15.094px;
+	font-weight: 700;
+	color: #4a4a4a;
+	line-height: normal;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+
+/* Workspace Selector */
+.sidebar-workspace-selector {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	cursor: pointer;
+	padding: 15px 10px 10px 14px;
+}
+
+.sidebar-workspace-badge {
+	width: 25px;
+	height: 25px;
+	background-color: #ffcd29;
+	border-radius: 15px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.sidebar-workspace-badge-text {
+	font-family: "Inter", sans-serif;
+	font-size: 10.662px;
+	font-weight: 400;
+	line-height: 12.035px;
+	color: black;
+}
+
+.sidebar-workspace-name-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 3.308px;
+	flex: 1;
+}
+
+.sidebar-workspace-name {
+	font-family: "Inter", sans-serif;
+	font-size: 16px;
+	font-weight: 500;
+	line-height: 21px;
+	color: black;
+}
+
+.sidebar-workspace-caret {
+	width: 11.577px;
+	height: 11.577px;
+	flex-shrink: 0;
+	color: black;
+}
+
+/* Menu Section (Settings & Profile) */
+.sidebar-menu-section {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 0 7px 10px 7px;
+	margin-bottom: 10px;
+	border-bottom: 2px solid #ebebed;
+}
+
+.sidebar-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 7px;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	border-radius: 6px;
+	text-decoration: none;
+}
+
+.sidebar-menu-item:hover {
+	background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-menu-icon {
+	width: 24px;
+	height: 24px;
+	color: #444;
+	flex-shrink: 0;
+}
+
+.sidebar-menu-text {
+	font-family: "Inter", sans-serif;
+	font-size: 16px;
+	font-weight: 500;
+	color: #444;
+	line-height: normal;
+}
+
+/* Back Button for Settings View */
+.sidebar-back-button {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 8px 5px;
+	cursor: pointer;
+	transition: all 0.2s;
+	text-decoration: none;
+	margin-bottom: 16px;
+	border-bottom: 1px solid #ebebed;
+	padding-bottom: 12px;
+}
+
+.sidebar-back-button:hover {
+	background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-back-button .sidebar-nav-icon {
+	color: #666;
+}
+
+.sidebar-back-button .sidebar-nav-text {
+	color: #666;
+	font-size: 14px;
+}
+
+/* Main Navigation */
+.sidebar-main-nav {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding-left: 10px;
+}
+
+.sidebar-nav-item {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 8px 5px;
+	cursor: pointer;
+	transition: all 0.2s;
+	text-decoration: none;
+}
+
+.sidebar-nav-item:hover {
+	background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-nav-item.active {
+	background: linear-gradient(to bottom, #ff6657, #ff4b39 91.25%);
+	border: 1px solid #ca2212;
+	margin-left: 0;
+    
+	box-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.15), inset 0px 2px 0px 0px #ee1500;
+}
+
+.sidebar-nav-icon {
+	width: 24px;
+	height: 24px;
+	color: #444;
+	flex-shrink: 0;
+}
+
+.sidebar-nav-item.active .sidebar-nav-icon {
+	color: white;
+}
+
+.sidebar-nav-text {
+	font-family: "Inter", sans-serif;
+	font-size: 16px;
+	font-weight: 500;
+	color: #444;
+	line-height: normal;
+}
+
+.sidebar-nav-item.active .sidebar-nav-text {
+	color: white;
+}
+
+/* Collapsed Navigation */
+.sidebar-container.collapsed .sidebar-nav-item {
+	justify-content: center;
+	padding: 8px;
+}
+
+.sidebar-container.collapsed .sidebar-main-nav {
+	padding: 0 4px;
+}
+
+/* Spacer */
+.sidebar-spacer {
+	flex: 1;
+}
+
+/* Log Out Section */
+.sidebar-logout {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 6px;
+	cursor: pointer;
+	transition: background-color 0.2s;
+
+	padding-top: 14px;
+	border-top: 2px solid #ebebed;
+}
+
+.sidebar-logout:hover {
+	background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-logout-icon {
+	width: 24px;
+	height: 24px;
+	color: #444;
+	flex-shrink: 0;
+}
+
+.sidebar-logout-text {
+	font-family: "Inter", sans-serif;
+	font-size: 16px;
+	font-weight: 500;
+	color: #444;
+	line-height: normal;
+}

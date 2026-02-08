@@ -1,12 +1,30 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kinople - AI Assistant Director</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Kinople - AI Assistant Director</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+		<style>
+			.highlight {
+				background-color: red;
+			}
+			.highlight-blue {
+				background-color: #007bff !important;
+				color: rgb(230, 238, 0) !important;
+			}
+			/* Hover effect for any date */
+			.react-calendar__tile:hover {
+				background-color: #e0f0ff !important; /* light blue */
+				color: #007bff !important;
+				border-radius: 50%;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="root"></div>
+		<script type="module" src="/src/main.jsx"></script>
+	</body>
 </html>

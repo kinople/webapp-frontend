@@ -1,0 +1,534 @@
+/* Script.css - Styles for Script page based on Figma design */
+
+.script-page-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	background-color: #fff;
+	width: 100%;
+    padding: 0;
+    padding-top: 38px;
+    margin: 0;
+}
+
+/* Header Section */
+.script-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 16px;
+	padding-top: 10px;
+	margin-top: 7px;
+	background-color: #fff;
+	gap: 16px;
+}
+
+.script-header-left {
+	display: flex;
+	align-items: center;
+	gap: 28px;
+	flex: 1;
+}
+
+.script-nav-button {
+	width: 38px;
+	height: 39px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	padding: 0;
+	flex-shrink: 0;
+}
+
+.script-nav-button img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.script-nav-button:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+
+/* Script Tabs */
+.script-tabs-container {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 30px;
+	flex: 1;
+	overflow: visible;
+}
+
+.script-tab {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 132px;
+	height: 45px;
+	padding: 7.5px 15px;
+	border-radius: 7px;
+	font-family: "Inter", Arial, sans-serif;
+	font-size: 16px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	position: relative;
+	background: transparent;
+	border: 0.5px solid rgba(238, 21, 0, 0.96);
+	color: #ee1500;
+	flex-shrink: 0;
+}
+
+.script-tab-name {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: center;
+}
+
+.script-tab:hover {
+	background-color: rgba(238, 21, 0, 0.05);
+}
+
+.script-tab.active {
+	border: 1.155px solid #ca2212;
+	font-weight: 700;
+}
+
+.script-tab-arrow {
+	width: 7px;
+	height: 12.832px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transform: rotate(90deg);
+}
+
+.script-tab-arrow img {
+	width: 100%;
+	height: 100%;
+}
+
+/* Tab Dropdown Menu */
+.script-tab-wrapper {
+	position: relative;
+}
+
+.script-tab-dropdown {
+	position: absolute;
+	top: calc(100% + 8px);
+	left: 50%;
+	transform: translateX(-50%);
+	background: #fff;
+	border-radius: 10px 10px 12px 10px;
+	box-shadow: 0px 3px 22.7px 0px rgba(0, 0, 0, 0.16);
+	width: 139px;
+	z-index: 100;
+	overflow: hidden;
+}
+
+.script-tab-dropdown-item {
+	display: flex;
+	align-items: center;
+	padding: 6.567px 35px;
+	height: 27px;
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 10.951px;
+	color: #000;
+	cursor: pointer;
+	text-transform: capitalize;
+	background: transparent;
+	border: none;
+	width: 100%;
+	text-align: left;
+}
+
+.script-tab-dropdown-item:hover {
+	background-color: #f5f5f5;
+}
+
+.script-tab-dropdown-item:last-child {
+	border-top: 0.5px solid #e0e0e0;
+	border-radius: 0 0 14px 14px;
+	height: 26px;
+}
+
+/* Import New Draft Button */
+.script-import-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 9.157px;
+	width: auto;
+	height: 45px;
+	padding: 8.013px 16.025px;
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%), #ff4533;
+	border: 1.234px solid #ca2212;
+	border-radius: 7.405px;
+	box-shadow: 0px 4.937px 7.405px -1.234px rgba(202, 34, 18, 0.1), 0px 2.468px 4.937px -2.468px rgba(202, 34, 18, 0.1), inset 0px 1.234px 0px 1.234px #ee1500;
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 17.278px;
+	color: #f5f5f5;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	white-space: nowrap;
+}
+
+.script-import-button:hover {
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 100%), #ff4533;
+}
+
+.script-import-button.disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.script-import-button svg {
+	width: 24px;
+	height: 24px;
+}
+
+/* Main Content Area */
+.script-main-content {
+	display: flex;
+	flex-direction: column;
+	flex-grow: 1;
+	padding: 10px;
+	gap: 9px;
+    height: 100vh;
+}
+
+.script-content-viewer {
+	flex-grow: 1;
+	background-color: #c9c9c9;
+	border-radius: 7px;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+}
+
+.script-pdf-viewer {
+	width: 100%;
+	height: 100%;
+	border: none;
+	border-radius: 7px;
+}
+
+.script-placeholder {
+	font-family: "Inter", sans-serif;
+	font-size: 16px;
+	color: #888;
+}
+
+/* Modal Overlay */
+.script-modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: rgba(0, 0, 0, 0.5);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	z-index: 1000;
+}
+
+/* Modal */
+.script-modal {
+	background-color: #fff;
+	border-radius: 8.243px;
+	padding: 9.89px 11.54px;
+	width: 479px;
+	max-width: 90%;
+}
+
+.script-modal-content {
+	display: flex;
+	flex-direction: column;
+	gap: 19.783px;
+}
+
+/* Modal Title */
+.script-modal-title {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 21.881px;
+	color: #000;
+	margin: 0;
+	line-height: normal;
+}
+
+/* Modal Input */
+.script-filename-input {
+	width: 100%;
+	height: 37.092px;
+	padding: 8.243px;
+	background: #fff;
+	border: 0.824px solid #ddd;
+	border-radius: 9.067px;
+	box-shadow: 0px 1.649px 3.297px 0px rgba(0, 0, 0, 0.04);
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 12.364px;
+	color: #000;
+	box-sizing: border-box;
+	letter-spacing: -0.2473px;
+}
+
+.script-filename-input::placeholder {
+	color: #98999d;
+}
+
+.script-filename-input:focus {
+	outline: none;
+	border-color: #ee1500;
+}
+
+/* File Tag */
+.script-file-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 9px 6.66px;
+	background: #fff;
+	border: 0.824px solid #ddd;
+	border-radius: 9.067px;
+	margin-top: 3.297px;
+}
+
+.script-file-tag-name {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 10px;
+	color: #98999d;
+}
+
+.script-file-tag-remove {
+	width: 11.54px;
+	height: 11.54px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	padding: 0;
+}
+
+.script-file-tag-remove svg {
+	width: 100%;
+	height: 100%;
+	color: #98999d;
+}
+
+/* Modal Buttons */
+.script-modal-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 7.418px;
+}
+
+.script-cancel-button {
+	width: 97.281px;
+	height: 28.787px;
+	background: transparent;
+	border: 0.724px solid #ff2d18;
+	border-radius: 4.345px;
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 11.586px;
+	color: #ff2d18;
+	cursor: pointer;
+	text-transform: capitalize;
+	transition: all 0.2s ease;
+}
+
+.script-cancel-button:hover {
+	background-color: rgba(255, 45, 24, 0.05);
+}
+
+.script-submit-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 104.683px;
+	height: 30.498px;
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%), #ff4533;
+	border: 0.776px solid #ca2212;
+	border-radius: 4.656px;
+	box-shadow: 0px 3.104px 4.656px -0.776px rgba(202, 34, 18, 0.1), 0px 1.552px 3.104px -1.552px rgba(202, 34, 18, 0.1), inset 0px 0.776px 0px 0.776px #ee1500;
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 10.863px;
+	color: #f5f5f5;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.script-submit-button:hover {
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 100%), #ff4533;
+}
+
+.script-submit-button.disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+/* Progress Bar Modal */
+.script-progress-modal {
+	display: flex;
+	flex-direction: column;
+	gap: 19.783px;
+}
+
+.script-progress-title {
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 21.881px;
+	color: #000;
+	margin: 0;
+	line-height: normal;
+}
+
+.script-progress-bar-container {
+	width: 100%;
+	height: 18.958px;
+	background: #fff;
+	border: 0.824px solid #ddd;
+	border-radius: 9.067px;
+	box-shadow: 0px 1.649px 3.297px 0px rgba(0, 0, 0, 0.04);
+	overflow: hidden;
+}
+
+.script-progress-bar {
+	height: 100%;
+	background: linear-gradient(90deg, #ff4533 0%, #ff6657 100%);
+	border-radius: 9.067px;
+	transition: width 0.3s ease;
+}
+
+.script-progress-percentage {
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 12.364px;
+	color: #98999d;
+	letter-spacing: -0.2473px;
+	margin-top: 4px;
+}
+
+.script-progress-footer {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.script-view-breakdown-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 5.038px 10.076px;
+	height: 30.498px;
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%), #ff4533;
+	border: 0.776px solid #ca2212;
+	border-radius: 4.656px;
+	box-shadow: 0px 3.104px 4.656px -0.776px rgba(202, 34, 18, 0.1), 0px 1.552px 3.104px -1.552px rgba(202, 34, 18, 0.1), inset 0px 0.776px 0px 0.776px #ee1500;
+	font-family: "Inter", sans-serif;
+	font-weight: 600;
+	font-size: 10.863px;
+	color: #f5f5f5;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.script-view-breakdown-button:hover {
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 100%), #ff4533;
+}
+
+/* Model Selection (admin only) */
+.script-model-selection {
+	margin-top: 8px;
+}
+
+.script-model-label {
+	display: block;
+	margin-bottom: 4px;
+	font-family: "Inter", sans-serif;
+	font-size: 12px;
+	color: #666;
+	font-weight: 500;
+}
+
+.script-model-select {
+	width: 100%;
+	height: 37.092px;
+	padding: 8.243px;
+	background: #fff;
+	border: 0.824px solid #ddd;
+	border-radius: 9.067px;
+	box-shadow: 0px 1.649px 3.297px 0px rgba(0, 0, 0, 0.04);
+	font-family: "Inter", sans-serif;
+	font-weight: 500;
+	font-size: 12.364px;
+	color: #000;
+	cursor: pointer;
+}
+
+/* Divider Line */
+.script-divider {
+	width: 100%;
+	height: 0;
+	margin: 0;
+	border: none;
+	border-top: 2px solid #ebebed;
+}
+
+/* When there are no scripts */
+.script-empty-tabs {
+	font-family: "Inter", sans-serif;
+	font-size: 14px;
+	color: #888;
+	padding: 12px 16px;
+}
+
+/* Hidden file input */
+.script-hidden-input {
+	display: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+	.script-header {
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.script-tabs-container {
+		flex-wrap: wrap;
+		justify-content: center;
+	}
+
+	.script-tab {
+		width: 110px;
+		height: 40px;
+		font-size: 14px;
+	}
+
+	.script-import-button {
+		width: auto;
+	}
+
+	.script-modal {
+		width: 95%;
+		padding: 16px;
+	}
+}
