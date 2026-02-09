@@ -119,40 +119,99 @@ const Script = () => {
 				return "Finalizing breakdown...";
 			};
 
-			// Animate progress from 0% to 95% over 10 minutes (600 seconds)
-			const totalDuration = 600000; // 10 minutes in milliseconds
-			const targetProgress = 95;
-			const updateInterval = 1000; // Update every second
-			const progressIncrement = targetProgress / (totalDuration / updateInterval);
-
-			let currentProgress = 0;
-			const progressInterval = setInterval(() => {
-				if (currentProgress < targetProgress) {
-					currentProgress = Math.min(currentProgress + progressIncrement, targetProgress);
-					setProgress(Math.round(currentProgress));
-					setBreakdownMessage(getProgressMessage(currentProgress));
-				}
-			}, updateInterval);
-
 			const breakdownUrl =
 				user === "2"
 					? getApiUrl(`/api/${id}/generate-breakdown/${fileName}?model=${selectedModel}`)
 					: getApiUrl(`/api/${id}/generate-breakdown/${fileName}`);
 
+			// Start the breakdown generation (returns 202 immediately)
 			const breakdownResponse = await fetch(breakdownUrl, {
 				method: "POST",
 				mode: "cors",
 			});
 
-			// Stop the progress animation
-			clearInterval(progressInterval);
-
 			if (!breakdownResponse.ok) {
-				throw new Error("Failed to generate script breakdown");
+				throw new Error("Failed to start breakdown generation");
 			}
 
-			setProgress(100);
-			setBreakdownMessage("Breakdown completed!");
+			const breakdownData = await breakdownResponse.json();
+			
+			// Check if we got 202 Accepted (async processing)
+			if (breakdownResponse.status === 202) {
+				const scriptId = breakdownData.script_id;
+				
+				if (!scriptId) {
+					throw new Error("Script ID not returned from breakdown API");
+				}
+
+				// Start animated progress from 0% to 95% over 10 minutes (600 seconds)
+				const totalDuration = 600000; // 10 minutes in milliseconds
+				const targetProgress = 95;
+				const updateInterval = 1000; // Update every second
+				const progressIncrement = targetProgress / (totalDuration / updateInterval);
+
+				let currentProgress = 0;
+				const progressInterval = setInterval(() => {
+					if (currentProgress < targetProgress) {
+						currentProgress = Math.min(currentProgress + progressIncrement, targetProgress);
+						setProgress(Math.round(currentProgress));
+						setBreakdownMessage(getProgressMessage(currentProgress));
+					}
+				}, updateInterval);
+
+				// Poll for breakdown status using the dedicated endpoint
+				const pollInterval = setInterval(async () => {
+					try {
+						const statusResponse = await fetch(
+							getApiUrl(`/api/${id}/breakdown-status?script_id=${scriptId}`),
+							{
+								method: "GET",
+								headers: {
+									"Content-Type": "application/json",
+								},
+								credentials: "include",
+								mode: "cors",
+							}
+						);
+
+						if (statusResponse.ok) {
+							const statusData = await statusResponse.json();
+							const status = statusData.status;
+							
+							console.log("Breakdown status:", status);
+							
+							if (status === 'completed') {
+								clearInterval(progressInterval);
+								clearInterval(pollInterval);
+								setProgress(100);
+								setBreakdownMessage("Breakdown completed!");
+							} else if (status === 'failed') {
+								clearInterval(progressInterval);
+								clearInterval(pollInterval);
+								const errorMsg = statusData.message || "Breakdown generation failed";
+								setBreakdownMessage(`Failed: ${errorMsg}`);
+								alert(`Breakdown generation failed: ${errorMsg}`);
+							}
+							// If status is 'processing', continue polling
+						}
+					} catch (pollError) {
+						console.error("Error polling breakdown status:", pollError);
+					}
+				}, 3000); // Poll every 3 seconds
+
+				// Cleanup intervals after 15 minutes (safety timeout)
+				setTimeout(() => {
+					clearInterval(progressInterval);
+					clearInterval(pollInterval);
+					if (progress < 100) {
+						setBreakdownMessage("Please check breakdown status manually");
+					}
+				}, 900000); // 15 minutes
+			} else {
+				// If not 202, assume it's already completed (old API behavior)
+				setProgress(100);
+				setBreakdownMessage("Breakdown completed!");
+			}
 		} catch (error) {
 			console.error("Upload/Breakdown error:", error);
 			alert("Error in generating Breakdown, try again");
