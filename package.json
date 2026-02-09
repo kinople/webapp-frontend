@@ -20,6 +20,8 @@
     "@dnd-kit/sortable": "^10.0.0",
     "chart.js": "^4.5.0",
     "date-fns": "^4.1.0",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
     "gh-pages": "^6.3.0",
     "react": "^19.0.0",
     "react-calendar": "^6.0.0",

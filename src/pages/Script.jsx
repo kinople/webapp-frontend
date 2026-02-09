@@ -50,7 +50,9 @@ const Script = () => {
 				throw new Error("Failed to fetch scripts");
 			}
 
-			const data = await response.json();
+			var data = await response.json();
+			console.log("scripts list ", data);
+			data = data.filter((s) => s.status !== "archived");
 			setScriptList(data);
 			return data;
 		} catch (error) {
@@ -214,9 +216,36 @@ const Script = () => {
 	};
 
 	const handleArchiveScript = async (scriptName) => {
-		// Implement archive functionality
-		console.log("Archive script:", scriptName);
-		setActiveDropdown(null);
+		if (!window.confirm(`Are you sure you want to archive "${scriptName}"? \n you can restore this script from project settings once archived..`)) {
+			return;
+		}
+
+		try {
+			const response = await fetch(getApiUrl(`/api/${id}/archive-script/${scriptName}`), {
+				method: "POST",
+				credentials: "include",
+				mode: "cors",
+			});
+
+			if (!response.ok) {
+				console.log("response is ", response.status);
+				if (response.status === 402) {
+					throw new Error("Cannot archive master script");
+				}
+				throw new Error("Failed to archive script");
+			}
+
+			if (selectedScript === scriptName) {
+				setSelectedScript(null);
+				setPdfUrl(null);
+			}
+
+			await fetchScripts();
+			setActiveDropdown(null);
+		} catch (error) {
+			console.error("Error archiving script:", error);
+			alert(`Failed to archive script: ${error.message}`);
+		}
 	};
 
 	const handleScriptClick = async (script) => {

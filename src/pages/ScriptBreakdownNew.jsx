@@ -195,6 +195,7 @@ const ScriptBreakdownNew = () => {
 	const [editingSceneIndex, setEditingSceneIndex] = useState(0);
 	const [editingScene, setEditingScene] = useState(null);
 	const [pdfUrl, setPdfUrl] = useState(null);
+	const [pdfZoom, setPdfZoom] = useState(100);
 	const [hasBreakdown, setHasBreakdown] = useState(false);
 	const [filterText, setFilterText] = useState("");
 	const [parsing, setParsing] = useState([]);
@@ -359,7 +360,61 @@ const ScriptBreakdownNew = () => {
 		try {
 			setIsLoading(true);
 			setError(null);
-			const res = await fetch(getApiUrl(`/api/fetch-breakdown?script_id=${scriptId}`), { method: "GET" });
+			const res = await fetch(getApiUrl(`/api/fetch-generated-breakdown?script_id=${scriptId}`), { method: "GET" });
+			if (!res.ok) {
+				if (res.status === 404) {
+					setHasBreakdown(false);
+					setError("No breakdown available. Please generate a breakdown first by uploading and processing a script.");
+				} else {
+					throw new Error(`Failed to fetch breakdown: ${res.status}`);
+				}
+				return;
+			}
+			const data = await res.json();
+			if (data.parsing) {
+				setParsing(data.parsing);
+			} else {
+				setError("No parsing data found");
+			}
+			// Store characters list from breakdown
+			if (data.characters) {
+				setBreakdownCharacters(data.characters);
+			}
+			// Store scene breakdowns as JSON
+			if (data.scene_breakdowns) {
+				setSceneBreakdowns(data.scene_breakdowns);
+			}
+			// Store default and custom fields
+			if (data.default_fields) {
+				setDefaultFields(data.default_fields);
+			}
+			if (data.custom_fields) {
+				setCustomFields(data.custom_fields);
+			} else {
+				setCustomFields([]);
+			}
+			if (data.tsv_content) {
+				const parsed = parseTSV(data.tsv_content);
+				setScriptBreakdown(parsed);
+				setHasBreakdown(true);
+			} else {
+				setError("No breakdown data found");
+				setHasBreakdown(false);
+			}
+		} catch (e) {
+			console.error(e);
+			setError(e.message || "Failed to fetch breakdown");
+			setHasBreakdown(false);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	const fetchMasterBreakdown = async () => {
+		try {
+			setIsLoading(true);
+			setError(null);
+			const res = await fetch(getApiUrl(`/api/fetch-breakdown?project_id=${id}`), { method: "GET" });
 			if (!res.ok) {
 				if (res.status === 404) {
 					setHasBreakdown(false);
@@ -415,11 +470,13 @@ const ScriptBreakdownNew = () => {
 			if (res.ok) {
 				const scripts = await res.json();
 				const sorted = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
-				setAllScripts(sorted);
+				const activeScripts = scripts.filter((s) => s.status !== "archived");
+				setAllScripts(activeScripts);
+				console.log("all scripts ------------ ", sorted);
 				if (sorted.length > 0) {
 					// Always load master script (oldest one, last in sorted array) by default
-					const master = sorted[sorted.length - 1];
-					handleScriptSelect(master);
+					fetchMasterBreakdown();
+
 					// Set default generated script to the newest (first in sorted array) if there are multiple scripts
 					if (sorted.length > 1) {
 						setSelectedGeneratedScript(sorted[0]);
@@ -435,15 +492,23 @@ const ScriptBreakdownNew = () => {
 
 	const loadPdfPreview = async (scriptName) => {
 		try {
-			const response = await fetch(getApiUrl(`/api/${id}/script-file/${scriptName}`), { method: "GET" });
-			if (response.ok) {
-				const blob = await response.blob();
-				const url = URL.createObjectURL(blob);
-				setPdfUrl(url + "#view=FitH");
-			}
+			// Use script-serve endpoint which serves the file directly (no hash; zoom/toolbar set below)
+			const url = getApiUrl(`/api/${id}/script-serve/${scriptName}`);
+			setPdfUrl(url);
 		} catch (e) {
 			console.error("Error loading PDF", e);
 		}
+	};
+
+	const PDF_ZOOM_MIN = 50;
+	const PDF_ZOOM_MAX = 200;
+	const PDF_ZOOM_STEP = 25;
+
+	const handlePdfZoomIn = () => {
+		setPdfZoom((z) => Math.min(z + PDF_ZOOM_STEP, PDF_ZOOM_MAX));
+	};
+	const handlePdfZoomOut = () => {
+		setPdfZoom((z) => Math.max(z - PDF_ZOOM_STEP, PDF_ZOOM_MIN));
 	};
 
 	const handleScriptSelect = (script) => {
@@ -499,7 +564,7 @@ const ScriptBreakdownNew = () => {
 		castList.forEach((cast) => {
 			if (cast.character) {
 				mergedCharacters.push({
-					id: String(cast.cast_id),  // Use cast_id as string for consistent comparison
+					id: String(cast.cast_id), // Use cast_id as string for consistent comparison
 					name: cast.character,
 					cast_id: String(cast.cast_id),
 				});
@@ -512,8 +577,8 @@ const ScriptBreakdownNew = () => {
 	// Load correct breakdown when tab changes
 	useEffect(() => {
 		if (activeTab === "master" && masterScript) {
-			setSelectedScript(masterScript);
-			fetchBreakdown(masterScript.id);
+			setSelectedScript("masterScript");
+			fetchMasterBreakdown();
 		} else if (activeTab === "generated" && selectedGeneratedScript) {
 			setSelectedScript(selectedGeneratedScript);
 			fetchBreakdown(selectedGeneratedScript.id);
@@ -589,21 +654,24 @@ const ScriptBreakdownNew = () => {
 			return;
 		}
 
+		// Load PDF when entering scene editor (if not already loaded)
+		if (masterScript?.name && !pdfUrl) {
+			loadPdfPreview(masterScript.name);
+		}
+
 		setEditingSceneIndex(idx);
 		// Use JSON scene breakdown data (which is correct) instead of TSV parsed data
 		const displayData = sceneBreakdownToDisplayFormat(sceneData);
 		setEditingScene(displayData);
 		setEditingSceneParsing(parsing[idx] || { heading: "", content: "" });
-		
+
 		// Match characters by NAME from sceneData.characters to find IDs in allCharacters (castlist)
 		// This ensures consistency with the castlist regardless of old characters_ids
 		if (sceneData && sceneData.characters && Array.isArray(sceneData.characters)) {
 			const matchedIds = sceneData.characters
 				.map((charName) => {
 					const normalizedName = String(charName).trim().toUpperCase();
-					const foundChar = allCharacters.find(
-						(c) => c.name?.toUpperCase() === normalizedName
-					);
+					const foundChar = allCharacters.find((c) => c.name?.toUpperCase() === normalizedName);
 					return foundChar?.id;
 				})
 				.filter(Boolean);
@@ -618,7 +686,13 @@ const ScriptBreakdownNew = () => {
 		window.scrollTo({ top: 0, behavior: "smooth" });
 	};
 
-	const handleStartSceneEditor = () => openSceneEditorAt(0);
+	const handleStartSceneEditor = () => {
+		// Load PDF when entering scene editor
+		if (masterScript?.name && !pdfUrl) {
+			loadPdfPreview(masterScript.name);
+		}
+		openSceneEditorAt(0);
+	};
 
 	const handlePreviousScene = () => {
 		if (editingSceneIndex > 0) openSceneEditorAt(editingSceneIndex - 1);
@@ -750,7 +824,7 @@ const ScriptBreakdownNew = () => {
 				prev.map((scene) => ({
 					...scene,
 					[elementKey]: scene[elementKey] || [],
-				}))
+				})),
 			);
 
 			setNewElementName("");
@@ -803,7 +877,7 @@ const ScriptBreakdownNew = () => {
 					const newScene = { ...scene };
 					delete newScene[selectedElementToRemove];
 					return newScene;
-				})
+				}),
 			);
 
 			setSelectedElementToRemove(null);
@@ -887,7 +961,7 @@ const ScriptBreakdownNew = () => {
 			}
 
 			// Re-fetch breakdown to get updated data
-			fetchBreakdown(masterScript.id);
+			fetchMasterBreakdown();
 
 			setSelectedSceneToRemove(null);
 			setShowRemoveSceneModal(false);
@@ -1130,7 +1204,7 @@ const ScriptBreakdownNew = () => {
 
 			// Find the position of the original scene
 			const originalPosition = sceneBreakdowns.findIndex(
-				(s) => s.id === selectedSceneToSplit.id || s.scene_number === selectedSceneToSplit.scene_number
+				(s) => s.id === selectedSceneToSplit.id || s.scene_number === selectedSceneToSplit.scene_number,
 			);
 
 			// Step 1: Delete the original scene
@@ -1190,7 +1264,7 @@ const ScriptBreakdownNew = () => {
 			}
 
 			// Re-fetch breakdown to get updated data
-			fetchBreakdown(masterScript.id);
+			fetchMasterBreakdown();
 
 			setShowSplitSceneModal(false);
 			setSelectedSceneToSplit(null);
@@ -1294,10 +1368,7 @@ const ScriptBreakdownNew = () => {
 				};
 
 				// Combine characters from both scenes (unique)
-				const combinedCharacterIds = [...new Set([
-					...matchCharactersByName(scene1.characters),
-					...matchCharactersByName(scene2.characters)
-				])];
+				const combinedCharacterIds = [...new Set([...matchCharactersByName(scene1.characters), ...matchCharactersByName(scene2.characters)])];
 
 				// Use the first scene's basic info as default, combine the rest
 				const mergedForm = {
@@ -1361,7 +1432,7 @@ const ScriptBreakdownNew = () => {
 		const newSceneNumber = mergeSceneForm.scene_number.trim();
 		const mergedSceneNumbers = selectedScenesToMerge.map((s) => s.scene_number?.trim());
 		const duplicateScene = sceneBreakdowns.find(
-			(scene) => scene.scene_number?.trim() === newSceneNumber && !mergedSceneNumbers.includes(scene.scene_number?.trim())
+			(scene) => scene.scene_number?.trim() === newSceneNumber && !mergedSceneNumbers.includes(scene.scene_number?.trim()),
 		);
 		if (duplicateScene) {
 			alert(`Scene number "${newSceneNumber}" already exists. Please use a unique scene number.`);
@@ -1430,7 +1501,7 @@ const ScriptBreakdownNew = () => {
 
 			// Find the position of the first selected scene (to insert merged scene there)
 			const positions = selectedScenesToMerge.map((s) =>
-				sceneBreakdowns.findIndex((scene) => scene.id === s.id || scene.scene_number === s.scene_number)
+				sceneBreakdowns.findIndex((scene) => scene.id === s.id || scene.scene_number === s.scene_number),
 			);
 			const insertPosition = Math.min(...positions.filter((p) => p >= 0));
 
@@ -1491,7 +1562,7 @@ const ScriptBreakdownNew = () => {
 			}
 
 			// Re-fetch breakdown to get updated data
-			fetchBreakdown(masterScript.id);
+			fetchMasterBreakdown();
 
 			setShowMergeSceneModal(false);
 			setSelectedScenesToMerge([]);
@@ -1662,7 +1733,7 @@ const ScriptBreakdownNew = () => {
 			}
 
 			// Re-fetch breakdown to get updated data
-			fetchBreakdown(masterScript.id);
+			fetchMasterBreakdown();
 
 			setShowAddSceneModal(false);
 			setNewSceneForm({
@@ -1741,7 +1812,7 @@ const ScriptBreakdownNew = () => {
 
 		// Download the file
 		XLSX.writeFile(workbook, filename);
-	}, [sceneBreakdowns, selectedScript, customFields]);
+	}, [sceneBreakdowns, customFields]);
 
 	/* ---------- props columns: explicit list ---------- */
 	const propsHeaderNames = useMemo(() => {
@@ -1972,7 +2043,7 @@ const ScriptBreakdownNew = () => {
 			return Object.values(row).some((v) =>
 				String(v || "")
 					.toLowerCase()
-					.includes(q)
+					.includes(q),
 			);
 		});
 
@@ -2122,7 +2193,7 @@ const ScriptBreakdownNew = () => {
 													const sceneNum = row["Scene Number"];
 													const sceneData = sceneBreakdowns.find((s) => s.scene_number === sceneNum);
 													const isSelected = selectedScenesToMerge.some(
-														(s) => s.scene_number === sceneNum || s.id === sceneData?.id
+														(s) => s.scene_number === sceneNum || s.id === sceneData?.id,
 													);
 													return (
 														<button
@@ -3073,7 +3144,7 @@ const ScriptBreakdownNew = () => {
 												? `= ${mergeSceneForm.page_eighths}/8 page`
 												: `= ${Math.floor(mergeSceneForm.page_eighths / 8)} ${
 														mergeSceneForm.page_eighths % 8 > 0 ? `${mergeSceneForm.page_eighths % 8}/8` : ""
-												  } pages`}
+													} pages`}
 										</span>
 									</div>
 								</div>
@@ -3339,7 +3410,7 @@ const ScriptBreakdownNew = () => {
 												? `= ${newSceneForm.page_eighths}/8 page`
 												: `= ${Math.floor(newSceneForm.page_eighths / 8)} ${
 														newSceneForm.page_eighths % 8 > 0 ? `${newSceneForm.page_eighths % 8}/8` : ""
-												  } pages`}
+													} pages`}
 										</span>
 									</div>
 								</div>
@@ -3494,7 +3565,7 @@ const ScriptBreakdownNew = () => {
 																		})
 																	}
 																	placeholder={`e.g., ${snakeCaseToTitleCase(
-																		customFields[index + 1]
+																		customFields[index + 1],
 																	)} items...`}
 																	className="sbn-form-input"
 																/>
@@ -3547,30 +3618,40 @@ const ScriptBreakdownNew = () => {
 						<div className="sbn-right-pane">
 							<div className="sbn-pdf-header">
 								<h3 className="sbn-pdf-title">Script Preview</h3>
-								{!isViewOnly && (
-									<button
-										className="sbn-edit-parsing-btn"
-										onClick={() => {
-											setEditParsing(true);
-										}}
-									>
-										edit
-									</button>
+								{pdfUrl && (
+									<div className="sbn-pdf-zoom-toolbar">
+										<button
+											type="button"
+											className="sbn-pdf-zoom-btn"
+											onClick={handlePdfZoomOut}
+											title="Zoom out"
+											aria-label="Zoom out"
+										>
+											−
+										</button>
+										<span className="sbn-pdf-zoom-value">{pdfZoom}%</span>
+										<button
+											type="button"
+											className="sbn-pdf-zoom-btn"
+											onClick={handlePdfZoomIn}
+											title="Zoom in"
+											aria-label="Zoom in"
+										>
+											+
+										</button>
+									</div>
 								)}
 							</div>
 
-							{
-								<div className="sbn-screenplay-container">
-									{/* Scene Heading (title of the scene) */}
-									<div className="sbn-scene-heading">{editingSceneParsing.heading?.toUpperCase() || "UNTITLED SCENE"}</div>
-
-									{editingSceneParsing.content ? (
-										renderScreenplay(editingSceneParsing.content)
-									) : (
-										<p className="sbn-action-text">No content available.</p>
-									)}
+							{pdfUrl ? (
+								<div className="sbn-pdf-viewer-wrap" style={{ ["--pdf-zoom"]: pdfZoom / 100 }}>
+									<iframe src={`${pdfUrl}#toolbar=0&navpanes=0`} className="sbn-pdf-viewer" title="Script PDF Viewer" />
 								</div>
-							}
+							) : (
+								<div className="sbn-pdf-placeholder">
+									<p>Loading script PDF...</p>
+								</div>
+							)}
 						</div>
 					</div>
 				) : (
