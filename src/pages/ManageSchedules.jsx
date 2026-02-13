@@ -60,11 +60,11 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 					type="number"
 					className="sched-hours-input"
 					placeholder="HH"
-					value={sceneHours[scene.scene_number]?.hours ?? ""}
+					value={sceneHours[scene.id]?.hours ?? ""}
 					onChange={(e) => {
 						const newSceneHours = { ...sceneHours };
-						if (!newSceneHours[scene.scene_number]) {
-							newSceneHours[scene.scene_number] = { hours: "", minutes: "" };
+						if (!newSceneHours[scene.id]) {
+							newSceneHours[scene.id] = { hours: "", minutes: "" };
 						}
 						const value = parseInt(e.target.value);
 						console.log(value);
@@ -72,7 +72,7 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 							alert("Cannot have negative values for hours");
 							return;
 						}
-						newSceneHours[scene.scene_number].hours = value;
+						newSceneHours[scene.id].hours = value;
 						setSceneHours(newSceneHours);
 					}}
 				/>
@@ -84,11 +84,11 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 					type="number"
 					className="sched-hours-input"
 					placeholder="MM"
-					value={sceneHours[scene.scene_number]?.minutes ?? ""}
+					value={sceneHours[scene.id]?.minutes ?? ""}
 					onChange={(e) => {
 						const newSceneHours = { ...sceneHours };
-						if (!newSceneHours[scene.scene_number]) {
-							newSceneHours[scene.scene_number] = { hours: "", minutes: "" };
+						if (!newSceneHours[scene.id]) {
+							newSceneHours[scene.id] = { hours: "", minutes: "" };
 						}
 						const value = parseInt(e.target.value);
 						console.log(value);
@@ -96,7 +96,7 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 							alert("Enter a acceptable value for minutes");
 							return;
 						}
-						newSceneHours[scene.scene_number].minutes = value;
+						newSceneHours[scene.id].minutes = value;
 						setSceneHours(newSceneHours);
 					}}
 				/>
@@ -202,6 +202,67 @@ const UnscheduledSceneCard = ({ scene, isEditing, characterNameToIdMap }) => {
 	);
 };
 
+// Draggable scene block for calendar view
+const CalendarSceneBlock = ({ scene, isEditing }) => {
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+		id: scene.id,
+		disabled: !isEditing,
+	});
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+		cursor: isEditing ? "grab" : "default",
+		userSelect: "none",
+		opacity: isDragging ? 0.5 : 1,
+	};
+
+	return (
+		<div
+			ref={setNodeRef}
+			style={style}
+			className={`sched-calendar-scene-block ${isEditing ? "sched-calendar-scene-draggable" : ""}`}
+			{...attributes}
+			{...listeners}
+		>
+			<div className="sched-calendar-scene-number">Scene {scene.scene_number}</div>
+			<div className="sched-calendar-scene-info">
+				{scene.int_ext && <span className="sched-calendar-scene-int-ext">{scene.int_ext}</span>}
+				{scene.time_of_day && <span className="sched-calendar-scene-time">{scene.time_of_day}</span>}
+			</div>
+			<div className="sched-calendar-scene-location">{scene.location_name || "N/A"}</div>
+		</div>
+	);
+};
+
+// Droppable calendar day column
+const CalendarDayColumn = ({ day, isEditing, formatCalendarDateHeader }) => {
+	const { setNodeRef } = useDroppable({
+		id: `calendar-${day.id}`,
+	});
+
+	const { day: dayNum, weekday, month } = formatCalendarDateHeader(day.date);
+
+	return (
+		<div ref={setNodeRef} className={`sched-calendar-day-column ${isEditing ? "sched-calendar-day-droppable" : ""}`}>
+			<div className="sched-calendar-day-header">
+				<span className="sched-calendar-weekday">{weekday}</span>
+				<span className="sched-calendar-day-num">{dayNum}</span>
+				<span className="sched-calendar-month">{month}</span>
+			</div>
+			<div className="sched-calendar-scenes-container">
+				<SortableContext items={day.scenes ? day.scenes.map((s) => s.id) : []} strategy={verticalListSortingStrategy}>
+					{day.scenes && day.scenes.length > 0 ? (
+						day.scenes.map((scene, idx) => <CalendarSceneBlock key={scene.id || idx} scene={scene} isEditing={isEditing} />)
+					) : (
+						<div className="sched-calendar-no-scenes">{isEditing ? "Drop scenes here" : "No scenes"}</div>
+					)}
+				</SortableContext>
+			</div>
+		</div>
+	);
+};
+
 function findContainer(days, id, unscheduledScenesWithIds = []) {
 	// Check if it's the unscheduled container itself
 	if (id === "unscheduled") {
@@ -288,24 +349,36 @@ const ManageSchedules = () => {
 	const [scheduleEndDate, setScheduleEndDate] = useState("");
 	const [modalElementType, setModalElementType] = useState("character");
 	const [modalElement, setModalElement] = useState("");
-	const [modalSelectedDates, setModalSelectedDates] = useState([]);
+	const [modalAvailableDates, setModalAvailableDates] = useState([]);
+	const [modalUnavailableDates, setModalUnavailableDates] = useState([]);
 	const [modalDatePickerMode, setModalDatePickerMode] = useState("flexible");
 	const [modalDatePickerValue, setModalDatePickerValue] = useState("range");
 	const [modalDateRangeStart, setModalDateRangeStart] = useState("");
 	const [modalDateRangeEnd, setModalDateRangeEnd] = useState("");
 	const [modalIsSaving, setModalIsSaving] = useState(false);
-	const [modalUnavailableMode, setModalUnavailableMode] = useState(false);
+	const [modalAddMode, setModalAddMode] = useState("available"); // "available" or "unavailable"
 	const modalContentRef = useRef(null);
 	const doodContentRef = useRef(null);
 	const doodGridRef = useRef(null);
 
 	// DOOD Modal state
 	const [showDoodModal, setShowDoodModal] = useState(false);
+	const [doodModalTab, setDoodModalTab] = useState("dood"); // "dood" or "calendar"
 	const [doodElementType, setDoodElementType] = useState("character");
-	const [doodData, setDoodData] = useState({}); // { elementName: { id, dates: [], flexible: bool } }
+	const [doodData, setDoodData] = useState({}); // { elementName: { id, dates: [], unavailable_dates: [], flexible: bool } }
+	const [doodOriginalData, setDoodOriginalData] = useState({}); // Original data when modal opens, used to track changes
 	const [doodIsSaving, setDoodIsSaving] = useState(false);
 	const [doodStartDate, setDoodStartDate] = useState("");
 	const [doodEndDate, setDoodEndDate] = useState("");
+	const [doodSelectionMode, setDoodSelectionMode] = useState("available"); // "available" or "unavailable"
+	const [doodViewMode, setDoodViewMode] = useState("available"); // "available" or "scheduled"
+
+	// Calendar editing state
+	const [isCalendarEditing, setIsCalendarEditing] = useState(false);
+	const [calendarOriginalDays, setCalendarOriginalDays] = useState([]);
+	const [isCalendarSaving, setIsCalendarSaving] = useState(false);
+	const calendarGridRef = useRef(null);
+	const calendarContentRef = useRef(null);
 
 	// Cast and Location lists from APIs
 	const [castList, setCastList] = useState([]);
@@ -467,7 +540,7 @@ const ManageSchedules = () => {
 
 			// Helper to filter dates within schedule range
 			const filterDatesInRange = (dates) => {
-				if (!scheduleStartDate || !scheduleEndDate || !dates || dates.length === 0) return dates;
+				if (!scheduleStartDate || !scheduleEndDate || !dates || dates.length === 0) return dates || [];
 				const startDate = new Date(scheduleStartDate);
 				const endDate = new Date(scheduleEndDate);
 				return dates.filter((dateStr) => {
@@ -480,10 +553,16 @@ const ManageSchedules = () => {
 				const datesSection = modalElementType === "location" ? "locations" : "characters";
 				const elementData = scheduleData.dates[datesSection]?.[value];
 
+				// Load saved unavailable dates
+				const savedUnavailableDates = elementData?.unavailable_dates || [];
+				setModalUnavailableDates(filterDatesInRange(savedUnavailableDates));
+
+				// Load available dates
 				if (elementData?.dates && elementData.dates.length > 0) {
 					const existingDates = parseDateRanges(elementData.dates);
-					setModalSelectedDates(filterDatesInRange(existingDates));
+					setModalAvailableDates(filterDatesInRange(existingDates));
 				} else {
+					// Try to get locked dates as default available dates
 					let lockedDates = [];
 					if (modalElementType === "character") {
 						const selectedChar = castList.find((cast) => cast.character === value);
@@ -506,13 +585,14 @@ const ManageSchedules = () => {
 					}
 
 					if (lockedDates.length > 0) {
-						setModalSelectedDates(filterDatesInRange(lockedDates));
+						setModalAvailableDates(filterDatesInRange(lockedDates));
 					} else {
-						setModalSelectedDates([]);
+						setModalAvailableDates([]);
 					}
 				}
 			} else {
-				setModalSelectedDates([]);
+				setModalAvailableDates([]);
+				setModalUnavailableDates([]);
 			}
 
 			// Restore scroll position after state update
@@ -529,7 +609,8 @@ const ManageSchedules = () => {
 
 			setModalElementType(value);
 			setModalElement("");
-			setModalSelectedDates([]);
+			setModalAvailableDates([]);
+			setModalUnavailableDates([]);
 
 			// Restore scroll position after state update
 			requestAnimationFrame(() => {
@@ -599,7 +680,8 @@ const ManageSchedules = () => {
 			// Preserve scroll position
 			const scrollTop = modalContentRef.current?.scrollTop;
 
-			setModalSelectedDates([]);
+			setModalAvailableDates([]);
+			setModalUnavailableDates([]);
 
 			// Restore scroll position after state update
 			requestAnimationFrame(() => {
@@ -609,15 +691,12 @@ const ManageSchedules = () => {
 			});
 		};
 
-		const handleModalUnavailableModeChange = (isUnavailable) => {
+		const handleModalAddModeChange = (mode) => {
 			// Preserve scroll position
 			const scrollTop = modalContentRef.current?.scrollTop;
 
 			handleModalDatePickerModeChange("fixed");
-			setModalUnavailableMode(isUnavailable);
-			if (isUnavailable) {
-				setModalSelectedDates([]);
-			}
+			setModalAddMode(mode);
 
 			// Restore scroll position after state update
 			requestAnimationFrame(() => {
@@ -643,13 +722,27 @@ const ManageSchedules = () => {
 			// Preserve scroll position
 			const scrollTop = modalContentRef.current?.scrollTop;
 
-			setModalSelectedDates((prev) => {
-				if (prev.includes(dateStr)) {
-					return prev.filter((d) => d !== dateStr);
-				} else {
-					return [...prev, dateStr].sort();
-				}
-			});
+			if (modalAddMode === "available") {
+				// Add to available, remove from unavailable
+				setModalAvailableDates((prev) => {
+					if (prev.includes(dateStr)) {
+						return prev.filter((d) => d !== dateStr);
+					} else {
+						return [...prev, dateStr].sort();
+					}
+				});
+				setModalUnavailableDates((prev) => prev.filter((d) => d !== dateStr));
+			} else {
+				// Add to unavailable, remove from available
+				setModalUnavailableDates((prev) => {
+					if (prev.includes(dateStr)) {
+						return prev.filter((d) => d !== dateStr);
+					} else {
+						return [...prev, dateStr].sort();
+					}
+				});
+				setModalAvailableDates((prev) => prev.filter((d) => d !== dateStr));
+			}
 
 			// Restore scroll position after state update
 			requestAnimationFrame(() => {
@@ -676,13 +769,27 @@ const ManageSchedules = () => {
 			// Preserve scroll position
 			const scrollTop = modalContentRef.current?.scrollTop;
 
-			setModalSelectedDates((prev) => {
-				if (prev.includes(selectedDate)) {
-					return prev;
-				} else {
-					return [...prev, selectedDate].sort();
-				}
-			});
+			if (modalAddMode === "available") {
+				// Add to available, remove from unavailable
+				setModalAvailableDates((prev) => {
+					if (prev.includes(selectedDate)) {
+						return prev;
+					} else {
+						return [...prev, selectedDate].sort();
+					}
+				});
+				setModalUnavailableDates((prev) => prev.filter((d) => d !== selectedDate));
+			} else {
+				// Add to unavailable, remove from available
+				setModalUnavailableDates((prev) => {
+					if (prev.includes(selectedDate)) {
+						return prev;
+					} else {
+						return [...prev, selectedDate].sort();
+					}
+				});
+				setModalAvailableDates((prev) => prev.filter((d) => d !== selectedDate));
+			}
 
 			// Restore scroll position after state update
 			requestAnimationFrame(() => {
@@ -704,8 +811,12 @@ const ManageSchedules = () => {
 					return "disabled-date";
 				}
 
-				if (modalSelectedDates.includes(formattedDate)) {
-					return "highlight-blue";
+				// Show green for available dates, red for unavailable dates
+				if (modalAvailableDates.includes(formattedDate)) {
+					return "highlight-green";
+				}
+				if (modalUnavailableDates.includes(formattedDate)) {
+					return "highlight-red";
 				}
 			}
 		};
@@ -756,7 +867,16 @@ const ManageSchedules = () => {
 				currentDate.setDate(currentDate.getDate() + 1);
 			}
 
-			setModalSelectedDates(rangeDates);
+			// Add range dates to the appropriate list based on mode
+			if (modalAddMode === "available") {
+				setModalAvailableDates(rangeDates);
+				// Remove these dates from unavailable if present
+				setModalUnavailableDates((prev) => prev.filter((d) => !rangeDates.includes(d)));
+			} else {
+				setModalUnavailableDates(rangeDates);
+				// Remove these dates from available if present
+				setModalAvailableDates((prev) => prev.filter((d) => !rangeDates.includes(d)));
+			}
 			setModalDateRangeStart("");
 			setModalDateRangeEnd("");
 
@@ -785,23 +905,22 @@ const ManageSchedules = () => {
 
 				const elementId = elementData.id;
 
-				// Calculate dates to send - if unavailable mode, compute available dates
-				let datesToSend = modalSelectedDates;
-				if (!flexible && modalUnavailableMode && scheduleStartDate && scheduleEndDate) {
-					// Generate all dates between start and end
-					const allDates = [];
-					const start = new Date(scheduleStartDate);
-					const end = new Date(scheduleEndDate);
-					const current = new Date(start);
-					while (current <= end) {
-						allDates.push(current.toISOString().split("T")[0]);
-						current.setDate(current.getDate() + 1);
-					}
-					// Available dates = all dates - unavailable dates (modalSelectedDates)
-					const unavailableSet = new Set(modalSelectedDates);
-					datesToSend = allDates.filter((date) => !unavailableSet.has(date));
+				// Prepare dates and unavailable_dates
+				let datesToSend = [];
+				let unavailableDatesToSend = [];
+
+				if (flexible) {
+					// Flexible mode: clear both dates and unavailable_dates
+					datesToSend = [];
+					unavailableDatesToSend = [];
+				} else {
+					// Send both available and unavailable dates
+					datesToSend = modalAvailableDates;
+					unavailableDatesToSend = modalUnavailableDates;
 				}
+
 				console.log("sending dates ::: ", datesToSend);
+				console.log("sending unavailable_dates ::: ", unavailableDatesToSend);
 				const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}/dates`), {
 					method: "POST",
 					headers: {
@@ -812,7 +931,8 @@ const ManageSchedules = () => {
 						element_name: modalElement,
 						element_id: elementId,
 						flexible: flexible,
-						dates: flexible ? [] : datesToSend,
+						dates: datesToSend,
+						unavailable_dates: unavailableDatesToSend,
 					}),
 				});
 
@@ -1073,103 +1193,65 @@ const ManageSchedules = () => {
 
 										{modalDatePickerMode === "fixed" && (
 											<>
-												{/* Second level: Available / Unavailable */}
+												{/* Second level: Available / Unavailable mode selector */}
 												<div className="sched-mode-selector">
 													<label className="sched-mode-label">
 														<input
-															type="radio"
-															value="available"
-															checked={!modalUnavailableMode}
-															onChange={() => handleModalUnavailableModeChange(false)}
-															className="sched-radio-input"
+															type="checkbox"
+															checked={modalAddMode === "available"}
+															onChange={() => handleModalAddModeChange("available")}
+															className="sched-checkbox-input"
 														/>
-														Available Dates
+														Mark Available (Green)
 													</label>
 													<label className="sched-mode-label">
 														<input
-															type="radio"
-															value="unavailable"
-															checked={modalUnavailableMode}
-															onChange={() => handleModalUnavailableModeChange(true)}
-															className="sched-radio-input"
+															type="checkbox"
+															checked={modalAddMode === "unavailable"}
+															onChange={() => handleModalAddModeChange("unavailable")}
+															className="sched-checkbox-input"
 														/>
-														Unavailable Dates
+														Mark Unavailable (Red)
 													</label>
 												</div>
 
-												{/* Third level: Range / Single */}
-												<div className="sched-mode-selector">
-													<label className="sched-mode-label">
+												{/* Date Range Selector */}
+												<div className="sched-date-range-container">
+													<div className="sched-date-range-inputs">
 														<input
-															type="radio"
-															value="range"
-															checked={modalDatePickerValue === "range"}
-															onChange={(e) => handleModalDatePickerValueChange(e.target.value)}
-															className="sched-radio-input"
+															type="date"
+															value={modalDateRangeStart}
+															min={scheduleStartDate}
+															max={scheduleEndDate}
+															onChange={(e) => handleModalDateRangeStartChange(e.target.value)}
+															className="sched-date-range-input"
+															placeholder="Start Date"
 														/>
-														Range
-													</label>
-													<label className="sched-mode-label">
+														<span className="sched-date-range-separator">to</span>
 														<input
-															type="radio"
-															value="single"
-															checked={modalDatePickerValue === "single"}
-															onChange={(e) => handleModalDatePickerValueChange(e.target.value)}
-															className="sched-radio-input"
+															type="date"
+															value={modalDateRangeEnd}
+															min={modalDateRangeStart || scheduleStartDate}
+															max={scheduleEndDate}
+															onChange={(e) => handleModalDateRangeEndChange(e.target.value)}
+															className="sched-date-range-input"
+															placeholder="End Date"
 														/>
-														Single
-													</label>
-												</div>
-
-												{modalDatePickerValue === "range" && (
-													<div className="sched-date-range-container">
-														<div className="sched-date-range-inputs">
-															<input
-																type="date"
-																value={modalDateRangeStart}
-																min={scheduleStartDate}
-																max={scheduleEndDate}
-																onChange={(e) => handleModalDateRangeStartChange(e.target.value)}
-																className="sched-date-range-input"
-																placeholder="Start Date"
-															/>
-															<span className="sched-date-range-separator">to</span>
-															<input
-																type="date"
-																value={modalDateRangeEnd}
-																min={modalDateRangeStart || scheduleStartDate}
-																max={scheduleEndDate}
-																onChange={(e) => handleModalDateRangeEndChange(e.target.value)}
-																className="sched-date-range-input"
-																placeholder="End Date"
-															/>
-														</div>
-														<button
-															onClick={addModalDateRange}
-															className="sched-add-range-button"
-															disabled={!modalDateRangeStart || !modalDateRangeEnd}
-														>
-															Add Range
-														</button>
 													</div>
-												)}
-
-												{modalDatePickerValue === "single" && (
-													<input
-														type="date"
-														min={scheduleStartDate}
-														max={scheduleEndDate}
-														onChange={handleModalSingleDateChange}
-														className="sched-date-picker"
-													/>
-												)}
+													<button
+														onClick={addModalDateRange}
+														className="sched-add-range-button"
+														disabled={!modalDateRangeStart || !modalDateRangeEnd}
+													>
+														Add Range
+													</button>
+												</div>
 
 												{/* Always show calendar when Fixed is selected */}
 												<div className="sched-selected-dates-list">
 													<div className="sched-selected-dates-header">
 														<span>
-															{modalUnavailableMode ? "Unavailable" : "Selected"} Dates (
-															{modalSelectedDates.length}):
+															Available: {modalAvailableDates.length} | Unavailable: {modalUnavailableDates.length}
 														</span>
 														<div className="sched-date-actions">
 															<button
@@ -1262,6 +1344,79 @@ const ManageSchedules = () => {
 
 		const elements = getElements();
 
+		// Get scheduled dates for each element based on scheduleDays state
+		const getScheduledDatesForElement = (elementName) => {
+			if (!scheduleDays || scheduleDays.length === 0) return [];
+			const scheduledDates = [];
+			scheduleDays.forEach((day) => {
+				if (day.scenes && day.scenes.length > 0) {
+					day.scenes.forEach((scene) => {
+						if (doodElementType === "character") {
+							// Check if character is in this scene
+							const characterNames = scene.character_names || [];
+							if (characterNames.some((name) => name.toUpperCase() === elementName.toUpperCase())) {
+								if (!scheduledDates.includes(day.date)) {
+									scheduledDates.push(day.date);
+								}
+							}
+						} else {
+							// Check if location matches
+							if (scene.location_name && scene.location_name.toUpperCase() === elementName.toUpperCase()) {
+								if (!scheduledDates.includes(day.date)) {
+									scheduledDates.push(day.date);
+								}
+							}
+						}
+					});
+				}
+			});
+			return scheduledDates.sort();
+		};
+
+		// Get locked option info for an element
+		const getLockedOptionInfo = (elementName) => {
+			if (doodElementType === "character") {
+				const selectedChar = castList.find((cast) => cast.character?.toUpperCase() === elementName.toUpperCase());
+				if (!selectedChar) return null;
+
+				const lockedOptionId = selectedChar.locked;
+				if (lockedOptionId === -1 || lockedOptionId === "-1" || lockedOptionId === null || lockedOptionId === undefined) {
+					return null;
+				}
+
+				const castOptions = selectedChar.cast_options || {};
+				const lockedOption = castOptions[String(lockedOptionId)];
+
+				if (!lockedOption) return null;
+
+				return {
+					optionName: lockedOption.actor_name || lockedOption.actorName || "Unknown",
+				};
+			} else {
+				const selectedLoc = locationList.find((loc) => loc.location?.toUpperCase() === elementName.toUpperCase());
+				if (!selectedLoc) return null;
+
+				const lockedOptionId = selectedLoc.locked;
+				if (lockedOptionId === -1 || lockedOptionId === "-1" || lockedOptionId === null || lockedOptionId === undefined) {
+					return null;
+				}
+
+				const locationOptions = selectedLoc.location_options || {};
+				const lockedOption = locationOptions[String(lockedOptionId)];
+
+				if (!lockedOption) return null;
+
+				return {
+					optionName: lockedOption.locationName || lockedOption.location_name || "Unknown",
+				};
+			}
+		};
+
+		// Check if a date is scheduled for an element
+		const isDateScheduled = (elementName, date) => {
+			return getScheduledDatesForElement(elementName).includes(date);
+		};
+
 		// Initialize doodData when modal opens or element type changes
 		const initializeDoodData = () => {
 			const newData = {};
@@ -1270,11 +1425,13 @@ const ManageSchedules = () => {
 			elements.forEach((elem) => {
 				const existingData = scheduleData?.dates?.[datesSection]?.[elem.name];
 				const existingDates = existingData?.dates || (Array.isArray(existingData) ? existingData : []);
-				const isFlexible = scheduleData?.dates?.flexible?.[datesSection]?.[elem.id] || false;
+				const existingUnavailableDates = existingData?.unavailable_dates || [];
+				const isFlexible = existingData?.flexible || scheduleData?.dates?.flexible?.[datesSection]?.[elem.id] || false;
 
 				newData[elem.name] = {
 					id: elem.id,
 					dates: parseDateRanges(existingDates),
+					unavailable_dates: parseDateRanges(existingUnavailableDates),
 					flexible: isFlexible,
 				};
 			});
@@ -1286,29 +1443,70 @@ const ManageSchedules = () => {
 			return doodData[elementName]?.dates?.includes(date) || false;
 		};
 
+		// Check if a cell is marked as unavailable
+		const isCellUnavailable = (elementName, date) => {
+			return doodData[elementName]?.unavailable_dates?.includes(date) || false;
+		};
+
 		// Check if element is flexible
 		const isElementFlexible = (elementName) => {
 			return doodData[elementName]?.flexible || false;
 		};
 
-		// Toggle a single cell
+		// Check if doodData has changed from original
+		const hasDoodChanges = () => {
+			if (Object.keys(doodData).length !== Object.keys(doodOriginalData).length) return true;
+			for (const elementName of Object.keys(doodData)) {
+				const current = doodData[elementName];
+				const original = doodOriginalData[elementName];
+				if (!original) return true;
+				if (current.flexible !== original.flexible) return true;
+				if (JSON.stringify(current.dates?.sort()) !== JSON.stringify(original.dates?.sort())) return true;
+				if (JSON.stringify(current.unavailable_dates?.sort()) !== JSON.stringify(original.unavailable_dates?.sort())) return true;
+			}
+			return false;
+		};
+
+		// Toggle a single cell based on selection mode
 		const toggleCell = (elementName, date) => {
 			if (isElementFlexible(elementName)) return; // Can't toggle if flexible
 
 			const scrollTop = doodGridRef.current?.scrollTop;
 			const scrollLeft = doodGridRef.current?.scrollLeft;
 			setDoodData((prev) => {
-				const current = prev[elementName] || { id: null, dates: [], flexible: false };
+				const current = prev[elementName] || { id: null, dates: [], unavailable_dates: [], flexible: false };
 				const dates = current.dates || [];
-				const newDates = dates.includes(date) ? dates.filter((d) => d !== date) : [...dates, date].sort();
+				const unavailableDates = current.unavailable_dates || [];
 
-				return {
-					...prev,
-					[elementName]: {
-						...current,
-						dates: newDates,
-					},
-				};
+				if (doodSelectionMode === "available") {
+					// Toggle in available dates
+					const isCurrentlySelected = dates.includes(date);
+					const newDates = isCurrentlySelected ? dates.filter((d) => d !== date) : [...dates, date].sort();
+					// Remove from unavailable if adding to available
+					const newUnavailable = isCurrentlySelected ? unavailableDates : unavailableDates.filter((d) => d !== date);
+					return {
+						...prev,
+						[elementName]: {
+							...current,
+							dates: newDates,
+							unavailable_dates: newUnavailable,
+						},
+					};
+				} else {
+					// Toggle in unavailable dates
+					const isCurrentlyUnavailable = unavailableDates.includes(date);
+					const newUnavailable = isCurrentlyUnavailable ? unavailableDates.filter((d) => d !== date) : [...unavailableDates, date].sort();
+					// Remove from available if adding to unavailable
+					const newDates = isCurrentlyUnavailable ? dates : dates.filter((d) => d !== date);
+					return {
+						...prev,
+						[elementName]: {
+							...current,
+							dates: newDates,
+							unavailable_dates: newUnavailable,
+						},
+					};
+				}
 			});
 			setTimeout(() => {
 				if (doodGridRef.current) {
@@ -1323,13 +1521,14 @@ const ManageSchedules = () => {
 			const scrollTop = doodGridRef.current?.scrollTop;
 			const scrollLeft = doodGridRef.current?.scrollLeft;
 			setDoodData((prev) => {
-				const current = prev[elementName] || { id: null, dates: [], flexible: false };
+				const current = prev[elementName] || { id: null, dates: [], unavailable_dates: [], flexible: false };
 				return {
 					...prev,
 					[elementName]: {
 						...current,
 						flexible: !current.flexible,
 						dates: !current.flexible ? [] : current.dates, // Clear dates when setting flexible
+						unavailable_dates: !current.flexible ? [] : current.unavailable_dates, // Clear unavailable dates when setting flexible
 					},
 				};
 			});
@@ -1341,21 +1540,33 @@ const ManageSchedules = () => {
 			}, 0);
 		};
 
-		// Select all dates for an element
+		// Select all dates for an element (based on current selection mode)
 		const selectAllDates = (elementName) => {
 			if (isElementFlexible(elementName)) return;
 
 			const scrollTop = doodGridRef.current?.scrollTop;
 			const scrollLeft = doodGridRef.current?.scrollLeft;
 			setDoodData((prev) => {
-				const current = prev[elementName] || { id: null, dates: [], flexible: false };
-				return {
-					...prev,
-					[elementName]: {
-						...current,
-						dates: [...dateColumns],
-					},
-				};
+				const current = prev[elementName] || { id: null, dates: [], unavailable_dates: [], flexible: false };
+				if (doodSelectionMode === "available") {
+					return {
+						...prev,
+						[elementName]: {
+							...current,
+							dates: [...dateColumns],
+							unavailable_dates: [], // Clear unavailable when selecting all as available
+						},
+					};
+				} else {
+					return {
+						...prev,
+						[elementName]: {
+							...current,
+							dates: [], // Clear available when selecting all as unavailable
+							unavailable_dates: [...dateColumns],
+						},
+					};
+				}
 			});
 			setTimeout(() => {
 				if (doodGridRef.current) {
@@ -1365,19 +1576,20 @@ const ManageSchedules = () => {
 			}, 0);
 		};
 
-		// Clear all dates for an element
+		// Clear all dates for an element (clears both available and unavailable dates)
 		const clearAllDates = (elementName) => {
 			if (isElementFlexible(elementName)) return;
 
 			const scrollTop = doodGridRef.current?.scrollTop;
 			const scrollLeft = doodGridRef.current?.scrollLeft;
 			setDoodData((prev) => {
-				const current = prev[elementName] || { id: null, dates: [], flexible: false };
+				const current = prev[elementName] || { id: null, dates: [], unavailable_dates: [], flexible: false };
 				return {
 					...prev,
 					[elementName]: {
 						...current,
 						dates: [],
+						unavailable_dates: [],
 					},
 				};
 			});
@@ -1408,6 +1620,7 @@ const ManageSchedules = () => {
 						id: data.id,
 						dates: data.flexible ? [] : data.dates,
 						flexible: data.flexible,
+						unavailable_dates: data.flexible ? [] : data.unavailable_dates || [],
 					};
 				});
 
@@ -1426,6 +1639,7 @@ const ManageSchedules = () => {
 				}
 
 				alert("DOOD data saved successfully!");
+				setDoodOriginalData(JSON.parse(JSON.stringify(doodData))); // Update original data so Save button hides
 				fetchScheduleData();
 			} catch (error) {
 				console.error("Error saving DOOD data:", error);
@@ -1440,189 +1654,412 @@ const ManageSchedules = () => {
 			const date = new Date(dateStr);
 			const day = date.getDate();
 			const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
-			return { day, weekday };
+			const month = date.toLocaleDateString("en-US", { month: "short" });
+			return { day, weekday, month };
+		};
+
+		// Format date for calendar display
+		const formatCalendarDateHeader = (dateStr) => {
+			const date = new Date(dateStr);
+			const day = date.getDate();
+			const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
+			const month = date.toLocaleDateString("en-US", { month: "short" });
+			return { day, weekday, month };
 		};
 
 		return (
 			<div className="sched-conflicts-modal-overlay" onClick={() => setShowDoodModal(false)}>
 				<div className="sched-dood-modal" onClick={(e) => e.stopPropagation()}>
 					<div className="sched-conflicts-modal-header">
-						<h2 className="sched-conflicts-modal-heading">Day Out Of Days (DOOD)</h2>
+						<h2 className="sched-conflicts-modal-heading">Schedule Overview</h2>
 						<button className="sched-conflicts-modal-close-button" onClick={() => setShowDoodModal(false)}>
 							×
 						</button>
 					</div>
 
-					<div className="sched-dood-modal-content" ref={doodContentRef}>
-						{/* Date Range Selection */}
-						<div className="sched-dood-controls">
-							<div className="sched-dood-date-range">
-								<label>
-									Start Date:
-									<input
-										type="date"
-										value={doodStartDate}
-										onChange={(e) => {
-											const scrollTop = doodContentRef.current?.scrollTop;
-											setDoodStartDate(e.target.value);
-											requestAnimationFrame(() => {
-												if (doodContentRef.current && scrollTop !== undefined) {
-													doodContentRef.current.scrollTop = scrollTop;
-												}
-											});
-										}}
-										className="sched-date-range-input"
-									/>
-								</label>
-								<label>
-									End Date:
-									<input
-										type="date"
-										value={doodEndDate}
-										min={doodStartDate}
-										onChange={(e) => {
-											const scrollTop = doodContentRef.current?.scrollTop;
-											setDoodEndDate(e.target.value);
-											requestAnimationFrame(() => {
-												if (doodContentRef.current && scrollTop !== undefined) {
-													doodContentRef.current.scrollTop = scrollTop;
-												}
-											});
-										}}
-										className="sched-date-range-input"
-									/>
-								</label>
-							</div>
+					{/* Tabs */}
+					<div className="sched-modal-tabs">
+						<button className={`sched-modal-tab ${doodModalTab === "dood" ? "active" : ""}`} onClick={() => setDoodModalTab("dood")}>
+							DOODs
+						</button>
+						<button className={`sched-modal-tab ${doodModalTab === "calendar" ? "active" : ""}`} onClick={() => setDoodModalTab("calendar")}>
+							Schedule Calendar
+						</button>
+					</div>
 
-							<div className="sched-dood-type-selector">
-								<label>
-									Show:
-									<select
-										value={doodElementType}
-										onChange={(e) => {
-											const scrollTop = doodContentRef.current?.scrollTop;
-											setDoodElementType(e.target.value);
-											requestAnimationFrame(() => {
-												if (doodContentRef.current && scrollTop !== undefined) {
-													doodContentRef.current.scrollTop = scrollTop;
-												}
-											});
-										}}
-										className="sched-element-dropdown"
+					{doodModalTab === "dood" ? (
+						<div className="sched-dood-modal-content" ref={doodContentRef}>
+							{/* Date Range Selection */}
+							<div className="sched-dood-controls">
+								<div className="sched-dood-date-range">
+									<label>
+										Start Date:
+										<input
+											type="date"
+											value={doodStartDate}
+											onChange={(e) => {
+												const scrollTop = doodContentRef.current?.scrollTop;
+												setDoodStartDate(e.target.value);
+												requestAnimationFrame(() => {
+													if (doodContentRef.current && scrollTop !== undefined) {
+														doodContentRef.current.scrollTop = scrollTop;
+													}
+												});
+											}}
+											className="sched-date-range-input"
+										/>
+									</label>
+									<label>
+										End Date:
+										<input
+											type="date"
+											value={doodEndDate}
+											min={doodStartDate}
+											onChange={(e) => {
+												const scrollTop = doodContentRef.current?.scrollTop;
+												setDoodEndDate(e.target.value);
+												requestAnimationFrame(() => {
+													if (doodContentRef.current && scrollTop !== undefined) {
+														doodContentRef.current.scrollTop = scrollTop;
+													}
+												});
+											}}
+											className="sched-date-range-input"
+										/>
+									</label>
+								</div>
+
+								<div className="sched-dood-type-selector">
+									<label>
+										Show:
+										<select
+											value={doodElementType}
+											onChange={(e) => {
+												const scrollTop = doodContentRef.current?.scrollTop;
+												setDoodElementType(e.target.value);
+												requestAnimationFrame(() => {
+													if (doodContentRef.current && scrollTop !== undefined) {
+														doodContentRef.current.scrollTop = scrollTop;
+													}
+												});
+											}}
+											className="sched-element-dropdown"
+										>
+											<option value="character">Characters</option>
+											<option value="location">Sets</option>
+										</select>
+									</label>
+								</div>
+
+								<div className="sched-dood-view-selector">
+									<label>
+										View:
+										<select
+											value={doodViewMode}
+											onChange={(e) => setDoodViewMode(e.target.value)}
+											className="sched-element-dropdown"
+										>
+											<option value="available">See Available Dates</option>
+											<option value="scheduled">See Scheduled Dates</option>
+										</select>
+									</label>
+								</div>
+
+								{doodViewMode === "available" && (
+									<div className="sched-dood-mode-selector">
+										<label>
+											Selection Mode:
+											<select
+												value={doodSelectionMode}
+												onChange={(e) => setDoodSelectionMode(e.target.value)}
+												className="sched-element-dropdown"
+											>
+												<option value="available">Available Dates</option>
+												<option value="unavailable">Unavailable Dates</option>
+											</select>
+										</label>
+									</div>
+								)}
+
+								{doodViewMode === "available" && hasDoodChanges() && (
+									<button
+										onClick={handleDoodSave}
+										className="sched-action-btn-success"
+										disabled={doodIsSaving || !doodStartDate || !doodEndDate}
 									>
-										<option value="character">Characters</option>
-										<option value="location">Sets</option>
-									</select>
-								</label>
+										{doodIsSaving ? "Saving..." : "Save All"}
+									</button>
+								)}
 							</div>
 
-							<button
-								onClick={handleDoodSave}
-								className="sched-action-btn-success"
-								disabled={doodIsSaving || !doodStartDate || !doodEndDate}
-							>
-								{doodIsSaving ? "Saving..." : "Save All"}
-							</button>
-						</div>
-
-						{/* DOOD Grid */}
-						{doodStartDate && doodEndDate && dateColumns.length > 0 ? (
-							<div className="sched-dood-grid-wrapper" ref={doodGridRef}>
-								<div className="sched-dood-grid">
-									<table className="sched-dood-table">
-										<thead>
-											<tr>
-												<th className="sched-dood-header-cell sched-dood-element-header">
-													{doodElementType === "character" ? "Character" : "Set"}
-												</th>
-												<th className="sched-dood-header-cell sched-dood-actions-header">Actions</th>
-												{dateColumns.map((date) => {
-													const { day, weekday } = formatDateHeader(date);
+							{/* DOOD Grid */}
+							{doodStartDate && doodEndDate && dateColumns.length > 0 ? (
+								<div className="sched-dood-grid-wrapper" ref={doodGridRef}>
+									<div className="sched-dood-grid">
+										<table className="sched-dood-table">
+											<thead>
+												<tr>
+													<th className="sched-dood-header-cell sched-dood-element-header">
+														{doodElementType === "character" ? "Character" : "Set"}
+													</th>
+													{doodViewMode === "available" && (
+														<th className="sched-dood-header-cell sched-dood-actions-header">Actions</th>
+													)}
+													{dateColumns.map((date) => {
+														const { day, weekday, month } = formatDateHeader(date);
+														return (
+															<th key={date} className="sched-dood-header-cell sched-dood-date-header">
+																<div className="sched-dood-date-label">
+																	<span className="sched-dood-weekday">{weekday}</span>
+																	<span className="sched-dood-day">{day}</span>
+																	<span className="sched-dood-month">{month}</span>
+																</div>
+															</th>
+														);
+													})}
+												</tr>
+											</thead>
+											<tbody>
+												{elements.map((elem) => {
+													const lockedInfo = getLockedOptionInfo(elem.name);
 													return (
-														<th key={date} className="sched-dood-header-cell sched-dood-date-header">
-															<div className="sched-dood-date-label">
-																<span className="sched-dood-weekday">{weekday}</span>
-																<span className="sched-dood-day">{day}</span>
-															</div>
-														</th>
+														<tr
+															key={elem.name}
+															className={
+																doodViewMode === "available" && isElementFlexible(elem.name)
+																	? "sched-dood-row-flexible"
+																	: ""
+															}
+														>
+															<td className="sched-dood-element-cell">
+																<div>{elem.name}</div>
+																<div className="sched-dood-locked-info">
+																	{lockedInfo ? (
+																		<span className="sched-dood-locked">
+																			(Option Locked: {lockedInfo.optionName})
+																		</span>
+																	) : (
+																		<span className="sched-dood-not-locked">(Not Locked)</span>
+																	)}
+																</div>
+															</td>
+															{doodViewMode === "available" && (
+																<td className="sched-dood-actions-cell">
+																	<button
+																		onClick={() => toggleFlexible(elem.name)}
+																		className={`sched-dood-flex-btn ${isElementFlexible(elem.name) ? "active" : ""}`}
+																		title="Toggle Flexible"
+																	>
+																		F
+																	</button>
+																	<button
+																		onClick={() => clearAllDates(elem.name)}
+																		className="sched-dood-clear-btn"
+																		disabled={isElementFlexible(elem.name)}
+																		title="Clear All"
+																	>
+																		✕
+																	</button>
+																</td>
+															)}
+															{doodViewMode === "available"
+																? // Available dates view - editable
+																	dateColumns.map((date) => {
+																		const isFlexible = isElementFlexible(elem.name);
+																		const isSelected = isCellSelected(elem.name, date);
+																		const isUnavailable = isCellUnavailable(elem.name, date);
+
+																		let cellClass = "sched-dood-cell";
+																		let cellContent = "";
+
+																		if (isFlexible) {
+																			cellClass += " sched-dood-cell-flexible";
+																			cellContent = "F";
+																		} else if (isUnavailable) {
+																			cellClass += " sched-dood-cell-unavailable";
+																			cellContent = "✕";
+																		} else if (isSelected) {
+																			cellClass += " sched-dood-cell-selected";
+																			cellContent = "✓";
+																		} else {
+																			cellClass += " sched-dood-cell-empty";
+																		}
+
+																		return (
+																			<td
+																				key={date}
+																				className={cellClass}
+																				onClick={() => toggleCell(elem.name, date)}
+																			>
+																				{cellContent}
+																			</td>
+																		);
+																	})
+																: // Scheduled dates view - read only
+																	dateColumns.map((date) => {
+																		const isScheduled = isDateScheduled(elem.name, date);
+
+																		return (
+																			<td
+																				key={date}
+																				className={`sched-dood-cell ${isScheduled ? "sched-dood-cell-scheduled" : "sched-dood-cell-empty"}`}
+																				style={{ cursor: "default" }}
+																			>
+																				{isScheduled ? "✓" : ""}
+																			</td>
+																		);
+																	})}
+														</tr>
 													);
 												})}
-											</tr>
-										</thead>
-										<tbody>
-											{elements.map((elem) => (
-												<tr key={elem.name} className={isElementFlexible(elem.name) ? "sched-dood-row-flexible" : ""}>
-													<td className="sched-dood-element-cell">{elem.name}</td>
-													<td className="sched-dood-actions-cell">
-														<button
-															onClick={() => toggleFlexible(elem.name)}
-															className={`sched-dood-flex-btn ${isElementFlexible(elem.name) ? "active" : ""}`}
-															title="Toggle Flexible"
-														>
-															F
-														</button>
-														<button
-															onClick={() => selectAllDates(elem.name)}
-															className="sched-dood-all-btn"
-															disabled={isElementFlexible(elem.name)}
-															title="Select All"
-														>
-															✓
-														</button>
-														<button
-															onClick={() => clearAllDates(elem.name)}
-															className="sched-dood-clear-btn"
-															disabled={isElementFlexible(elem.name)}
-															title="Clear All"
-														>
-															✕
-														</button>
-													</td>
-													{dateColumns.map((date) => (
-														<td
-															key={date}
-															className={`sched-dood-cell ${
-																isElementFlexible(elem.name)
-																	? "sched-dood-cell-flexible"
-																	: isCellSelected(elem.name, date)
-																		? "sched-dood-cell-selected"
-																		: "sched-dood-cell-empty"
-															}`}
-															onClick={() => toggleCell(elem.name, date)}
-														>
-															{isElementFlexible(elem.name) ? "F" : isCellSelected(elem.name, date) ? "✓" : ""}
-														</td>
-													))}
-												</tr>
-											))}
-										</tbody>
-									</table>
+											</tbody>
+										</table>
+									</div>
 								</div>
-							</div>
-						) : (
-							<div className="sched-dood-placeholder">
-								{!doodStartDate || !doodEndDate
-									? "Please set a schedule date range first (in the Generate Schedule modal)"
-									: "No data to display"}
-							</div>
-						)}
+							) : (
+								<div className="sched-dood-placeholder">
+									{!doodStartDate || !doodEndDate
+										? "Please set a schedule date range first (in the Generate Schedule modal)"
+										: "No data to display"}
+								</div>
+							)}
 
-						{/* Legend */}
-						<div className="sched-dood-legend">
-							<div className="sched-dood-legend-item">
-								<span className="sched-dood-legend-box sched-dood-cell-selected"></span>
-								<span>Available</span>
-							</div>
-							<div className="sched-dood-legend-item">
-								<span className="sched-dood-legend-box sched-dood-cell-empty"></span>
-								<span>Unavailable</span>
-							</div>
-							<div className="sched-dood-legend-item">
-								<span className="sched-dood-legend-box sched-dood-cell-flexible"></span>
-								<span>Flexible (any date)</span>
+							{/* Legend */}
+							<div className="sched-dood-legend">
+								{doodViewMode === "available" ? (
+									<>
+										<div className="sched-dood-legend-item">
+											<span className="sched-dood-legend-box sched-dood-cell-selected"></span>
+											<span>Available</span>
+										</div>
+										<div className="sched-dood-legend-item">
+											<span className="sched-dood-legend-box sched-dood-cell-unavailable"></span>
+											<span>Unavailable</span>
+										</div>
+										<div className="sched-dood-legend-item">
+											<span className="sched-dood-legend-box sched-dood-cell-empty"></span>
+											<span>Unselected</span>
+										</div>
+										<div className="sched-dood-legend-item">
+											<span className="sched-dood-legend-box sched-dood-cell-flexible"></span>
+											<span>Flexible (any date)</span>
+										</div>
+									</>
+								) : (
+									<>
+										<div className="sched-dood-legend-item">
+											<span className="sched-dood-legend-box sched-dood-cell-scheduled"></span>
+											<span>Scheduled</span>
+										</div>
+										<div className="sched-dood-legend-item">
+											<span className="sched-dood-legend-box sched-dood-cell-empty"></span>
+											<span>Not Scheduled</span>
+										</div>
+									</>
+								)}
 							</div>
 						</div>
-					</div>
+					) : (
+						/* Schedule Calendar Tab */
+						<div className="sched-calendar-modal-content" ref={calendarContentRef}>
+							{/* Edit Controls */}
+							<div className="sched-calendar-controls">
+								{!isCalendarEditing ? (
+									<button
+										onClick={() => {
+											setCalendarOriginalDays(JSON.parse(JSON.stringify(scheduleDays)));
+											setIsCalendarEditing(true);
+										}}
+										className="sched-action-btn"
+										disabled={!scheduleDays || scheduleDays.length === 0}
+									>
+										Edit Schedule
+									</button>
+								) : (
+									<>
+										<button onClick={handleCalendarSaveChanges} className="sched-action-btn-success" disabled={isCalendarSaving}>
+											{isCalendarSaving ? "Saving..." : "Save Changes"}
+										</button>
+										<button
+											onClick={() => {
+												setScheduleDays(calendarOriginalDays);
+												setIsCalendarEditing(false);
+											}}
+											className="sched-action-btn-cancel"
+											disabled={isCalendarSaving}
+										>
+											Cancel
+										</button>
+										<span className="sched-calendar-edit-hint">Drag and drop scenes between days to reschedule</span>
+									</>
+								)}
+							</div>
+
+							{scheduleDays && scheduleDays.length > 0 ? (
+								<div className="sched-calendar-grid-wrapper" ref={calendarGridRef}>
+									{isCalendarEditing ? (
+										<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCalendarDragEnd}>
+											<div className="sched-calendar-grid">
+												{scheduleDays.map((day) => (
+													<CalendarDayColumn
+														key={day.id}
+														day={day}
+														isEditing={isCalendarEditing}
+														formatCalendarDateHeader={formatCalendarDateHeader}
+													/>
+												))}
+											</div>
+										</DndContext>
+									) : (
+										<div className="sched-calendar-grid">
+											{scheduleDays.map((day) => {
+												const { day: dayNum, weekday, month } = formatCalendarDateHeader(day.date);
+												return (
+													<div key={day.id} className="sched-calendar-day-column">
+														<div className="sched-calendar-day-header">
+															<span className="sched-calendar-weekday">{weekday}</span>
+															<span className="sched-calendar-day-num">{dayNum}</span>
+															<span className="sched-calendar-month">{month}</span>
+														</div>
+														<div className="sched-calendar-scenes-container">
+															{day.scenes && day.scenes.length > 0 ? (
+																day.scenes.map((scene, idx) => (
+																	<div key={scene.id || idx} className="sched-calendar-scene-block">
+																		<div className="sched-calendar-scene-number">
+																			Scene {scene.scene_number}
+																		</div>
+																		<div className="sched-calendar-scene-info">
+																			{scene.int_ext && (
+																				<span className="sched-calendar-scene-int-ext">
+																					{scene.int_ext}
+																				</span>
+																			)}
+																			{scene.time_of_day && (
+																				<span className="sched-calendar-scene-time">
+																					{scene.time_of_day}
+																				</span>
+																			)}
+																		</div>
+																		<div className="sched-calendar-scene-location">
+																			{scene.location_name || "N/A"}
+																		</div>
+																	</div>
+																))
+															) : (
+																<div className="sched-calendar-no-scenes">No scenes</div>
+															)}
+														</div>
+													</div>
+												);
+											})}
+										</div>
+									)}
+								</div>
+							) : (
+								<div className="sched-calendar-placeholder">No schedule data available. Generate a schedule first.</div>
+							)}
+						</div>
+					)}
 				</div>
 			</div>
 		);
@@ -1703,7 +2140,7 @@ const ManageSchedules = () => {
 				};
 				return acc;
 			}, {});
-			console.log("schedule_by_day-----------", schedule_by_day);
+			console.log("PAyload for save changes ::::::::::::::::::::; ", schedule_by_day);
 
 			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`), {
 				method: "POST",
@@ -1728,6 +2165,177 @@ const ManageSchedules = () => {
 			alert("Failed to save schedule: " + error.message);
 			setScheduleDays(originalScheduleDays);
 		}
+	};
+
+	// Calendar edit save function - uses same API as handleSaveChanges
+	const handleCalendarSaveChanges = async () => {
+		const scrollLeft = calendarGridRef.current?.scrollLeft;
+		const scrollTop = calendarGridRef.current?.scrollTop;
+		const contentScrollTop = calendarContentRef.current?.scrollTop;
+		setIsCalendarSaving(true);
+		try {
+			const filteredDays = scheduleDays.filter((day) => {
+				return day.scenes && day.scenes.length > 0;
+			});
+
+			const schedule_by_day = filteredDays.reduce((acc, day) => {
+				acc[day.date] = {
+					date: day.date,
+					scenes: day.scenes.map((scene) => ({
+						scene_id: scene.scene_id,
+						scene_number: scene.scene_number,
+						location_name: scene.location_name,
+						character_names: scene.character_names,
+						character_ids: scene.character_ids,
+					})),
+				};
+				return acc;
+			}, {});
+			console.log("Calendar save payload: ", schedule_by_day);
+
+			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ schedule_by_day }),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.message || "Failed to save schedule");
+			} else {
+				setScheduleDays(filteredDays);
+			}
+			await fetchScheduleData();
+			setIsCalendarEditing(false);
+			// Restore scroll position after React re-renders
+			const restoreScroll = () => {
+				if (calendarGridRef.current) {
+					if (scrollLeft !== undefined) calendarGridRef.current.scrollLeft = scrollLeft;
+					if (scrollTop !== undefined) calendarGridRef.current.scrollTop = scrollTop;
+				}
+				if (calendarContentRef.current && contentScrollTop !== undefined) {
+					calendarContentRef.current.scrollTop = contentScrollTop;
+				}
+			};
+			setTimeout(restoreScroll, 50);
+			setTimeout(restoreScroll, 100);
+			setTimeout(restoreScroll, 200);
+			setTimeout(() => alert("Schedule saved successfully!"), 250);
+		} catch (error) {
+			console.error("Error saving calendar schedule:", error);
+			alert("Failed to save schedule: " + error.message);
+			setScheduleDays(calendarOriginalDays);
+		} finally {
+			setIsCalendarSaving(false);
+		}
+	};
+
+	// Helper function to find container for calendar drag-drop
+	const findCalendarContainer = (days, id) => {
+		// Check if it's a day container
+		const calendarPrefix = "calendar-";
+		if (typeof id === "string" && id.startsWith(calendarPrefix)) {
+			const dayId = id.replace(calendarPrefix, "");
+			const day = days.find((d) => String(d.id) === dayId);
+			return day || null;
+		}
+
+		// Check if it's a scene
+		for (const day of days) {
+			if (day.scenes.find((scene) => scene.id === id)) {
+				return day;
+			}
+		}
+		return null;
+	};
+
+	// Handle drag end for calendar view
+	const handleCalendarDragEnd = (event) => {
+		const { active, over } = event;
+		const scrollLeft = calendarGridRef.current?.scrollLeft;
+		const scrollTop = calendarGridRef.current?.scrollTop;
+		const contentScrollTop = calendarContentRef.current?.scrollTop;
+
+		if (!over) {
+			return;
+		}
+
+		const activeId = active.id;
+		const overId = over.id;
+
+		if (activeId === overId) {
+			return;
+		}
+
+		setScheduleDays((days) => {
+			const activeContainer = findCalendarContainer(days, activeId);
+			const overContainer = findCalendarContainer(days, overId);
+
+			if (!activeContainer || !overContainer) {
+				return days;
+			}
+
+			// Handle reordering within the same day
+			if (activeContainer.id === overContainer.id) {
+				const activeIndex = activeContainer.scenes.findIndex((s) => s.id === activeId);
+				const overIndex = overContainer.scenes.findIndex((s) => s.id === overId);
+				if (activeIndex !== -1 && overIndex !== -1) {
+					const newScenes = arrayMove(activeContainer.scenes, activeIndex, overIndex);
+					return days.map((day) => {
+						if (day.id === activeContainer.id) {
+							return { ...day, scenes: newScenes };
+						}
+						return day;
+					});
+				}
+				return days;
+			}
+
+			// Handle moving between days
+			const activeDayIndex = days.findIndex((d) => d.id === activeContainer.id);
+			const overDayIndex = days.findIndex((d) => d.id === overContainer.id);
+
+			if (activeDayIndex === -1 || overDayIndex === -1) return days;
+
+			const activeSceneIndex = activeContainer.scenes.findIndex((s) => s.id === activeId);
+			if (activeSceneIndex === -1) return days;
+
+			const [movedScene] = activeContainer.scenes.splice(activeSceneIndex, 1);
+
+			// Find insertion index in target day
+			let overSceneIndex = overContainer.scenes.findIndex((s) => s.id === overId);
+			if (overSceneIndex === -1) {
+				overSceneIndex = overContainer.scenes.length;
+			}
+
+			const newDays = [...days];
+			newDays[activeDayIndex] = {
+				...newDays[activeDayIndex],
+				scenes: activeContainer.scenes,
+			};
+			newDays[overDayIndex] = {
+				...newDays[overDayIndex],
+				scenes: [...overContainer.scenes.slice(0, overSceneIndex), movedScene, ...overContainer.scenes.slice(overSceneIndex)],
+			};
+
+			return newDays;
+		});
+
+		// Restore scroll position after React re-renders
+		const restoreScroll = () => {
+			if (calendarGridRef.current) {
+				if (scrollLeft !== undefined) calendarGridRef.current.scrollLeft = scrollLeft;
+				if (scrollTop !== undefined) calendarGridRef.current.scrollTop = scrollTop;
+			}
+			if (calendarContentRef.current && contentScrollTop !== undefined) {
+				calendarContentRef.current.scrollTop = contentScrollTop;
+			}
+		};
+		setTimeout(restoreScroll, 0);
+		setTimeout(restoreScroll, 50);
+		setTimeout(restoreScroll, 100);
 	};
 
 	useEffect(() => {
@@ -1871,21 +2479,32 @@ const ManageSchedules = () => {
 		}
 	}, [showGenerateModal, scheduleData]);
 
-	// Filter modalSelectedDates when start/end dates change
+	// Filter modal dates when start/end dates change
 	useEffect(() => {
 		if (!scheduleStartDate || !scheduleEndDate) return;
 
 		const startDate = new Date(scheduleStartDate);
 		const endDate = new Date(scheduleEndDate);
 
-		// Filter modalSelectedDates if any dates are selected
-		if (modalSelectedDates.length > 0) {
-			const filteredModalDates = modalSelectedDates.filter((dateStr) => {
+		// Filter modalAvailableDates if any dates are selected
+		if (modalAvailableDates.length > 0) {
+			const filteredModalDates = modalAvailableDates.filter((dateStr) => {
 				const date = new Date(dateStr);
 				return date >= startDate && date <= endDate;
 			});
-			if (filteredModalDates.length !== modalSelectedDates.length) {
-				setModalSelectedDates(filteredModalDates);
+			if (filteredModalDates.length !== modalAvailableDates.length) {
+				setModalAvailableDates(filteredModalDates);
+			}
+		}
+
+		// Filter modalUnavailableDates if any dates are selected
+		if (modalUnavailableDates.length > 0) {
+			const filteredUnavailableDates = modalUnavailableDates.filter((dateStr) => {
+				const date = new Date(dateStr);
+				return date >= startDate && date <= endDate;
+			});
+			if (filteredUnavailableDates.length !== modalUnavailableDates.length) {
+				setModalUnavailableDates(filteredUnavailableDates);
 			}
 		}
 	}, [scheduleStartDate, scheduleEndDate]);
@@ -1913,11 +2532,13 @@ const ManageSchedules = () => {
 							addedCharacters.add(normalizedName);
 							const existingData = scheduleData?.dates?.[datesSection]?.[cast.character];
 							const existingDates = existingData?.dates || (Array.isArray(existingData) ? existingData : []);
+							const existingUnavailableDates = existingData?.unavailable_dates || [];
 							const isFlexible = existingData?.flexible || false;
 
 							newData[cast.character] = {
 								id: cast.cast_id,
 								dates: parseDateRanges(existingDates),
+								unavailable_dates: parseDateRanges(existingUnavailableDates),
 								flexible: isFlexible,
 							};
 						}
@@ -1926,16 +2547,19 @@ const ManageSchedules = () => {
 					locationList.forEach((loc) => {
 						const existingData = scheduleData?.dates?.[datesSection]?.[loc.location];
 						const existingDates = existingData?.dates || (Array.isArray(existingData) ? existingData : []);
+						const existingUnavailableDates = existingData?.unavailable_dates || [];
 						const isFlexible = existingData?.flexible || false;
 
 						newData[loc.location] = {
 							id: loc.location_id,
 							dates: parseDateRanges(existingDates),
+							unavailable_dates: parseDateRanges(existingUnavailableDates),
 							flexible: isFlexible,
 						};
 					});
 				}
 				setDoodData(newData);
+				setDoodOriginalData(JSON.parse(JSON.stringify(newData))); // Deep copy for comparison
 			}
 		}
 	}, [showDoodModal, doodElementType, scheduleData, castList, locationList]);
@@ -1952,18 +2576,26 @@ const ManageSchedules = () => {
 
 		Object.entries(doodData).forEach(([elementName, elementData]) => {
 			const currentDates = elementData.dates || [];
+			const currentUnavailableDates = elementData.unavailable_dates || [];
+
 			const filteredDates = currentDates.filter((dateStr) => {
 				const date = new Date(dateStr);
 				return date >= startDate && date <= endDate;
 			});
 
-			if (filteredDates.length !== currentDates.length) {
+			const filteredUnavailableDates = currentUnavailableDates.filter((dateStr) => {
+				const date = new Date(dateStr);
+				return date >= startDate && date <= endDate;
+			});
+
+			if (filteredDates.length !== currentDates.length || filteredUnavailableDates.length !== currentUnavailableDates.length) {
 				hasChanges = true;
 			}
 
 			filteredData[elementName] = {
 				...elementData,
 				dates: filteredDates,
+				unavailable_dates: filteredUnavailableDates,
 			};
 		});
 
@@ -2011,7 +2643,7 @@ const ManageSchedules = () => {
 			scene_id: scene.id,
 			scene_number: scene.scene_number,
 			int_ext: scene.int_ext,
-			time_of_day: scene.time_of_day,
+			time_of_day: scene.time,
 			page_eighths: scene.page_eighths,
 			synopsis: scene.synopsis,
 			location_name: scene.location,
@@ -2101,7 +2733,7 @@ const ManageSchedules = () => {
 								newScene.scene_id = scheduledScene.scene_id;
 								newScene.scene_number = scheduledScene.scene_number || breakdownScene.scene_number;
 								newScene.int_ext = breakdownScene.int_ext;
-								newScene.time_of_day = breakdownScene.time_of_day;
+								newScene.time_of_day = breakdownScene.time;
 								newScene.page_eighths = breakdownScene.page_eighths;
 								newScene.synopsis = breakdownScene.synopsis;
 
@@ -2460,17 +3092,31 @@ const ManageSchedules = () => {
 						const charName = character_names?.[index];
 						const charData = characterDates[charName];
 
-						if (charData && charData.dates.length > 0) {
-							if (!charData.dates.includes(dayData.date)) {
-								conflictList.push(`Character "${charName}" is not available on ${dayData.date}`);
+						if (charData) {
+							// Check if character is marked as unavailable on this date
+							if (charData.unavailable_dates && charData.unavailable_dates.includes(dayData.date)) {
+								conflictList.push(`Character "${charName}" is marked as unavailable on ${dayData.date}`);
+							}
+							// Check if character has available dates set but this date is not included
+							else if (charData.dates && charData.dates.length > 0 && !charData.flexible) {
+								if (!charData.dates.includes(dayData.date)) {
+									conflictList.push(`Character "${charName}" is not available on ${dayData.date}`);
+								}
 							}
 						}
 					});
 
 					const locationData = locationDates[location_name];
-					if (locationData && locationData.dates.length > 0) {
-						if (!locationData.dates.includes(dayData.date)) {
-							conflictList.push(`Location "${location_name}" is not available on ${dayData.date}`);
+					if (locationData) {
+						// Check if location is marked as unavailable on this date
+						if (locationData.unavailable_dates && locationData.unavailable_dates.includes(dayData.date)) {
+							conflictList.push(`Location "${location_name}" is marked as unavailable on ${dayData.date}`);
+						}
+						// Check if location has available dates set but this date is not included
+						else if (locationData.dates && locationData.dates.length > 0 && !locationData.flexible) {
+							if (!locationData.dates.includes(dayData.date)) {
+								conflictList.push(`Location "${location_name}" is not available on ${dayData.date}`);
+							}
 						}
 					}
 
@@ -2910,14 +3556,14 @@ const ManageSchedules = () => {
 	};
 
 	const handleSaveHours = async () => {
-		for (let day of scheduleDays) {
-			for (let scene of day.scenes) {
-				if (!(scene.scene_number in sceneHours)) {
-					alert(`Enter estimated Hours and minutes for scene ${scene.scene_number} before saving `);
-					return;
-				}
-			}
-		}
+		// for (let day of scheduleDays) {
+		// 	for (let scene of day.scenes) {
+		// 		if (!(scene.scene_number in sceneHours)) {
+		// 			alert(`Enter estimated Hours and minutes for scene ${scene.scene_number} before saving `);
+		// 			return;
+		// 		}
+		// 	}
+		// }
 
 		try {
 			const scriptsResponse = await fetch(getApiUrl(`/api/${id}/script-list`));
@@ -2931,7 +3577,7 @@ const ManageSchedules = () => {
 				// Use master script (oldest/first uploaded) for scheduling
 				const masterScript = sortedScripts[sortedScripts.length - 1];
 
-				const SaveResponse = await fetch(getApiUrl(`/api/save-hours?script_id=${masterScript.id}`), {
+				const SaveResponse = await fetch(getApiUrl(`/api/save-hours?project_id=${id}`), {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
@@ -3126,9 +3772,11 @@ const ManageSchedules = () => {
 			<div className="sched-content">
 				<div className="sched-left-panel">
 					<div className="sched-left-panel-header">Availability dates</div>
-					<button className="sched-dood-button" onClick={() => setShowDoodModal(true)}>
-						See DOODs
-					</button>
+					<div className="sched-left-panel-buttons">
+						<button className="sched-dood-button" onClick={() => setShowDoodModal(true)}>
+							DOODS
+						</button>
+					</div>
 					<div className="sched-element-selector">
 						<div className="sched-selector-header">
 							<select
@@ -3244,43 +3892,52 @@ const ManageSchedules = () => {
 					)}
 
 					<div className="sched-given-dates">
-						<div className="sched-section-title">Available Dates</div>
+						<div className="sched-section-title">Available / Unavailable Dates</div>
 
-						{selectedElement &&
-							scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element] &&
-							scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element]["flexible"] && (
-								<div className="sched-existing-dates-info">
-									<span> ✅ Flexible dates for {element}</span>
-								</div>
-							)}
 						{selectedElement ? (
 							<div className="sched-date-picker-container">
-								{scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element] &&
-									selectedDates.length === 0 &&
-									!scheduleData["dates"][elementType === "location" ? "locations" : "characters"][element]["flexible"] && (
-										<div className="sched-existing-dates-info">
-											<span className="sched-existing-dates-label">{`No dates set for ${getSelectedElementName()}`}</span>
-										</div>
-									)}
+								{(() => {
+									const datesSection = elementType === "location" ? "locations" : "characters";
+									const elementData = scheduleData?.dates?.[datesSection]?.[element];
+									const unavailableDates = elementData?.unavailable_dates || [];
+									const availableDates = selectedDates || [];
+									const isFlexible = elementData?.flexible || false;
 
-								{selectedDates.length > 0 && (
-									<div className="sched-selected-dates-list">
-										<div className="sched-selected-dates-header">
-											<span>Available Dates ({selectedDates.length}):</span>
+									// Combined tile className for both available and unavailable dates
+									const combinedTileClassName = ({ date, view }) => {
+										if (view === "month") {
+											const formattedDate = date.toLocaleDateString("en-CA").split("T")[0];
+											if (availableDates.includes(formattedDate)) {
+												return "highlight-green";
+											}
+											if (unavailableDates.includes(formattedDate)) {
+												return "highlight-red";
+											}
+										}
+									};
+
+									return (
+										<div className="sched-selected-dates-list">
+											<div className="sched-selected-dates-header">
+												<span>
+													Available: {availableDates.length} | Unavailable: {unavailableDates.length}
+												</span>
+												{isFlexible && <span> ✅ Flexible</span>}
+											</div>
+											<div className="sched-calendar-container">
+												<Calendar
+													selectRange={false}
+													activeStartDate={null}
+													tileClassName={combinedTileClassName}
+													tileDisabled={() => true}
+												/>
+											</div>
 										</div>
-										<div className="sched-calendar-container">
-											<Calendar
-												selectRange={false}
-												activeStartDate={null}
-												tileClassName={tileClassName}
-												tileDisabled={() => true}
-											/>
-										</div>
-									</div>
-								)}
+									);
+								})()}
 							</div>
 						) : (
-							<div className="sched-calendar-placeholder">Select an element to choose dates</div>
+							<div className="sched-calendar-placeholder">Select an element to see dates</div>
 						)}
 					</div>
 
