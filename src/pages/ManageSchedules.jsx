@@ -225,12 +225,17 @@ const CalendarSceneBlock = ({ scene, isEditing }) => {
 			{...attributes}
 			{...listeners}
 		>
-			<div className="sched-calendar-scene-number">Scene {scene.scene_number}</div>
-			<div className="sched-calendar-scene-info">
-				{scene.int_ext && <span className="sched-calendar-scene-int-ext">{scene.int_ext}</span>}
-				{scene.time_of_day && <span className="sched-calendar-scene-time">{scene.time_of_day}</span>}
-			</div>
-			<div className="sched-calendar-scene-location">{scene.location_name || "N/A"}</div>
+			<b>
+				<div>
+					{scene.scene_number}
+					{"   "}
+					{scene.int_ext && scene.int_ext} {"      "}
+					{scene.location_name || "N/A"}
+					{"    -    "}
+					{scene.time_of_day && <span>{scene.time_of_day}</span>}
+				</div>
+			</b>
+			
 		</div>
 	);
 };
@@ -339,7 +344,9 @@ const ManageSchedules = () => {
 	const [generatedMaxScenes, setGeneratedMaxScenes] = useState("");
 	const [scheduleDates, setScheduleDates] = useState({ start: "N/A", end: "N/A" });
 	const [HoursSaved, setHoursSaved] = useState(false);
-
+	const [constraintType, setConstraintType] = useState("");
+	const [maxGeneratedPageEightsPerDay, setGeneratedMaxPageEightsPerDay] = useState("");
+	const [generatedMaxHoursPerDay, setGeneratedMaxHoursPerDay] = useState("");
 	const [conflicts, setConflicts] = useState([]);
 	const [showConflictModal, setShowConflictModal] = useState(false);
 
@@ -974,23 +981,30 @@ const ManageSchedules = () => {
 					payload.max_scenes_per_day = parseInt(maxScenes);
 				}
 			} else if (scheduleMode === "page-eights") {
-				const pages = parseInt(maxPageEights.pages, 10) || 0;
-				const eighths = parseInt(maxPageEights.eighths, 10) || 0;
-				const totalEighths = pages * 8 + eighths;
-				if (totalEighths <= 0) {
-					alertMessage = "Please enter a valid number of page-eights per day";
+				if (maxPageEights.pages === "" || maxPageEights.eighths === "") {
+					alertMessage = "Please fill in both pages and eighths fields";
 				} else {
-					payload.max_page_eighths_per_day = totalEighths;
+					const pages = parseInt(maxPageEights.pages, 10) || 0;
+					const eighths = parseInt(maxPageEights.eighths, 10) || 0;
+					const totalEighths = pages * 8 + eighths;
+					if (totalEighths <= 0) {
+						alertMessage = "Please enter a valid number of page-eights per day";
+					} else {
+						payload.max_page_eighths_per_day = totalEighths;
+					}
 				}
 			} else if (scheduleMode === "hours") {
-				const parsedHours = parseHours(maxHours);
 				if (!HoursSaved) {
 					alertMessage = "Please save Hours for each scene before generating schedule";
-				}
-				if (parsedHours <= 0) {
-					alertMessage = "Please enter a valid number of hours per day";
+				} else if (maxHours.hours === "" || maxHours.minutes === "") {
+					alertMessage = "Please fill in both hours and minutes fields";
 				} else {
-					payload.max_hours_per_day = parsedHours;
+					const parsedHours = parseHours(maxHours);
+					if (parsedHours <= 0) {
+						alertMessage = "Please enter a valid number of hours per day";
+					} else {
+						payload.max_hours_per_day = parsedHours;
+					}
 				}
 			}
 
@@ -1023,7 +1037,9 @@ const ManageSchedules = () => {
 							const refreshedData = await refreshResponse.json();
 							setScheduleData(refreshedData);
 							setGeneratedMaxScenes(refreshedData["generated_schedule"]["max_scenes_per_day"] || "N/A");
-
+							setConstraintType(refreshedData["generated_schedule"]["constraint_type"] || "N/A");
+							setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["max_page_eighths_per_day"] || "N/A");
+							setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["max_hours_per_day"] || "N/A");
 							alert("Schedule generated successfully!");
 						} else {
 							throw new Error("Failed to refresh schedule data");
@@ -1105,12 +1121,28 @@ const ManageSchedules = () => {
 							</div>
 						)}
 
-						{/* Max Scenes Per Day Section */}
+						{/* Scheduling Constraint Section */}
 						<div className="sched-generate-section">
 							<h3 className="sched-section-title">Scheduling Constraint</h3>
 							<div className="sched-controls-group">
 								<label className="sched-controls-label">
-									Max Scenes Per Day:
+									Schedule By:
+									<select
+										value={scheduleMode}
+										onChange={(e) => setScheduleMode(e.target.value)}
+										className="sched-mode-dropdown"
+										style={{ marginLeft: "10px" }}
+									>
+										<option value="scenes">Max Scenes Per Day</option>
+										<option value="page-eights">Max Page-Eights Per Day</option>
+										<option value="hours">Max Shooting Hours Per Day</option>
+									</select>
+								</label>
+							</div>
+
+							{scheduleMode === "scenes" && (
+								<div className="sched-controls-group">
+									<label className="sched-controls-label">Max scenes:</label>
 									<input
 										type="number"
 										value={maxScenes}
@@ -1120,8 +1152,57 @@ const ManageSchedules = () => {
 										min="1"
 										style={{ marginLeft: "10px", width: "80px" }}
 									/>
-								</label>
-							</div>
+								</div>
+							)}
+
+							{scheduleMode === "page-eights" && (
+								<div className="sched-controls-group">
+									<label className="sched-controls-label">Max page-eights:</label>
+									<input
+										type="number"
+										value={maxPageEights.pages}
+										onChange={(e) => setMaxPageEights({ ...maxPageEights, pages: e.target.value })}
+										className="sched-page-input"
+										placeholder="2"
+										min="0"
+										style={{ marginLeft: "10px", width: "60px" }}
+									/>
+									<input
+										type="number"
+										value={maxPageEights.eighths}
+										onChange={(e) => setMaxPageEights({ ...maxPageEights, eighths: e.target.value })}
+										className="sched-page-input"
+										placeholder="3"
+										min="0"
+										max="7"
+										style={{ marginLeft: "5px", width: "60px" }}
+									/>
+									<span>/8</span>
+								</div>
+							)}
+
+							{scheduleMode === "hours" && (
+								<div className="sched-controls-group">
+									<label className="sched-controls-label">Max hours:</label>
+									<input
+										type="number"
+										className="sched-page-input"
+										placeholder="HH"
+										value={maxHours.hours}
+										onChange={(e) => setMaxHours({ ...maxHours, hours: e.target.value })}
+										style={{ marginLeft: "10px", width: "60px" }}
+									/>
+									<span>:</span>
+									<input
+										type="number"
+										className="sched-page-input"
+										placeholder="MM"
+										value={maxHours.minutes}
+										onChange={(e) => setMaxHours({ ...maxHours, minutes: e.target.value })}
+										style={{ marginLeft: "5px", width: "60px" }}
+									/>
+								</div>
+							)}
 						</div>
 
 						{/* Character/Location Availability Section */}
@@ -2025,24 +2106,16 @@ const ManageSchedules = () => {
 															{day.scenes && day.scenes.length > 0 ? (
 																day.scenes.map((scene, idx) => (
 																	<div key={scene.id || idx} className="sched-calendar-scene-block">
-																		<div className="sched-calendar-scene-number">
-																			Scene {scene.scene_number}
-																		</div>
-																		<div className="sched-calendar-scene-info">
-																			{scene.int_ext && (
-																				<span className="sched-calendar-scene-int-ext">
-																					{scene.int_ext}
-																				</span>
-																			)}
-																			{scene.time_of_day && (
-																				<span className="sched-calendar-scene-time">
-																					{scene.time_of_day}
-																				</span>
-																			)}
-																		</div>
-																		<div className="sched-calendar-scene-location">
-																			{scene.location_name || "N/A"}
-																		</div>
+																		<b>
+																			<div>
+																				{scene.scene_number}
+																				{"   "}
+																				{scene.int_ext && scene.int_ext}
+																				{scene.location_name || "N/A"}
+																				{"  -   "}
+																				{scene.time_of_day && <span>{scene.time_of_day}</span>}
+																			</div>
+																		</b>
 																	</div>
 																))
 															) : (
@@ -2453,6 +2526,10 @@ const ManageSchedules = () => {
 			console.log("schedule-data ------------ ", data);
 			setScheduleData(data);
 			setGeneratedMaxScenes(data["generated_schedule"]["max_scenes_per_day"] || "N/A");
+			setConstraintType(data["generated_schedule"]["constraint_type"] || "N/A");
+			console.log("conatraont type set as ::: ", typeof data["generated_schedule"]["constraint_type"]);
+			setGeneratedMaxPageEightsPerDay(data["generated_schedule"]["max_page_eighths_per_day"] || "N/A");
+			setGeneratedMaxHoursPerDay(data["generated_schedule"]["max_hours_per_day"] || "N/A");
 		} catch (error) {
 			console.error("Error fetching schedule data:", error);
 			setError(error.message);
@@ -2460,6 +2537,15 @@ const ManageSchedules = () => {
 			setIsLoading(false);
 		}
 	};
+
+	function parsePageEights(PageEights) {
+		if (!PageEights) return "N/A";
+		PageEights = parseInt(PageEights);
+		var m = PageEights % 8;
+		PageEights -= m;
+		PageEights /= 8;
+		return `${PageEights} ${m}/8 `;
+	}
 
 	useEffect(() => {
 		fetchScheduleData();
@@ -3202,23 +3288,30 @@ const ManageSchedules = () => {
 				payload = { max_scenes_per_day: parseInt(maxScenes) };
 			}
 		} else if (scheduleMode === "page-eights") {
-			const pages = parseInt(maxPageEights.pages, 10) || 0;
-			const eighths = parseInt(maxPageEights.eighths, 10) || 0;
-			const totalEighths = pages * 8 + eighths;
-			if (totalEighths <= 0) {
-				alertMessage = "Please enter a valid number of page-eights per day";
+			if (maxPageEights.pages === "" || maxPageEights.eighths === "") {
+				alertMessage = "Please fill in both pages and eighths fields";
 			} else {
-				payload = { max_page_eighths_per_day: totalEighths };
+				const pages = parseInt(maxPageEights.pages, 10) || 0;
+				const eighths = parseInt(maxPageEights.eighths, 10) || 0;
+				const totalEighths = pages * 8 + eighths;
+				if (totalEighths <= 0) {
+					alertMessage = "Please enter a valid number of page-eights per day";
+				} else {
+					payload = { max_page_eighths_per_day: totalEighths };
+				}
 			}
 		} else if (scheduleMode === "hours") {
-			const parsedHours = parseHours(maxHours);
 			if (!HoursSaved) {
 				alertMessage = "Please save Hours for each scene before generating schedule";
-			}
-			if (parsedHours <= 0) {
-				alertMessage = "Please enter a valid number of hours per day";
+			} else if (maxHours.hours === "" || maxHours.minutes === "") {
+				alertMessage = "Please fill in both hours and minutes fields";
 			} else {
-				payload = { max_hours_per_day: parsedHours };
+				const parsedHours = parseHours(maxHours);
+				if (parsedHours <= 0) {
+					alertMessage = "Please enter a valid number of hours per day";
+				} else {
+					payload = { max_hours_per_day: parsedHours };
+				}
 			}
 		}
 
@@ -3250,6 +3343,9 @@ const ManageSchedules = () => {
 						const refreshedData = await refreshResponse.json();
 						setScheduleData(refreshedData);
 						setGeneratedMaxScenes(refreshedData["generated_schedule"]["max_scenes_per_day"] || "N/A");
+						setConstraintType(refreshedData["generated_schedule"]["constraint_type"] || "N/A");
+						setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["max_page_eighths_per_day"] || "N/A");
+						setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["max_hours_per_day"] || "N/A");
 
 						alert("Schedule generated successfully!");
 					} else {
@@ -3958,14 +4054,19 @@ const ManageSchedules = () => {
 				<div className="sched-center-panel">
 					<div className="sched-schedule-header">
 						Schedule
-						{scheduleData?.schedule && (
+						{scheduleData?.schedule && (constraintType === "scenes" || constraintType === "page_eights" || constraintType === "hours") && (
 							<span className="sched-schedule-header-generated">
-								&nbsp;– Generated Schedule for {generatedMaxScenes || "N/A"} max scenes per day
+								&nbsp;– Generated Schedule with{" "}
+								{constraintType === "scenes"
+									? `max ${generatedMaxScenes} scenes per day`
+									: constraintType === "hours"
+										? `max ${generatedMaxHoursPerDay} hours per day`
+										: `max ${parsePageEights(maxGeneratedPageEightsPerDay)} page eights per day`}
 							</span>
 						)}
 					</div>
 
-					{conflicts.length > 0 && (
+					{constraintType === "scenes" && conflicts.length > 0 && (
 						<div className="sched-schedule-header sched-schedule-header-conflict">
 							<button
 								className="sched-conflict-button"
@@ -3986,75 +4087,41 @@ const ManageSchedules = () => {
 
 					<div className="sched-controls-section">
 						<div className="sched-controls-group">
-							<label className="sched-controls-label">
-								Schedule By:
-								<select value={scheduleMode} onChange={(e) => setScheduleMode(e.target.value)} className="sched-mode-dropdown">
-									<option value="scenes">Max Scenes Per Day</option>
-									<option value="page-eights">Max Page-Eights Per Day</option>
-									<option value="hours">Max Shooting Hours Per Day</option>
-								</select>
-							</label>
+							<span className="sched-controls-label" style={{ fontWeight: "600" }}>
+								Schedule By:&nbsp;
+								<span style={{ fontWeight: "400" }}>
+									{scheduleMode === "scenes" && "Max Scenes Per Day"}
+									{scheduleMode === "page-eights" && "Max Page-Eights Per Day"}
+									{scheduleMode === "hours" && "Max Shooting Hours Per Day"}
+								</span>
+							</span>
 						</div>
 
-						{scheduleMode === "scenes" && (
-							<div className="sched-controls-group">
-								<label className="sched-controls-label">Max scenes:</label>
-								<input
-									type="number"
-									value={maxScenes}
-									onChange={(e) => setMaxScenes(e.target.value)}
-									className="sched-page-input"
-									placeholder="5"
-									min="1"
-								/>
-							</div>
-						)}
-
-						{scheduleMode === "page-eights" && (
-							<div className="sched-controls-group">
-								<label className="sched-controls-label">Max page-eights:</label>
-								<input
-									type="number"
-									value={maxPageEights.pages}
-									onChange={(e) => setMaxPageEights({ ...maxPageEights, pages: e.target.value })}
-									className="sched-page-input"
-									placeholder="2"
-									min="0"
-								/>
-
-								<input
-									type="number"
-									value={maxPageEights.eighths}
-									onChange={(e) => setMaxPageEights({ ...maxPageEights, eighths: e.target.value })}
-									className="sched-page-input"
-									placeholder="3"
-									min="0"
-									max="7"
-								/>
-								<span>/8</span>
-							</div>
-						)}
-
-						{scheduleMode === "hours" && (
-							<div className="sched-controls-group">
-								<label className="sched-controls-label">Max hours:</label>
-								<input
-									type="number"
-									className="sched-page-input"
-									placeholder="HH"
-									value={maxHours.hours}
-									onChange={(e) => setMaxHours({ ...maxHours, hours: e.target.value })}
-								/>
-								<span>:</span>
-								<input
-									type="number"
-									className="sched-page-input"
-									placeholder="MM"
-									value={maxHours.minutes}
-									onChange={(e) => setMaxHours({ ...maxHours, minutes: e.target.value })}
-								/>
-							</div>
-						)}
+						<div className="sched-controls-group">
+							<span className="sched-controls-label">
+								{scheduleMode === "scenes" && (
+									<>
+										Max Scenes: <strong>{maxScenes || "–"}</strong>
+									</>
+								)}
+								{scheduleMode === "page-eights" && (
+									<>
+										Max Page-Eights:{" "}
+										<strong>
+											{maxPageEights.pages || "0"} {maxPageEights.eighths || "0"}/8
+										</strong>
+									</>
+								)}
+								{scheduleMode === "hours" && (
+									<>
+										Max Hours:{" "}
+										<strong>
+											{maxHours.hours || "0"}:{maxHours.minutes || "00"}
+										</strong>
+									</>
+								)}
+							</span>
+						</div>
 
 						<div className="sched-controls-group">
 							<button className="sched-generate-button" onClick={() => setShowGenerateModal(true)} disabled={isGenerating}>
