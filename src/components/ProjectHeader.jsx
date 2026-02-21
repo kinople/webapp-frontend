@@ -3,7 +3,7 @@ import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
 import { getApiUrl, fetchWithAuth } from "../utils/api";
 import { useSelector } from "react-redux";
 
-const ProjectHeader = () => {
+const ProjectHeader = ({ hideProjectName = false }) => {
 	const { user, id } = useParams();
 	const [showModal, setShowModal] = useState(false);
 	const [showAddModal, setShowAddModal] = useState(false);
@@ -193,11 +193,13 @@ const ProjectHeader = () => {
 
 	return (
 		<div style={styles.subHeader}>
-			<h1 style={styles.projectTitle}>
-				<Link to={`/${user}/${id}`} style={styles.projectTitleLink}>
-					{!projectName ? "Loading..." : projectName}
-				</Link>
-			</h1>
+			{!hideProjectName && (
+				<h1 style={styles.projectTitle}>
+					<Link to={`/${user}/${id}`} style={styles.projectTitleLink}>
+						{!projectName ? "Loading..." : projectName}
+					</Link>
+				</h1>
+			)}
 			<div style={styles.teamIcon} onClick={handleTeamIconClick}>
 				<svg width="24" height="24" viewBox="0 0 24 24" fill="#2C3440">
 					<path d="M12 12.75c1.63 0 3.07.39 4.24.9 1.08.48 1.76 1.56 1.76 2.73V18H6v-1.62c0-1.17.68-2.25 1.76-2.73 1.17-.51 2.61-.9 4.24-.9zM4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm18 0c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-8-6c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3z" />

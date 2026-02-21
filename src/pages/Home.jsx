@@ -24,6 +24,13 @@ const Home = () => {
 	const [resultsPerPage, setResultsPerPage] = useState(16);
 	const [currentPage, setCurrentPage] = useState(1);
 
+	const formatDateTime = (value) => {
+		if (!value) return "";
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return "";
+		return date.toLocaleString();
+	};
+
 	useEffect(() => {
 		if (!user) return;
 		(async () => {
@@ -47,7 +54,9 @@ const Home = () => {
 	}, [user, organizationId, refreshKey]);
 
 	// Use real projects if available, otherwise show demo
-	const displayProjects = currentProjects;
+	const displayProjects = currentProjects
+		.slice()
+		.sort((a, b) => new Date(b.createtime || b.createTime || 0) - new Date(a.createtime || a.createTime || 0));
 
 	const totalResults = displayProjects.length;
 	const totalPages = Math.ceil(totalResults / resultsPerPage) || 1;
@@ -76,6 +85,9 @@ const Home = () => {
 									<div className="home-card-info">
 										<h3 className="home-card-title">{project.projectName || project.name}</h3>
 										<p className="home-card-type">Type: {project.type || project.projectType || "Film"}</p>
+										{(project.createtime || project.createTime) && (
+											<p className="home-card-type">Created: {formatDateTime(project.createtime || project.createTime)}</p>
+										)}
 									</div>
 									<div className="home-card-stats">
 										<div className="home-stat-item">

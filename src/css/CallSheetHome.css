@@ -1,0 +1,83 @@
+/* CallSheetHome.css - Modern design following app design system */
+
+.csh-page-container {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 60px);
+    background-color: #f7f8fa;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+.csh-content {
+    display: flex;
+    flex-direction: column;
+    padding: 80px 24px;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+}
+
+.csh-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #0f1724;
+    margin-bottom: 64px;
+    text-align: center;
+}
+
+.csh-button-container {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    flex-wrap: wrap;
+}
+
+.csh-button {
+    background-color: #fff;
+    border: 2px solid #e2e6ed;
+    border-radius: 16px;
+    padding: 36px 52px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #0f1724;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 16px rgba(15, 23, 36, 0.08);
+    min-width: 260px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.csh-button:hover {
+    background: linear-gradient(135deg, #ff6454 0%, #ff4c3a 100%);
+    color: #fff;
+    border-color: #ff6758;
+    transform: translateY(-6px);
+    box-shadow: 0 12px 32px rgba(255, 103, 88, 0.3);
+}
+
+.csh-button-icon {
+    font-size: 36px;
+}
+
+@media (max-width: 768px) {
+    .csh-content {
+        padding: 48px 24px;
+    }
+    
+    .csh-title {
+        font-size: 1.8rem;
+    }
+    
+    .csh-button-container {
+        flex-direction: column;
+        width: 100%;
+        max-width: 400px;
+    }
+    
+    .csh-button {
+        width: 100%;
+    }
+}

@@ -74,17 +74,17 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
 
             // Convert the response to a blob
             const blob = await response.blob();
-            
+
             // Create a URL for the blob
             const url = window.URL.createObjectURL(blob);
-            
+
             // Create a temporary link element and trigger the download
             const link = document.createElement('a');
             link.href = url;
             link.download = filename;
             document.body.appendChild(link);
             link.click();
-            
+
             // Clean up
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
@@ -125,11 +125,11 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
             </div>
 
             <div style={styles.generateButtonContainer}>
-                <button 
+                <button
                     style={{
                         ...styles.generateButton,
                         ...(isGenerating && styles.generateButtonDisabled)
-                    }} 
+                    }}
                     onClick={handleGenerateCallSheet}
                     disabled={isGenerating}
                 >
@@ -206,8 +206,8 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
                 <thead>
                     <tr>
                         <th>Scene No.</th>
-                        <th>Int./Ext.<br/>Day/Night</th>
-                        <th>Location<br/>Synopsis</th>
+                        <th>Int./Ext.<br />Day/Night</th>
+                        <th>Location<br />Synopsis</th>
                         <th>Cast ID</th>
                         <th>Pages</th>
                         <th>Notes</th>
@@ -217,9 +217,9 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
                     {dayData.map((scene, index) => (
                         <tr key={index}>
                             <td>{scene['Scene Number']}</td>
-                            <td>{scene['INT/EXT']}<br/>{scene['Day/Night']}</td>
+                            <td>{scene['INT/EXT']}<br />{scene['Day/Night']}</td>
                             <td>
-                                {scene['Location']}<br/>
+                                {scene['Location']}<br />
                                 <span style={styles.synopsis}>{scene['Synopsis']}</span>
                             </td>
                             <td>{scene['Cast ID']}</td>
@@ -304,9 +304,9 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
                             </div>
                         </td>
                         <td>
-                            Living Room Furnishings,<br/>
-                            Decorative elements for<br/>
-                            Syed's House including<br/>
+                            Living Room Furnishings,<br />
+                            Decorative elements for<br />
+                            Syed's House including<br />
                             Table & Chairs
                         </td>
                     </tr>
@@ -374,8 +374,8 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
                 <thead>
                     <tr>
                         <th>Scene No.</th>
-                        <th>Int./Ext.<br/>Day/Night</th>
-                        <th>Location<br/>Synopsis</th>
+                        <th>Int./Ext.<br />Day/Night</th>
+                        <th>Location<br />Synopsis</th>
                         <th>Cast ID</th>
                         <th>Pages</th>
                         <th>Notes</th>
@@ -385,9 +385,9 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
                     {nextDayScenes.map((scene, index) => (
                         <tr key={index}>
                             <td>{scene['Scene Number']}</td>
-                            <td>{scene['INT/EXT']}<br/>{scene['Day/Night']}</td>
+                            <td>{scene['INT/EXT']}<br />{scene['Day/Night']}</td>
                             <td>
-                                {scene['Location']}<br/>
+                                {scene['Location']}<br />
                                 <span style={styles.synopsis}>{scene['Synopsis']}</span>
                             </td>
                             <td>{scene['Cast ID']}</td>
@@ -434,7 +434,7 @@ const CallSheet = () => {
 
     return (
         <div style={styles.pageContainer}>
-            <ProjectHeader />
+            <ProjectHeader hideProjectName />
             <div style={styles.content}>
                 <h2 style={styles.title}>Call Sheets</h2>
                 <div style={styles.mainContent}>
@@ -445,7 +445,7 @@ const CallSheet = () => {
                             <div style={styles.errorMessage}>{error}</div>
                         ) : (
                             Object.entries(groupedData).map(([date, scenes], index) => (
-                                <button 
+                                <button
                                     key={date}
                                     style={styles.dayButton}
                                     onClick={() => setSelectedDay(date)}
@@ -459,7 +459,7 @@ const CallSheet = () => {
                         {!selectedDay ? (
                             <div style={styles.message}>Click on a shoot day to view call sheet</div>
                         ) : (
-                            <CallSheetForm 
+                            <CallSheetForm
                                 dayData={groupedData[selectedDay]}
                                 dayNumber={Object.keys(groupedData).indexOf(selectedDay) + 1}
                                 totalDays={Object.keys(groupedData).length}

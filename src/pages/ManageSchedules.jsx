@@ -235,7 +235,7 @@ const CalendarSceneBlock = ({ scene, isEditing }) => {
 					{scene.time_of_day && <span>{scene.time_of_day}</span>}
 				</div>
 			</b>
-			
+
 		</div>
 	);
 };
@@ -1945,51 +1945,51 @@ const ManageSchedules = () => {
 															)}
 															{doodViewMode === "available"
 																? // Available dates view - editable
-																	dateColumns.map((date) => {
-																		const isFlexible = isElementFlexible(elem.name);
-																		const isSelected = isCellSelected(elem.name, date);
-																		const isUnavailable = isCellUnavailable(elem.name, date);
+																dateColumns.map((date) => {
+																	const isFlexible = isElementFlexible(elem.name);
+																	const isSelected = isCellSelected(elem.name, date);
+																	const isUnavailable = isCellUnavailable(elem.name, date);
 
-																		let cellClass = "sched-dood-cell";
-																		let cellContent = "";
+																	let cellClass = "sched-dood-cell";
+																	let cellContent = "";
 
-																		if (isFlexible) {
-																			cellClass += " sched-dood-cell-flexible";
-																			cellContent = "F";
-																		} else if (isUnavailable) {
-																			cellClass += " sched-dood-cell-unavailable";
-																			cellContent = "✕";
-																		} else if (isSelected) {
-																			cellClass += " sched-dood-cell-selected";
-																			cellContent = "✓";
-																		} else {
-																			cellClass += " sched-dood-cell-empty";
-																		}
+																	if (isFlexible) {
+																		cellClass += " sched-dood-cell-flexible";
+																		cellContent = "F";
+																	} else if (isUnavailable) {
+																		cellClass += " sched-dood-cell-unavailable";
+																		cellContent = "✕";
+																	} else if (isSelected) {
+																		cellClass += " sched-dood-cell-selected";
+																		cellContent = "✓";
+																	} else {
+																		cellClass += " sched-dood-cell-empty";
+																	}
 
-																		return (
-																			<td
-																				key={date}
-																				className={cellClass}
-																				onClick={() => toggleCell(elem.name, date)}
-																			>
-																				{cellContent}
-																			</td>
-																		);
-																	})
+																	return (
+																		<td
+																			key={date}
+																			className={cellClass}
+																			onClick={() => toggleCell(elem.name, date)}
+																		>
+																			{cellContent}
+																		</td>
+																	);
+																})
 																: // Scheduled dates view - read only
-																	dateColumns.map((date) => {
-																		const isScheduled = isDateScheduled(elem.name, date);
+																dateColumns.map((date) => {
+																	const isScheduled = isDateScheduled(elem.name, date);
 
-																		return (
-																			<td
-																				key={date}
-																				className={`sched-dood-cell ${isScheduled ? "sched-dood-cell-scheduled" : "sched-dood-cell-empty"}`}
-																				style={{ cursor: "default" }}
-																			>
-																				{isScheduled ? "✓" : ""}
-																			</td>
-																		);
-																	})}
+																	return (
+																		<td
+																			key={date}
+																			className={`sched-dood-cell ${isScheduled ? "sched-dood-cell-scheduled" : "sched-dood-cell-empty"}`}
+																			style={{ cursor: "default" }}
+																		>
+																			{isScheduled ? "✓" : ""}
+																		</td>
+																	);
+																})}
 														</tr>
 													);
 												})}

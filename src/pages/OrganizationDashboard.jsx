@@ -112,8 +112,19 @@ const OrganizationDashboard = () => {
 	};
 
 	const renderGeneralContent = () => {
-		const activeProjects = organization.projects?.filter((p) => !p.deletetime) || [];
-		const archivedProjects = organization.projects?.filter((p) => p.deletetime) || [];
+		const activeProjects = (organization.projects || [])
+			.filter((p) => !p.deletetime)
+			.sort((a, b) => new Date(b.createtime || 0) - new Date(a.createtime || 0));
+		const archivedProjects = (organization.projects || [])
+			.filter((p) => p.deletetime)
+			.sort((a, b) => new Date(b.deletetime || 0) - new Date(a.deletetime || 0));
+
+		const formatDateTime = (value) => {
+			if (!value) return "";
+			const date = new Date(value);
+			if (Number.isNaN(date.getTime())) return "";
+			return date.toLocaleString();
+		};
 
 		return (
 			<div className="org-card org-card-flex">
@@ -143,7 +154,7 @@ const OrganizationDashboard = () => {
 							<tr key={idx} className="org-table-row">
 								<td className="org-table-cell">{p.projectname}</td>
 								<td className="org-table-cell">{p.projecttype}</td>
-								<td className="org-table-cell">{new Date(p.createtime).toLocaleDateString()}</td>
+								<td className="org-table-cell">{formatDateTime(p.createtime)}</td>
 							</tr>
 						))}
 					</tbody>
@@ -166,7 +177,7 @@ const OrganizationDashboard = () => {
 							<tr key={idx} className="org-table-row">
 								<td className="org-table-cell">{p.projectname}</td>
 								<td className="org-table-cell">{p.projecttype}</td>
-								<td className="org-table-cell">{new Date(p.deletetime).toLocaleDateString()}</td>
+								<td className="org-table-cell">{formatDateTime(p.deletetime)}</td>
 							</tr>
 						))}
 					</tbody>

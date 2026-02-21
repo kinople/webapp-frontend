@@ -10,9 +10,9 @@ import * as XLSX from "xlsx";
 /*
   ScriptBreakdown page - final variant:
   - Table view: props columns (Action Props, Other Props, Picture Vehicles, Animals, Extras, Wardrobe, Set Dressing)
-    render as plain text in the table (no inline tag editors)
+	render as plain text in the table (no inline tag editors)
   - Scene editor view (opened when you click a row or press "Edit Breakdown") contains TagInput
-    for those props fields — add/remove tags only inside the edit view (exactly like prior behavior)
+	for those props fields — add/remove tags only inside the edit view (exactly like prior behavior)
   - Everything else (fetch/save, shadows, pdf preview) preserved
 */
 
@@ -665,6 +665,7 @@ const ScriptBreakdownNew = () => {
 		setEditingScene(displayData);
 		setEditingSceneParsing(parsing[idx] || { heading: "", content: "" });
 
+
 		// Match characters by NAME from sceneData.characters to find IDs in allCharacters (castlist)
 		// This ensures consistency with the castlist regardless of old characters_ids
 		if (sceneData && sceneData.characters && Array.isArray(sceneData.characters)) {
@@ -1164,9 +1165,9 @@ const ScriptBreakdownNew = () => {
 			const parseToArray = (str) =>
 				str
 					? str
-							.split(",")
-							.map((s) => s.trim())
-							.filter(Boolean)
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean)
 					: [];
 
 			// Prepare scene data for both scenes
@@ -1465,9 +1466,9 @@ const ScriptBreakdownNew = () => {
 			const parseToArray = (str) =>
 				str
 					? str
-							.split(",")
-							.map((s) => s.trim())
-							.filter(Boolean)
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean)
 					: [];
 
 			// Get character names from selected IDs
@@ -1676,9 +1677,9 @@ const ScriptBreakdownNew = () => {
 			const parseToArray = (str) =>
 				str
 					? str
-							.split(",")
-							.map((s) => s.trim())
-							.filter(Boolean)
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean)
 					: [];
 
 			// Get character names from selected IDs (using allCharacters from breakdown)
@@ -2002,9 +2003,9 @@ const ScriptBreakdownNew = () => {
 	};
 
 	/* ---------- Table render:
-       - Table cells show plain text; props columns are plain CSV strings in table
-       - Clicking a row opens the scene editor (where TagInput is available)
-       - Only show columns up to "Other Props"
+	   - Table cells show plain text; props columns are plain CSV strings in table
+	   - Clicking a row opens the scene editor (where TagInput is available)
+	   - Only show columns up to "Other Props"
   */
 	const renderTableContent = () => {
 		if (scriptBreakdown.length === 0) return null;
@@ -2114,9 +2115,8 @@ const ScriptBreakdownNew = () => {
 							{filtered.map((row, rIdx) => (
 								<React.Fragment key={rIdx}>
 									<tr
-										className={`sbn-data-row ${showPositionSelector ? "sbn-row-selectable" : ""} ${
-											removeSceneMode ? "sbn-row-removable" : ""
-										} ${splitSceneMode ? "sbn-row-splittable" : ""} ${mergeSceneMode ? "sbn-row-mergeable" : ""}`}
+										className={`sbn-data-row ${showPositionSelector ? "sbn-row-selectable" : ""} ${removeSceneMode ? "sbn-row-removable" : ""
+											} ${splitSceneMode ? "sbn-row-splittable" : ""} ${mergeSceneMode ? "sbn-row-mergeable" : ""}`}
 										onClick={() => {
 											if (showPositionSelector) return; // Disable row click in position selector mode
 											if (removeSceneMode) return; // Disable row click in remove mode
@@ -3755,9 +3755,8 @@ const ScriptBreakdownNew = () => {
 									Add Element
 								</button>
 								<button
-									className={`sbn-action-btn ${removeElementMode ? "sbn-action-btn-active" : ""} ${
-										removeElementMode && selectedElementToRemove ? "sbn-action-btn-remove" : ""
-									}`}
+									className={`sbn-action-btn ${removeElementMode ? "sbn-action-btn-active" : ""} ${removeElementMode && selectedElementToRemove ? "sbn-action-btn-remove" : ""
+										}`}
 									onClick={handleRemoveElementClick}
 								>
 									{removeElementMode && selectedElementToRemove ? "Confirm Remove" : removeElementMode ? "Cancel" : "Remove Element"}

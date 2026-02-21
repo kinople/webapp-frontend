@@ -1,3 +1,4 @@
+import React from "react";
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import ProjectHeader from "./components/ProjectHeader";
@@ -18,6 +19,7 @@ import ManageDates from "./pages/ManageDates";
 import ManageSchedules from "./pages/ManageSchedules";
 import CallSheet from "./pages/CallSheet";
 import CallSheetHome from "./pages/CallSheetHome";
+import CrewList from "./pages/CrewList";
 import ManageShootDays from "./pages/ManageShootDays";
 import Crew from "./pages/Crew";
 import Login from "./pages/Login";
@@ -189,6 +191,14 @@ function AppContent() {
 						element={
 							<ProtectedRoute>
 								<CallSheet />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="crew-list"
+						element={
+							<ProtectedRoute>
+								<CrewList />
 							</ProtectedRoute>
 						}
 					/>
