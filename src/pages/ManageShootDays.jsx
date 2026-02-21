@@ -2232,8 +2232,7 @@ const ManageShootDays = () => {
                                 scene_number: sceneNum,
                                 int_ext: breakdown?.int_ext || breakdown?.ie || '',
                                 description: breakdown?.synopsis || breakdown?.description || '',
-                                location: '', // Physical address
-                                set: breakdown?.set || breakdown?.location || '', // Set name
+                                location: breakdown?.set || breakdown?.location || '',
                                 pages: breakdown?.page_eighths || '',
                                 cast_ids: castIdsStr
                             });
