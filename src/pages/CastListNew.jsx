@@ -5,6 +5,7 @@ import {
 	PiPlusBold,
 	PiMinusCircle,
 	PiArrowsMerge,
+	PiScissors,
 	PiCaretUp,
 	PiCaretDown,
 	PiCheckSquareFill,
@@ -51,7 +52,7 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 				[field]: value,
 			}));
 		},
-		[setOptionForm]
+		[setOptionForm],
 	);
 
 	const addDateRange = () => {
@@ -310,6 +311,13 @@ const CastListNew = () => {
 	const [showMergeModal, setShowMergeModal] = useState(false);
 	const [mergedCharacterName, setMergedCharacterName] = useState("");
 	const [mergeOptions, setMergeOptions] = useState(false);
+	// Split modal state
+	const [showSplitModal, setShowSplitModal] = useState(false);
+	const [splitNewName1, setSplitNewName1] = useState("");
+	const [splitNewName2, setSplitNewName2] = useState("");
+	const [scenesForChar1, setScenesForChar1] = useState(new Set());
+	const [scenesForChar2, setScenesForChar2] = useState(new Set());
+	const [splitCharacterScenes, setSplitCharacterScenes] = useState([]);
 
 	useEffect(() => {
 		const CalculateScenceChars = (data) => {
@@ -359,7 +367,7 @@ const CastListNew = () => {
 
 				if (sortedScripts.length > 0) {
 					const masterScript = sortedScripts[sortedScripts.length - 1];
-					const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?script_id=${masterScript.id}`));
+					const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?project_id=${id}`));
 					if (!breakdownResponse.ok) {
 						if (breakdownResponse.status === 404) {
 							return;
@@ -523,7 +531,7 @@ const CastListNew = () => {
 				setIsLoading(false);
 			}
 		},
-		[castData, id]
+		[castData, id],
 	);
 
 	const addCastGroup = async () => {
@@ -625,20 +633,26 @@ const CastListNew = () => {
 
 	const getData = (s, field) => {
 		var data = "";
-		scenes.forEach((scene) => {
+		const searchStr = String(s);
+		scenes.forEach((scene, idx) => {
 			// Support both JSON format (scene_number) and TSV format (Scene Number)
 			const sceneNumber = scene.scene_number || scene["Scene Number"];
-			if (sceneNumber === s) {
+			// Also check by 'id' field or array index (what castlist stores as scene ID)
+			const sceneId = String(scene.id !== undefined ? scene.id : idx);
+			const arrayIndex = String(idx);
+
+			// Match by scene_number, id field, or array index
+			if (sceneNumber === searchStr || sceneId === searchStr || arrayIndex === searchStr) {
 				// Map field names between TSV and JSON formats
 				const fieldMap = {
 					"Scene Number": scene.scene_number || scene["Scene Number"],
 					"Int./Ext.": scene.int_ext || scene["Int./Ext."],
-					"Location": scene.location || scene["Location"], // Use set first
-					"Time": scene.time || scene["Time"],
+					Location: scene.location || scene["Location"], // Use set first
+					Time: scene.time || scene["Time"],
 					"Page Eighths": scene.page_eighths || scene["Page Eighths"],
-					"Synopsis": scene.synopsis || scene["Synopsis"],
+					Synopsis: scene.synopsis || scene["Synopsis"],
 				};
-				data = fieldMap[field] !== undefined ? fieldMap[field] : (scene[field] || "");
+				data = fieldMap[field] !== undefined ? fieldMap[field] : scene[field] || "";
 				return;
 			}
 		});
@@ -647,18 +661,18 @@ const CastListNew = () => {
 
 	const toggleCharacterSelection = (idx) => {
 		if (!characterSelectionMode) return; // Don't allow selection if not in a mode
-		
+
 		setSelectedCharacters((prev) => {
 			const next = new Set(prev);
-			
+
 			// If already selected, deselect it
 			if (next.has(idx)) {
 				next.delete(idx);
 				return next;
 			}
-			
+
 			// For merge mode, allow up to 2 selections
-			if (characterSelectionMode === 'merge') {
+			if (characterSelectionMode === "merge") {
 				if (next.size < 2) {
 					next.add(idx);
 				} else {
@@ -669,15 +683,15 @@ const CastListNew = () => {
 				}
 				return next;
 			}
-			
-			// For remove mode, select only this one (single selection)
+
+			// For remove and split modes, select only this one (single selection)
 			return new Set([idx]);
 		});
 	};
 
 	// Enter remove mode
 	const enterRemoveMode = () => {
-		setCharacterSelectionMode('remove');
+		setCharacterSelectionMode("remove");
 		setSelectedCharacters(new Set());
 	};
 
@@ -689,7 +703,7 @@ const CastListNew = () => {
 
 	// Enter merge mode
 	const enterMergeMode = () => {
-		setCharacterSelectionMode('merge');
+		setCharacterSelectionMode("merge");
 		setSelectedCharacters(new Set());
 	};
 
@@ -745,7 +759,7 @@ const CastListNew = () => {
 					castId2: char2.cast_id,
 					mergedName: mergedCharacterName.trim(),
 					mergeOptions: mergeOptions,
-					scriptId: scriptId
+					scriptId: scriptId,
 				}),
 			});
 
@@ -773,6 +787,172 @@ const CastListNew = () => {
 			alert(`Characters merged successfully! ${data.scenes_updated} scene(s) updated.`);
 		} catch (error) {
 			console.error("Error merging characters:", error);
+			alert(error.message);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	// Enter split mode
+	const enterSplitMode = () => {
+		setCharacterSelectionMode("split");
+		setSelectedCharacters(new Set());
+	};
+
+	// Handle split button click - show split modal
+	const handleSplitCharacterClick = () => {
+		if (selectedCharacters.size === 1) {
+			const idx = Array.from(selectedCharacters)[0];
+			const member = castData.cast_list[idx];
+
+			// Get the scenes for this character
+			const characterScenes = member.scenes || [];
+			setSplitCharacterScenes(characterScenes);
+			console.log("characterScenes ", characterScenes);
+
+			// Reset split form
+			setSplitNewName1("");
+			setSplitNewName2("");
+			setScenesForChar1(new Set());
+			setScenesForChar2(new Set());
+
+			setShowSplitModal(true);
+		} else {
+			alert("Please select a character to split");
+		}
+	};
+
+	// Toggle scene assignment for split - characters can share scenes
+	const toggleSceneForSplit = (sceneNumber, targetChar) => {
+		const sceneStr = String(sceneNumber);
+
+		if (targetChar === 1) {
+			setScenesForChar1((prev) => {
+				const next = new Set(prev);
+				if (next.has(sceneStr)) {
+					next.delete(sceneStr);
+				} else {
+					next.add(sceneStr);
+				}
+				return next;
+			});
+		} else {
+			setScenesForChar2((prev) => {
+				const next = new Set(prev);
+				if (next.has(sceneStr)) {
+					next.delete(sceneStr);
+				} else {
+					next.add(sceneStr);
+				}
+				return next;
+			});
+		}
+	};
+
+	// Perform the actual split
+	const performSplitCharacter = async () => {
+		try {
+			if (!splitNewName1.trim() || !splitNewName2.trim()) {
+				alert("Please enter names for both new characters");
+				return;
+			}
+
+			if (splitNewName1.trim().toUpperCase() === splitNewName2.trim().toUpperCase()) {
+				alert("The two new character names must be different");
+				return;
+			}
+
+			const totalScenes = splitCharacterScenes.length;
+			const assignedScenes = new Set([...scenesForChar1, ...scenesForChar2]).size;
+
+			if (scenesForChar1.size === 0 && scenesForChar2.size === 0) {
+				alert("Please assign at least one scene to one of the new characters");
+				return;
+			}
+
+			if (assignedScenes < totalScenes) {
+				const unassigned = totalScenes - assignedScenes;
+				if (
+					!window.confirm(
+						`${unassigned} scene(s) are not assigned to either character. They will be removed from both new characters. Continue?`,
+					)
+				) {
+					return;
+				}
+			}
+
+			const idx = Array.from(selectedCharacters)[0];
+			const member = castData.cast_list[idx];
+
+			setIsLoading(true);
+
+			// Get scriptId
+			let scriptIdToUse = null;
+			try {
+				const scriptsResponse = await fetch(getApiUrl(`/api/${id}/script-list`));
+				if (scriptsResponse.ok) {
+					const scripts = await scriptsResponse.json();
+					const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
+					if (sortedScripts.length > 0) {
+						scriptIdToUse = sortedScripts[sortedScripts.length - 1].id;
+					}
+				}
+			} catch (error) {
+				console.error("Error fetching scripts for split:", error);
+			}
+
+			// Debug logging
+			console.log("Split character request data:", {
+				castId: member.cast_id,
+				newName1: splitNewName1.trim(),
+				newName2: splitNewName2.trim(),
+				scenesForChar1: Array.from(scenesForChar1),
+				scenesForChar2: Array.from(scenesForChar2),
+				scriptId: scriptIdToUse,
+			});
+
+			const response = await fetch(getApiUrl(`/api/${id}/cast/split`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					castId: member.cast_id,
+					newName1: splitNewName1.trim(),
+					newName2: splitNewName2.trim(),
+					scenesForChar1: Array.from(scenesForChar1),
+					scenesForChar2: Array.from(scenesForChar2),
+					scriptId: scriptIdToUse,
+				}),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to split character");
+			}
+
+			// Close modal and reset state
+			setShowSplitModal(false);
+			setSplitNewName1("");
+			setSplitNewName2("");
+			setScenesForChar1(new Set());
+			setScenesForChar2(new Set());
+			setSplitCharacterScenes([]);
+			setSelectedCharacters(new Set());
+			setCharacterSelectionMode(null);
+
+			// Refresh the cast list data
+			const refreshResponse = await fetch(getApiUrl(`/api/${id}/cast-list`));
+			if (!refreshResponse.ok) {
+				throw new Error("Failed to refresh cast list");
+			}
+			const jsonData = await refreshResponse.json();
+			setCastData(jsonData);
+
+			alert(
+				`Character split successfully! ${data.scenes_to_char_1} scene(s) assigned to "${splitNewName1.trim().toUpperCase()}" and ${data.scenes_to_char_2} scene(s) assigned to "${splitNewName2.trim().toUpperCase()}".`,
+			);
+		} catch (error) {
+			console.error("Error splitting character:", error);
 			alert(error.message);
 		} finally {
 			setIsLoading(false);
@@ -835,12 +1015,16 @@ const CastListNew = () => {
 												<PiMinusCircle />
 												Remove
 											</button>
-											
+
 											<div className="cln-header-divider-vertical"></div>
-											
+
 											<button className="cln-btn-secondary" onClick={enterMergeMode}>
 												<PiArrowsMerge />
 												Merge Characters
+											</button>
+											<button className="cln-btn-secondary" onClick={enterSplitMode}>
+												<PiScissors />
+												Split Character
 											</button>
 
 											{/* Expand/Collapse All Buttons */}
@@ -860,11 +1044,11 @@ const CastListNew = () => {
 												Compress All
 											</button>
 										</>
-									) : characterSelectionMode === 'remove' ? (
+									) : characterSelectionMode === "remove" ? (
 										<>
 											<span className="cln-selection-mode-label">Select a character to remove:</span>
-											<button 
-												className="cln-btn-danger" 
+											<button
+												className="cln-btn-danger"
 												onClick={handleRemoveCharactersClick}
 												disabled={selectedCharacters.size !== 1}
 											>
@@ -876,18 +1060,36 @@ const CastListNew = () => {
 												Cancel
 											</button>
 										</>
-									) : characterSelectionMode === 'merge' ? (
+									) : characterSelectionMode === "merge" ? (
 										<>
 											<span className="cln-selection-mode-label">
 												Select 2 characters to merge ({selectedCharacters.size}/2 selected):
 											</span>
-											<button 
-												className="cln-btn-primary" 
+											<button
+												className="cln-btn-primary"
 												onClick={handleMergeCharactersClick}
 												disabled={selectedCharacters.size !== 2}
 											>
 												<PiArrowsMerge />
 												Merge Selected
+											</button>
+											<button className="cln-btn-cancel" onClick={cancelSelectionMode}>
+												<PiX />
+												Cancel
+											</button>
+										</>
+									) : characterSelectionMode === "split" ? (
+										<>
+											<span className="cln-selection-mode-label">
+												Select a character to split ({selectedCharacters.size}/1 selected):
+											</span>
+											<button
+												className="cln-btn-primary"
+												onClick={handleSplitCharacterClick}
+												disabled={selectedCharacters.size !== 1}
+											>
+												<PiScissors />
+												Split Selected
 											</button>
 											<button className="cln-btn-cancel" onClick={cancelSelectionMode}>
 												<PiX />
@@ -913,10 +1115,11 @@ const CastListNew = () => {
 									// locationArray already contains unique location IDs from sceneAnalysis
 
 									// Determine lock status text for compressed view
-								const hasLockedOption = member.locked !== -1 && member.locked !== "-1" && member.locked !== null && member.locked !== undefined;
-								const lockStatusText = hasLockedOption ? "Option locked" : "Option not locked";
+									const hasLockedOption =
+										member.locked !== -1 && member.locked !== "-1" && member.locked !== null && member.locked !== undefined;
+									const lockStatusText = hasLockedOption ? "Option locked" : "Option not locked";
 
-								return (
+									return (
 										<div key={idx} className={`cln-character-card ${isCollapsed ? "cln-collapsed" : ""}`}>
 											{/* Card Header - Compressed View when collapsed */}
 											<div className={`cln-card-header ${isCollapsed ? "cln-card-header-compressed" : ""}`}>
@@ -935,6 +1138,7 @@ const CastListNew = () => {
 													<div className={`cln-character-info ${isCollapsed ? "cln-character-info-inline" : ""}`}>
 														<span className="cln-cast-id-box">{idx + 1}</span>
 														<span className="cln-character-name">{member.character}</span>
+														<span className="cln-extra-id">#{member.cast_id}</span>
 													</div>
 
 													{/* Collapse Button - only show here when expanded */}
@@ -977,7 +1181,9 @@ const CastListNew = () => {
 														<div className="cln-compressed-divider"></div>
 														<div className="cln-compressed-stat-item">
 															<PiUserFill className="cln-compressed-icon" />
-															<span className="cln-compressed-stat-text cln-compressed-label">{lockStatusText}</span>
+															<span className="cln-compressed-stat-text cln-compressed-label">
+																{lockStatusText}
+															</span>
 														</div>
 														<div className="cln-compressed-divider"></div>
 													</div>
@@ -1039,7 +1245,7 @@ const CastListNew = () => {
 
 																	if (
 																		window.confirm(
-																			`Are you sure you want to remove ${selectedForCharacter.length} selected option(s)?`
+																			`Are you sure you want to remove ${selectedForCharacter.length} selected option(s)?`,
 																		)
 																	) {
 																		selectedForCharacter.forEach((optId) => {
@@ -1067,7 +1273,7 @@ const CastListNew = () => {
 																: `Remove Selected (${
 																		Array.from(selectedOptions).filter((key) => key.startsWith(`${idx}-`))
 																			.length
-																  })`}
+																	})`}
 														</button>
 													</div>
 												)}
@@ -1259,7 +1465,7 @@ const CastListNew = () => {
 																									.map(formatDate)
 																									.join(", ")} +${
 																									dates.length - 2
-																							  } more`
+																								} more`
 																						: "-";
 
 																				return (
@@ -1276,7 +1482,7 @@ const CastListNew = () => {
 																									onChange={(e) => {
 																										setSelectedOptions((prev) => {
 																											const next = new Set(
-																												prev
+																												prev,
 																											);
 																											if (e.target.checked) {
 																												next.add(key);
@@ -1300,8 +1506,8 @@ const CastListNew = () => {
 																							title={
 																								Array.isArray(dates) && dates.length > 0
 																									? `Available dates:\n${dates.join(
-																											"\n"
-																									  )}`
+																											"\n",
+																										)}`
 																									: "No dates set"
 																							}
 																						>
@@ -1316,7 +1522,7 @@ const CastListNew = () => {
 																									toggleLockOption(
 																										idx,
 																										optId,
-																										member.cast_id
+																										member.cast_id,
 																									)
 																								}
 																								disabled={otherLocked}
@@ -1324,8 +1530,8 @@ const CastListNew = () => {
 																									locked
 																										? "Click to unlock"
 																										: otherLocked
-																										? "Another option is locked"
-																										: "Click to lock"
+																											? "Another option is locked"
+																											: "Click to lock"
 																								}
 																							>
 																								{locked ? (
@@ -1364,7 +1570,7 @@ const CastListNew = () => {
 																	</thead>
 																	<tbody>
 																		{(member.scenes || []).map((s, i) => {
-																			const sceneNo = s;
+																			const sceneNo = getData(s, "Scene Number");
 																			const intExt = getData(s, "Int./Ext.");
 																			const location = getData(s, "Location");
 																			const time = getData(s, "Time");
@@ -1375,7 +1581,7 @@ const CastListNew = () => {
 
 																			return (
 																				<tr key={i}>
-																					<td>{sceneNo === "-" ? i + 1 : sceneNo}</td>
+																					<td>{sceneNo !== "N/A" ? sceneNo : i + 1}</td>
 																					<td>{intExt}</td>
 																					<td>{location}</td>
 																					<td>{time}</td>
@@ -1414,11 +1620,14 @@ const CastListNew = () => {
 							{(selectedCharacterScenes || []).length === 0 ? (
 								<div className="cln-empty-state">No scenes</div>
 							) : (
-								selectedCharacterScenes.map((s, i) => (
-									<div key={i} className="cln-scene-item">
-										{typeof s === "string" ? s : JSON.stringify(s)}
-									</div>
-								))
+								selectedCharacterScenes.map((s, i) => {
+									const sceneNumber = getData(s, "Scene Number");
+									return (
+										<div key={i} className="cln-scene-item">
+											Scene {sceneNumber !== "N/A" ? sceneNumber : i + 1}
+										</div>
+									);
+								})
 							)}
 						</div>
 						<div className="cln-modal-buttons">
@@ -1487,11 +1696,14 @@ const CastListNew = () => {
 
 			{/* Remove Character Modal */}
 			{showRemoveCharModal && selectedCharacters.size === 1 && (
-				<div className="cln-modal-overlay" onClick={() => {
-					setShowRemoveCharModal(false);
-					setCharacterSelectionMode(null);
-					setSelectedCharacters(new Set());
-				}}>
+				<div
+					className="cln-modal-overlay"
+					onClick={() => {
+						setShowRemoveCharModal(false);
+						setCharacterSelectionMode(null);
+						setSelectedCharacters(new Set());
+					}}
+				>
 					<div className="cln-modal cln-modal-remove" onClick={(e) => e.stopPropagation()}>
 						<h3 className="cln-modal-title">Remove Character</h3>
 						<div className="cln-remove-modal-content">
@@ -1525,29 +1737,28 @@ const CastListNew = () => {
 
 			{/* Merge Characters Modal */}
 			{showMergeModal && selectedCharacters.size === 2 && (
-				<div className="cln-modal-overlay" onClick={() => {
-					setShowMergeModal(false);
-					setMergedCharacterName("");
-					setMergeOptions(false);
-				}}>
+				<div
+					className="cln-modal-overlay"
+					onClick={() => {
+						setShowMergeModal(false);
+						setMergedCharacterName("");
+						setMergeOptions(false);
+					}}
+				>
 					<div className="cln-modal cln-modal-merge" onClick={(e) => e.stopPropagation()}>
 						<h3 className="cln-modal-title">Merge Characters</h3>
 						<div className="cln-merge-modal-content">
-							<p className="cln-merge-info-text">
-								You are merging the following characters:
-							</p>
+							<p className="cln-merge-info-text">You are merging the following characters:</p>
 							<div className="cln-merge-characters-list">
 								{Array.from(selectedCharacters).map((idx) => (
 									<div key={idx} className="cln-merge-character-item">
 										<span className="cln-merge-character-id">{idx + 1}</span>
 										<span className="cln-merge-character-name">{castData.cast_list[idx]?.character}</span>
-										<span className="cln-merge-character-scenes">
-											({castData.cast_list[idx]?.scene_count || 0} scenes)
-										</span>
+										<span className="cln-merge-character-scenes">({castData.cast_list[idx]?.scene_count || 0} scenes)</span>
 									</div>
 								))}
 							</div>
-							
+
 							<div className="cln-form-group">
 								<label className="cln-label">New Merged Character Name:</label>
 								<input
@@ -1571,24 +1782,19 @@ const CastListNew = () => {
 									<span>Merge actor options from both characters</span>
 								</label>
 								<p className="cln-merge-checkbox-hint">
-									{mergeOptions 
+									{mergeOptions
 										? "Actor options from both characters will be combined. No option will be locked."
-										: "No actor options will be kept in the merged character."
-									}
+										: "No actor options will be kept in the merged character."}
 								</p>
 							</div>
 
 							<p className="cln-merge-warning-text">
-								This action will delete both original characters and update all associated scenes to use the new merged character. Dates from both characters will be combined in the schedule.
+								This action will delete both original characters and update all associated scenes to use the new merged character. Dates
+								from both characters will be combined in the schedule.
 							</p>
 						</div>
 						<div className="cln-modal-buttons">
-							<button 
-								type="button" 
-								onClick={performMergeCharacters} 
-								className="cln-submit-btn"
-								disabled={!mergedCharacterName.trim()}
-							>
+							<button type="button" onClick={performMergeCharacters} className="cln-submit-btn" disabled={!mergedCharacterName.trim()}>
 								<PiArrowsMerge />
 								Merge Characters
 							</button>
@@ -1598,6 +1804,171 @@ const CastListNew = () => {
 									setShowMergeModal(false);
 									setMergedCharacterName("");
 									setMergeOptions(false);
+								}}
+								className="cln-cancel-btn"
+							>
+								Cancel
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Split Character Modal */}
+			{showSplitModal && selectedCharacters.size === 1 && (
+				<div
+					className="cln-modal-overlay"
+					onClick={() => {
+						setShowSplitModal(false);
+						setSplitNewName1("");
+						setSplitNewName2("");
+						setScenesForChar1(new Set());
+						setScenesForChar2(new Set());
+						setSplitCharacterScenes([]);
+					}}
+				>
+					<div className="cln-modal cln-modal-split" onClick={(e) => e.stopPropagation()}>
+						<h3 className="cln-modal-title">Split Character</h3>
+						<div className="cln-split-modal-content">
+							<p className="cln-split-info-text">You are splitting the character:</p>
+							<div className="cln-split-source-char">
+								<span className="cln-split-source-id">{Array.from(selectedCharacters)[0] + 1}</span>
+								<span className="cln-split-source-name">{castData.cast_list[Array.from(selectedCharacters)[0]]?.character}</span>
+								<span className="cln-split-source-scenes">({splitCharacterScenes.length} scenes)</span>
+							</div>
+
+							<div className="cln-split-names-row">
+								<div className="cln-form-group cln-split-name-group">
+									<label className="cln-label">
+										New Character 1 Name: <span className="cln-required">*</span>
+									</label>
+									<input
+										type="text"
+										value={splitNewName1}
+										onChange={(e) => setSplitNewName1(e.target.value.toUpperCase())}
+										className="cln-input cln-input-uppercase"
+										placeholder="Enter name for character 1"
+										required
+									/>
+								</div>
+								<div className="cln-form-group cln-split-name-group">
+									<label className="cln-label">
+										New Character 2 Name: <span className="cln-required">*</span>
+									</label>
+									<input
+										type="text"
+										value={splitNewName2}
+										onChange={(e) => setSplitNewName2(e.target.value.toUpperCase())}
+										className="cln-input cln-input-uppercase"
+										placeholder="Enter name for character 2"
+										required
+									/>
+								</div>
+							</div>
+
+							<div className="cln-split-scenes-section">
+								<label className="cln-label">
+									Assign Scenes to New Characters: <span className="cln-required">*</span>
+								</label>
+								<p className="cln-split-scenes-hint">
+									A scene can be assigned to one or both characters. Click the checkboxes to assign.
+								</p>
+
+								{splitCharacterScenes.length === 0 ? (
+									<div className="cln-split-no-scenes">No scenes for this character to split.</div>
+								) : (
+									<div className="cln-split-scenes-table-container">
+										<table className="cln-split-scenes-table">
+											<thead>
+												<tr>
+													<th className="cln-split-scene-col">Scene</th>
+													<th className="cln-split-scene-details-col">Int/Ext</th>
+													<th className="cln-split-scene-details-col">Location</th>
+													<th className="cln-split-assign-col">
+														{splitNewName1 || "Char 1"}
+														<span className="cln-split-count">({scenesForChar1.size})</span>
+													</th>
+													<th className="cln-split-assign-col">
+														{splitNewName2 || "Char 2"}
+														<span className="cln-split-count">({scenesForChar2.size})</span>
+													</th>
+												</tr>
+											</thead>
+											<tbody>
+												{splitCharacterScenes.map((sceneId, idx) => {
+													const sceneIdStr = String(sceneId);
+													const isInChar1 = scenesForChar1.has(sceneIdStr);
+													const isInChar2 = scenesForChar2.has(sceneIdStr);
+													// Get actual scene data using scene ID
+													const sceneNumber = getData(sceneId, "Scene Number");
+													const intExt = getData(sceneId, "Int./Ext.");
+													const location = getData(sceneId, "Location");
+
+													return (
+														<tr key={idx} className="cln-split-scene-row">
+															<td className="cln-split-scene-number">
+																{sceneNumber !== "N/A" ? sceneNumber : sceneId}
+															</td>
+															<td className="cln-split-scene-detail">{intExt || "-"}</td>
+															<td className="cln-split-scene-detail">{location || "-"}</td>
+															<td
+																className={`cln-split-assign-cell ${isInChar1 ? "cln-split-assigned" : ""}`}
+																onClick={() => toggleSceneForSplit(sceneIdStr, 1)}
+															>
+																{isInChar1 ? <PiCheckSquareFill /> : <PiSquare />}
+															</td>
+															<td
+																className={`cln-split-assign-cell ${isInChar2 ? "cln-split-assigned" : ""}`}
+																onClick={() => toggleSceneForSplit(sceneIdStr, 2)}
+															>
+																{isInChar2 ? <PiCheckSquareFill /> : <PiSquare />}
+															</td>
+														</tr>
+													);
+												})}
+											</tbody>
+										</table>
+									</div>
+								)}
+
+								<div className="cln-split-summary">
+									<span className="cln-split-summary-item">
+										<strong>{scenesForChar1.size}</strong> scene(s) → {splitNewName1 || "Char 1"}
+									</span>
+									<span className="cln-split-summary-item">
+										<strong>{scenesForChar2.size}</strong> scene(s) → {splitNewName2 || "Char 2"}
+									</span>
+									<span className="cln-split-summary-item cln-split-unassigned">
+										<strong>{splitCharacterScenes.length - new Set([...scenesForChar1, ...scenesForChar2]).size}</strong>{" "}
+										unassigned
+									</span>
+								</div>
+							</div>
+
+							<p className="cln-split-warning-text">
+								This will delete the original character and create two new characters. Actor options will be duplicated to both new
+								characters. In the schedule, the new characters will have empty dates and flexible dates disabled.
+							</p>
+						</div>
+						<div className="cln-modal-buttons">
+							<button
+								type="button"
+								onClick={performSplitCharacter}
+								className="cln-submit-btn"
+								disabled={!splitNewName1.trim() || !splitNewName2.trim() || (scenesForChar1.size === 0 && scenesForChar2.size === 0)}
+							>
+								<PiScissors />
+								Split Character
+							</button>
+							<button
+								type="button"
+								onClick={() => {
+									setShowSplitModal(false);
+									setSplitNewName1("");
+									setSplitNewName2("");
+									setScenesForChar1(new Set());
+									setScenesForChar2(new Set());
+									setSplitCharacterScenes([]);
 								}}
 								className="cln-cancel-btn"
 							>

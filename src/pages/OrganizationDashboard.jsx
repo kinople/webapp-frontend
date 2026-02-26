@@ -13,6 +13,7 @@ const OrganizationDashboard = () => {
 	const [addMemberLoading, setAddMemberLoading] = useState(false);
 	const [currentSection, setCurrentSection] = useState("general");
 	const [memberFormData, setMemberFormData] = useState({ username: "", role_id: 1 });
+	const [userRoleInOrg, setUserRoleInOrg] = useState(null); // Track user's role in this org
 
 	useEffect(() => {
 		if (location.state?.section) {
@@ -31,6 +32,17 @@ const OrganizationDashboard = () => {
 
 				if (data.status === "success") {
 					setOrganization(data.organization);
+					
+					// Find the current user's role in the organization
+					const currentUserMember = data.organization.members?.find(
+						m => m.username === user || m.user_id?.toString() === user
+					);
+					if (currentUserMember) {
+						// role_name "Owner" = role_id 1, "Member" = role_id 2, "Viewer" = role_id 3
+						const roleId = currentUserMember.role_name === "Owner" ? 1 : 
+									   currentUserMember.role_name === "Member" ? 2 : 3;
+						setUserRoleInOrg(roleId);
+					}
 				} else {
 					throw new Error(data.message);
 				}
@@ -171,9 +183,12 @@ const OrganizationDashboard = () => {
 						<h3 className="org-card-title">Active Members</h3>
 						<p className="org-card-subtitle">{organization.members?.length || 0} active members</p>
 					</div>
-					<button onClick={handleAddMemberClick} className="org-button">
-						+ Invite Member
-					</button>
+					{/* Only show Invite Member button for Owners (role_id = 1) */}
+					{userRoleInOrg === 1 && (
+						<button onClick={handleAddMemberClick} className="org-button">
+							+ Invite Member
+						</button>
+					)}
 				</div>
 				<table className="org-table">
 					<thead className="org-table-head">
@@ -188,7 +203,7 @@ const OrganizationDashboard = () => {
 						{organization.members?.map((m, idx) => (
 							<tr key={idx} className="org-table-row">
 								<td className="org-table-cell">{m.username}</td>
-								<td className="org-table-cell">{new Date(m.createtime).toLocaleDateString()}</td>
+								<td className="org-table-cell">{m.createtime ? new Date(m.createtime).toLocaleDateString() : "-"}</td>
 								<td className="org-table-cell">{m.role_name === "Owner" ? "Admin" : m.role_name}</td>
 								<td className="org-table-cell">{m.projects || 0}</td>
 							</tr>

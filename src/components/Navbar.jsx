@@ -41,6 +41,14 @@ const Navbar = () => {
 	const currentOrganization = useSelector((state) => state.organization.currentOrganization);
 	const currentOrg = currentOrganization.name;
 
+	// Get the current user's role in the current organization (1=Owner, 2=Member, 3=Viewer)
+	const getCurrentUserOrgRole = () => {
+		if (!currentOrganization.id || organizations.length === 0) return null;
+		const org = organizations.find(o => o.organization_id === currentOrganization.id);
+		return org?.user_role_id || null;
+	};
+	const currentUserOrgRole = getCurrentUserOrgRole();
+
 	// Add state for organization menu dropdown
 
 	// Add state to track if we're in settings view
@@ -62,25 +70,26 @@ const Navbar = () => {
 		projectType: "",
 	});
 	const [addAllMembers, setAddAllMembers] = useState(false);
-	// Dummy team members data
-	const [teamMembers, setTeamMembers] = useState([
-		{ id: 1, email: "samwilson@example.com", role: "Roles" },
-		{ id: 2, email: "maryjane@example.com", role: "Roles" },
-		{ id: 3, email: "johndoe@example.com", role: "Roles" },
-	]);
+	// Team members - starts empty, populated from org members or user search
+	const [teamMembers, setTeamMembers] = useState([]);
 	const [creatingProject, setCreatingProject] = useState(false);
 	const [createProjectError, setCreateProjectError] = useState("");
 
 	// State for New Organization modal
 	const [showNewOrgModal, setShowNewOrgModal] = useState(false);
 	const [newOrgName, setNewOrgName] = useState("");
-	const [orgMembers, setOrgMembers] = useState([
-		{ id: 1, email: "samwilson@example.com", role: "Roles" },
-		{ id: 2, email: "maryjane@example.com", role: "Roles" },
-		{ id: 3, email: "johndoe@example.com", role: "Roles" },
-	]);
+	// Organization members - starts empty, populated from user search
+	const [orgMembers, setOrgMembers] = useState([]);
 	const [creatingOrg, setCreatingOrg] = useState(false);
 	const [createOrgError, setCreateOrgError] = useState("");
+
+	// State for Add Member popup (shared between project and org modals)
+	const [showAddMemberPopup, setShowAddMemberPopup] = useState(false);
+	const [addMemberContext, setAddMemberContext] = useState(null); // 'project' or 'org'
+	const [memberSearchQuery, setMemberSearchQuery] = useState("");
+	const [memberSearchResults, setMemberSearchResults] = useState([]);
+	const [memberSearchLoading, setMemberSearchLoading] = useState(false);
+	const [selectedMemberRole, setSelectedMemberRole] = useState(2); // Default to Member role
 
 	// Add useEffect to detect if we're on a settings page
 	useEffect(() => {
@@ -195,6 +204,7 @@ const Navbar = () => {
 	const handleCloseNewOrgModal = () => {
 		setShowNewOrgModal(false);
 		setNewOrgName("");
+		setOrgMembers([]);
 		setCreateOrgError("");
 	};
 
@@ -203,8 +213,89 @@ const Navbar = () => {
 	};
 
 	const handleAddOrgMember = () => {
-		// Dummy add member - just logs for now
-		console.log("Add Organization Member clicked");
+		setAddMemberContext('org');
+		setShowAddMemberPopup(true);
+		setMemberSearchQuery("");
+		setMemberSearchResults([]);
+		setSelectedMemberRole(2);
+	};
+
+	// Search for users by email
+	const searchUsers = async (query) => {
+		if (!query || query.length < 2) {
+			setMemberSearchResults([]);
+			return;
+		}
+
+		setMemberSearchLoading(true);
+		try {
+			const response = await fetchWithAuth(getApiUrl(`/api/${user}/users/search?q=${encodeURIComponent(query)}`), {
+				method: "GET",
+				credentials: "include",
+				headers: {
+					"Content-Type": "application/json",
+				},
+			});
+
+			if (response.ok) {
+				const data = await response.json();
+				if (data.status === "success") {
+					// Filter out users already in the member list and the current user
+					const existingIds = addMemberContext === 'project' 
+						? teamMembers.map(m => m.id)
+						: orgMembers.map(m => m.id);
+					const filteredUsers = data.users.filter(u => 
+						!existingIds.includes(u.user_id) && 
+						u.username !== user && 
+						u.email !== user
+					);
+					setMemberSearchResults(filteredUsers);
+				}
+			}
+		} catch (err) {
+			console.error("Error searching users:", err);
+		} finally {
+			setMemberSearchLoading(false);
+		}
+	};
+
+	// Handle search input change with debounce
+	const handleMemberSearchChange = (e) => {
+		const query = e.target.value;
+		setMemberSearchQuery(query);
+		// Simple debounce - search after typing stops
+		clearTimeout(window.memberSearchTimeout);
+		window.memberSearchTimeout = setTimeout(() => {
+			searchUsers(query);
+		}, 300);
+	};
+
+	// Add selected user to member list
+	const handleSelectMember = (selectedUser) => {
+		const newMember = {
+			id: selectedUser.user_id,
+			email: selectedUser.email || selectedUser.username,
+			role: selectedMemberRole === 1 ? "Owner" : selectedMemberRole === 2 ? "Member" : "Viewer",
+			role_id: selectedMemberRole
+		};
+
+		if (addMemberContext === 'project') {
+			setTeamMembers([...teamMembers, newMember]);
+		} else {
+			setOrgMembers([...orgMembers, newMember]);
+		}
+
+		// Close popup and reset
+		setShowAddMemberPopup(false);
+		setMemberSearchQuery("");
+		setMemberSearchResults([]);
+	};
+
+	const handleCloseAddMemberPopup = () => {
+		setShowAddMemberPopup(false);
+		setMemberSearchQuery("");
+		setMemberSearchResults([]);
+		setAddMemberContext(null);
 	};
 
 	const handleCreateOrganization = async () => {
@@ -243,6 +334,30 @@ const Navbar = () => {
 			const data = await response.json();
 
 			if (data.status === "success") {
+				const newOrgId = data.organization.organization_id;
+
+				// Add selected members to the newly created organization
+				if (orgMembers.length > 0) {
+					for (const member of orgMembers) {
+						try {
+							await fetchWithAuth(getApiUrl(`/api/${user}/organizations/${newOrgId}/members`), {
+								method: "POST",
+								credentials: "include",
+								headers: {
+									"Content-Type": "application/json",
+								},
+								body: JSON.stringify({
+									username: member.email,
+									role_id: member.role_id || 2
+								}),
+							});
+						} catch (memberErr) {
+							console.error(`Failed to add member ${member.email}:`, memberErr);
+							// Continue adding other members even if one fails
+						}
+					}
+				}
+
 				// Success - close modal, refresh organizations, and navigate
 				handleCloseNewOrgModal();
 				await fetchOrganizations();
@@ -269,15 +384,47 @@ const Navbar = () => {
 		}
 	};
 
-	const handleNewProject = () => {
+	const handleNewProject = async () => {
 		// Show the new project modal
 		setShowNewProjectModal(true);
+		setTeamMembers([]); // Reset members
+		
+		// If in an organization context, fetch organization members
+		if (currentOrganization.id) {
+			try {
+				const response = await fetchWithAuth(getApiUrl(`/api/${user}/organizations/${currentOrganization.id}`), {
+					method: "GET",
+					credentials: "include",
+					headers: {
+						"Content-Type": "application/json",
+					},
+				});
+
+				if (response.ok) {
+					const data = await response.json();
+					if (data.status === "success" && data.organization.members) {
+						// Convert org members to team members format
+						const members = data.organization.members.map(m => ({
+							id: m.user_id,
+							email: m.username,
+							role: m.role_name || "Member",
+							role_id: m.role_id || 2
+						}));
+						setTeamMembers(members);
+						setAddAllMembers(true); // Auto-check "Add all members" since we loaded org members
+					}
+				}
+			} catch (err) {
+				console.error("Error fetching organization members:", err);
+			}
+		}
 	};
 
 	const handleCloseNewProjectModal = () => {
 		setShowNewProjectModal(false);
 		setNewProjectForm({ projectName: "", projectType: "" });
 		setAddAllMembers(false);
+		setTeamMembers([]);
 		setCreateProjectError("");
 	};
 
@@ -293,8 +440,11 @@ const Navbar = () => {
 	};
 
 	const handleAddMember = () => {
-		// Dummy add member - just logs for now
-		console.log("Add Member clicked");
+		setAddMemberContext('project');
+		setShowAddMemberPopup(true);
+		setMemberSearchQuery("");
+		setMemberSearchResults([]);
+		setSelectedMemberRole(2);
 	};
 
 	const handleCreateProject = async () => {
@@ -315,11 +465,15 @@ const Navbar = () => {
 			// Get the current organization ID from Redux
 			const organizationId = currentOrganization.id;
 
-			// Prepare the request body
+			// Prepare the request body with members
 			const requestBody = {
 				projectName: newProjectForm.projectName,
 				projectType: newProjectForm.projectType,
 				...(organizationId && { organizationId }),
+				members: teamMembers.map(m => ({
+					id: m.id,
+					role_id: m.role_id || 2
+				})),
 			};
 
 			const response = await fetch(getApiUrl(`/api/create-project/${user}`), {
@@ -745,30 +899,38 @@ const Navbar = () => {
 								<div className="new-project-members-box">
 									<p className="new-project-members-title">Members</p>
 
-									{/* Add All Checkbox */}
-									<div className="new-project-add-all" onClick={() => setAddAllMembers(!addAllMembers)}>
-										<div className={`new-project-checkbox ${addAllMembers ? "checked" : ""}`}>
-											{addAllMembers && <span>✓</span>}
+									{/* Add All Checkbox - Only show when in organization context */}
+									{currentOrganization.id && (
+										<div className="new-project-add-all" onClick={() => setAddAllMembers(!addAllMembers)}>
+											<div className={`new-project-checkbox ${addAllMembers ? "checked" : ""}`}>
+												{addAllMembers && <span>✓</span>}
+											</div>
+											<span className="new-project-add-all-text">Add all member from organization</span>
 										</div>
-										<span className="new-project-add-all-text">Add all member from organization</span>
-									</div>
+									)}
 
 									{/* Team Members List */}
-									{teamMembers.map((member) => (
-										<div key={member.id} className="new-project-member-row">
-											<div className="new-project-member-icon-box">
-												<PiUser className="new-project-member-icon" />
+									{teamMembers.length === 0 ? (
+										<p className="new-project-no-members">
+											No members added yet. Click "Add Member" to invite users.
+										</p>
+									) : (
+										teamMembers.map((member) => (
+											<div key={member.id} className="new-project-member-row">
+												<div className="new-project-member-icon-box">
+													<PiUser className="new-project-member-icon" />
+												</div>
+												<div className="new-project-member-email-box">
+													<span className="new-project-member-email">{member.email}</span>
+												</div>
+												<div className="new-project-member-roles">
+													<span className="new-project-member-roles-text">{member.role}</span>
+													<PiCaretDown className="new-project-member-roles-caret" />
+												</div>
+												<PiX className="new-project-member-remove" onClick={() => handleRemoveTeamMember(member.id)} />
 											</div>
-											<div className="new-project-member-email-box">
-												<span className="new-project-member-email">{member.email}</span>
-											</div>
-											<div className="new-project-member-roles">
-												<span className="new-project-member-roles-text">{member.role}</span>
-												<PiCaretDown className="new-project-member-roles-caret" />
-											</div>
-											<PiX className="new-project-member-remove" onClick={() => handleRemoveTeamMember(member.id)} />
-										</div>
-									))}
+										))
+									)}
 								</div>
 							</div>
 
@@ -833,21 +995,25 @@ const Navbar = () => {
 									<p className="new-org-members-title">Members</p>
 
 									{/* Organization Members List */}
-									{orgMembers.map((member) => (
-										<div key={member.id} className="new-org-member-row">
-											<div className="new-org-member-icon-box">
-												<PiUser className="new-org-member-icon" />
+									{orgMembers.length === 0 ? (
+										<p className="new-org-no-members">No members added yet. Click "Add Member" to invite users.</p>
+									) : (
+										orgMembers.map((member) => (
+											<div key={member.id} className="new-org-member-row">
+												<div className="new-org-member-icon-box">
+													<PiUser className="new-org-member-icon" />
+												</div>
+												<div className="new-org-member-email-box">
+													<span className="new-org-member-email">{member.email}</span>
+												</div>
+												<div className="new-org-member-roles">
+													<span className="new-org-member-roles-text">{member.role}</span>
+													<PiCaretDown className="new-org-member-roles-caret" />
+												</div>
+												<PiX className="new-org-member-remove" onClick={() => handleRemoveOrgMember(member.id)} />
 											</div>
-											<div className="new-org-member-email-box">
-												<span className="new-org-member-email">{member.email}</span>
-											</div>
-											<div className="new-org-member-roles">
-												<span className="new-org-member-roles-text">{member.role}</span>
-												<PiCaretDown className="new-org-member-roles-caret" />
-											</div>
-											<PiX className="new-org-member-remove" onClick={() => handleRemoveOrgMember(member.id)} />
-										</div>
-									))}
+										))
+									)}
 								</div>
 							</div>
 
@@ -866,6 +1032,75 @@ const Navbar = () => {
 								>
 									{creatingOrg ? "Creating..." : "Create"}
 								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Add Member Popup */}
+			{showAddMemberPopup && (
+				<div className="navbar-modal-overlay" onClick={handleCloseAddMemberPopup}>
+					<div className="add-member-popup" onClick={(e) => e.stopPropagation()}>
+						<div className="add-member-popup-header">
+							<h3 className="add-member-popup-title">Add Member</h3>
+							<PiX className="add-member-popup-close" onClick={handleCloseAddMemberPopup} />
+						</div>
+						
+						<div className="add-member-popup-content">
+							{/* Search Input */}
+							<div className="add-member-search-field">
+								<label className="add-member-search-label">Search by email</label>
+								<input
+									type="text"
+									value={memberSearchQuery}
+									onChange={handleMemberSearchChange}
+									placeholder="Enter email address..."
+									className="add-member-search-input"
+									autoFocus
+								/>
+							</div>
+
+							{/* Role Selector */}
+							<div className="add-member-role-field">
+								<label className="add-member-role-label">Role</label>
+								<select
+									value={selectedMemberRole}
+									onChange={(e) => setSelectedMemberRole(parseInt(e.target.value))}
+									className="add-member-role-select"
+								>
+									<option value={1}>Owner</option>
+									<option value={2}>Member</option>
+									<option value={3}>Viewer</option>
+								</select>
+							</div>
+
+							{/* Search Results */}
+							<div className="add-member-results">
+								{memberSearchLoading ? (
+									<div className="add-member-loading">Searching...</div>
+								) : memberSearchResults.length > 0 ? (
+									memberSearchResults.map((searchUser) => (
+										<div 
+											key={searchUser.user_id} 
+											className="add-member-result-item"
+											onClick={() => handleSelectMember(searchUser)}
+										>
+											<div className="add-member-result-icon">
+												<PiUser />
+											</div>
+											<div className="add-member-result-info">
+												<span className="add-member-result-email">{searchUser.email || searchUser.username}</span>
+											</div>
+										</div>
+									))
+								) : memberSearchQuery.length >= 2 ? (
+									<div className="add-member-no-results">No users found with that email</div>
+								) : memberSearchQuery.length > 0 ? (
+									<div className="add-member-hint">Type at least 2 characters to search</div>
+								) : (
+									<div className="add-member-hint">Start typing to search for users</div>
+								)}
 							</div>
 						</div>
 					</div>

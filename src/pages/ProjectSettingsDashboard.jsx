@@ -22,6 +22,11 @@ const ProjectSettingsDashboard = () => {
 	const [teamLoading, setTeamLoading] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(null);
 
+	// Archived scripts state
+	const [archivedScripts, setArchivedScripts] = useState([]);
+	const [archivedLoading, setArchivedLoading] = useState(false);
+	const [restoringScript, setRestoringScript] = useState(null);
+
 	const roles = [
 		{ id: 1, name: "Owner", description: "Has all permissions" },
 		{ id: 2, name: "Member", description: "Permission to edit projects" },
@@ -113,6 +118,57 @@ const ProjectSettingsDashboard = () => {
 		}
 	}, [currentSection, projectid]);
 
+	// Fetch archived scripts
+	const fetchArchivedScripts = async () => {
+		try {
+			setArchivedLoading(true);
+			const response = await fetchWithAuth(getApiUrl(`/api/${projectid}/archived-scripts`), {
+				method: "GET",
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to fetch archived scripts");
+			}
+
+			const data = await response.json();
+			setArchivedScripts(data);
+		} catch (err) {
+			console.error("Error fetching archived scripts:", err);
+		} finally {
+			setArchivedLoading(false);
+		}
+	};
+
+	// Restore a script
+	const handleRestoreScript = async (scriptName) => {
+		try {
+			setRestoringScript(scriptName);
+			const response = await fetchWithAuth(getApiUrl(`/api/${projectid}/restore-script/${scriptName}`), {
+				method: "POST",
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({ message: "Failed to restore script" }));
+				throw new Error(errorData.message || "Failed to restore script");
+			}
+
+			// Refresh archived scripts list
+			await fetchArchivedScripts();
+		} catch (err) {
+			console.error("Error restoring script:", err);
+			setError(err.message);
+		} finally {
+			setRestoringScript(null);
+		}
+	};
+
+	// Fetch archived scripts when general section is active
+	useEffect(() => {
+		if (currentSection === "general") {
+			fetchArchivedScripts();
+		}
+	}, [currentSection, projectid]);
+
 	useEffect(() => {
 		const section = location.state?.section || "general";
 		console.log(section, "-------------------------------------------------------------");
@@ -179,22 +235,37 @@ const ProjectSettingsDashboard = () => {
 				<input type="text" value={projectName || ""} readOnly className="proj-settings-input" />
 			</div>
 			<div className="proj-settings-section-divider">
-				<h4 className="proj-settings-section-title">Deleted Drafts</h4>
+				<h4 className="proj-settings-section-title">Archived Drafts</h4>
 				<ul className="proj-settings-drafts-list">
-					<li className="proj-settings-draft-item">
-						<div className="proj-settings-draft-info">
-							<h4>My First Script - Draft v1</h4>
-							<p>Deleted on: 2025-08-23</p>
-						</div>
-						<button className="proj-settings-btn proj-settings-btn-secondary">Restore</button>
-					</li>
-					<li className="proj-settings-draft-item">
-						<div className="proj-settings-draft-info">
-							<h4>Scene 4 - Alternate Ending</h4>
-							<p>Deleted on: 2025-08-22</p>
-						</div>
-						<button className="proj-settings-btn proj-settings-btn-secondary">Restore</button>
-					</li>
+					{archivedLoading ? (
+						<li className="proj-settings-draft-item">
+							<div className="proj-settings-draft-info">
+								<p>Loading archived scripts...</p>
+							</div>
+						</li>
+					) : archivedScripts.length === 0 ? (
+						<li className="proj-settings-draft-item">
+							<div className="proj-settings-draft-info">
+								<p>No archived scripts</p>
+							</div>
+						</li>
+					) : (
+						archivedScripts.map((script) => (
+							<li key={script.id} className="proj-settings-draft-item">
+								<div className="proj-settings-draft-info">
+									<h4>{script.name}</h4>
+									<p>Archived on: {script.archivedDate}</p>
+								</div>
+								<button
+									className="proj-settings-btn proj-settings-btn-secondary"
+									onClick={() => handleRestoreScript(script.name)}
+									disabled={restoringScript === script.name}
+								>
+									{restoringScript === script.name ? "Restoring..." : "Restore"}
+								</button>
+							</li>
+						))
+					)}
 				</ul>
 			</div>
 		</div>
