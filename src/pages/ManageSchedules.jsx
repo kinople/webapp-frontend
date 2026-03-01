@@ -1036,10 +1036,10 @@ const ManageSchedules = () => {
 						if (refreshResponse.ok) {
 							const refreshedData = await refreshResponse.json();
 							setScheduleData(refreshedData);
-							setGeneratedMaxScenes(refreshedData["generated_schedule"]["max_scenes_per_day"] || "N/A");
-							setConstraintType(refreshedData["generated_schedule"]["constraint_type"] || "N/A");
-							setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["max_page_eighths_per_day"] || "N/A");
-							setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["max_hours_per_day"] || "N/A");
+							setGeneratedMaxScenes(refreshedData["generated_schedule"]["constraints"]["max_scenes_per_day"] || "N/A");
+							setConstraintType(refreshedData["generated_schedule"]["constraints"]["constraint_type"] || "N/A");
+							setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["constraints"]["max_page_eighths_per_day"] || "N/A");
+							setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["constraints"]["max_hours_per_day"] || "N/A");
 							alert("Schedule generated successfully!");
 						} else {
 							throw new Error("Failed to refresh schedule data");
@@ -2801,7 +2801,6 @@ const ManageSchedules = () => {
 			});
 
 			if (scenes.length > 0) {
-				let id = 0;
 				const days = Object.values(scheduleData.schedule.schedule_by_day).map((day) => ({
 					id: String(day.date),
 					date: day.date,
@@ -2815,7 +2814,7 @@ const ManageSchedules = () => {
 							const newScene = {};
 
 							if (breakdownScene) {
-								newScene.id = id++;
+								newScene.id = String(scheduledScene.scene_id ?? breakdownScene.id);
 								newScene.scene_id = scheduledScene.scene_id;
 								newScene.scene_number = scheduledScene.scene_number || breakdownScene.scene_number;
 								newScene.int_ext = breakdownScene.int_ext;
@@ -2837,7 +2836,7 @@ const ManageSchedules = () => {
 								// Fallback to TSV scenes data if breakdown scene not found
 								const fullScene = scenes.find((s) => (s["Scene Number"] || s["Scene No."]) === String(scheduledScene.scene_number));
 								if (fullScene) {
-									newScene.id = id++;
+									newScene.id = String(scheduledScene.scene_id);
 									newScene.scene_id = scheduledScene.scene_id;
 									newScene.scene_number = scheduledScene.scene_number || fullScene["Scene Number"];
 									newScene.int_ext = fullScene["Int./Ext."];
@@ -3668,7 +3667,7 @@ const ManageSchedules = () => {
 			}
 			const scripts = await scriptsResponse.json();
 			const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
-
+            console.log("Scene Hours ::::: ",sceneHours)
 			if (sortedScripts.length > 0) {
 				// Use master script (oldest/first uploaded) for scheduling
 				const masterScript = sortedScripts[sortedScripts.length - 1];
