@@ -2525,11 +2525,11 @@ const ManageSchedules = () => {
 			const data = await response.json();
 			console.log("schedule-data ------------ ", data);
 			setScheduleData(data);
-			setGeneratedMaxScenes(data["generated_schedule"]["max_scenes_per_day"] || "N/A");
-			setConstraintType(data["generated_schedule"]["constraint_type"] || "N/A");
-			console.log("conatraont type set as ::: ", typeof data["generated_schedule"]["constraint_type"]);
-			setGeneratedMaxPageEightsPerDay(data["generated_schedule"]["max_page_eighths_per_day"] || "N/A");
-			setGeneratedMaxHoursPerDay(data["generated_schedule"]["max_hours_per_day"] || "N/A");
+			setGeneratedMaxScenes(data["generated_schedule"]["constraints"]["max_scenes_per_day"] || "N/A");
+			setConstraintType(data["generated_schedule"]["constraints"]["constraint_type"] || "N/A");
+			console.log("conatraont type set as ::: ", typeof data["generated_schedule"]["constraints"]["constraint_type"]);
+			setGeneratedMaxPageEightsPerDay(data["generated_schedule"]["constraints"]["max_page_eighths_per_day"] || "N/A");
+			setGeneratedMaxHoursPerDay(data["generated_schedule"]["constraints"]["max_hours_per_day"] || "N/A");
 		} catch (error) {
 			console.error("Error fetching schedule data:", error);
 			setError(error.message);
@@ -3341,10 +3341,10 @@ const ManageSchedules = () => {
 					if (refreshResponse.ok) {
 						const refreshedData = await refreshResponse.json();
 						setScheduleData(refreshedData);
-						setGeneratedMaxScenes(refreshedData["generated_schedule"]["max_scenes_per_day"] || "N/A");
-						setConstraintType(refreshedData["generated_schedule"]["constraint_type"] || "N/A");
-						setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["max_page_eighths_per_day"] || "N/A");
-						setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["max_hours_per_day"] || "N/A");
+						setGeneratedMaxScenes(refreshedData["generated_schedule"]["constraints"]["max_scenes_per_day"] || "N/A");
+						setConstraintType(refreshedData["generated_schedule"]["constraints"]["constraint_type"] || "N/A");
+						setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["constraints"]["max_page_eighths_per_day"] || "N/A");
+						setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["constraints"]["max_hours_per_day"] || "N/A");
 
 						alert("Schedule generated successfully!");
 					} else {
@@ -3702,6 +3702,38 @@ const ManageSchedules = () => {
 	};
 	const projectName = useSelector((state) => state.project.projectName);
 
+	const handleClearSchedule = async () => {
+		if (!window.confirm("Are you sure you want to clear the schedule? This will remove the generated schedule and all availability dates for every location and character.")) {
+			return;
+		}
+		try {
+			const response = await fetch(getApiUrl(`/api/${id}/clear-schedule/${scheduleId}`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+			});
+			if (!response.ok) {
+				const errData = await response.json().catch(() => ({}));
+				throw new Error(errData.message || "Failed to clear schedule");
+			}
+			// Reset local state
+			setScheduleDays([]);
+			setIsEditing(false);
+			setConstraintType("");
+			setGeneratedMaxScenes("");
+			setGeneratedMaxPageEightsPerDay("");
+			setGeneratedMaxHoursPerDay("");
+			setScheduleDates({ start: "N/A", end: "N/A" });
+			setSelectedDates([]);
+			setElement("");
+			setSelectedElement("");
+			alert("Schedule cleared successfully!");
+			fetchScheduleData();
+		} catch (error) {
+			console.error("Error clearing schedule:", error);
+			alert("Failed to clear schedule: " + error.message);
+		}
+	};
+
 	const exportScheduleToExcel = async (days, breakdown) => {
 		const sceneMap = {};
 
@@ -3845,30 +3877,25 @@ const ManageSchedules = () => {
 				</div>
 			)}
 
-			<div className="sched-header">
-				<div className="sched-header-left">
-					<h2 className="sched-page-title">Project : {projectName}</h2>
-				</div>
-				{scheduleData?.schedule && (
-					<button className="sched-sync-btn" onClick={() => exportScheduleToExcel(scheduleData.schedule.schedule_by_day, breakdownScenes)}>
-						<span>
-							<FaFileExcel />
-						</span>
-						<span>Export to Excel</span>
-					</button>
-				)}
-				<div className="sched-header-right">
-					<div className="sched-date-info">
-						<div>Schedule Start Date: {scheduleDates.start || "Not set"}</div>
-						<div>Schedule End Date: {scheduleDates.end || "Not set"}</div>
-					</div>
-				</div>
-			</div>
+
 			<div className="sched-content">
 				<div className="sched-left-panel">
-					<div className="sched-left-panel-header">Availability dates</div>
-					<div className="sched-left-panel-buttons">
-						<button className="sched-dood-button" onClick={() => setShowDoodModal(true)}>
+					<div className="sched-left-panel-header">
+						{projectName && <span className="sched-left-panel-project-name">{projectName}</span>}
+						<span className="sched-left-panel-header-title">Availability Dates</span>
+					</div>
+					<div className="sched-left-panel-dates-bar">
+						<div className="sched-date-info-inline">
+							<div className="sched-date-info-item">
+								<span className="sched-date-info-label">Start</span>
+								<span className="sched-date-info-value">{scheduleDates.start || "Not set"}</span>
+							</div>
+							<div className="sched-date-info-item">
+								<span className="sched-date-info-label">End</span>
+								<span className="sched-date-info-value">{scheduleDates.end || "Not set"}</span>
+							</div>
+						</div>
+						<button className="sched-action-btn sched-dood-btn" onClick={() => setShowDoodModal(true)}>
 							DOODS
 						</button>
 					</div>
@@ -4123,16 +4150,26 @@ const ManageSchedules = () => {
 						</div>
 
 						<div className="sched-controls-group">
-							<button className="sched-generate-button" onClick={() => setShowGenerateModal(true)} disabled={isGenerating}>
-								{isGenerating ? "GENERATING..." : "GENERATE"}
+							<button className="sched-action-btn sched-action-btn-primary sched-generate-button" onClick={() => setShowGenerateModal(true)} disabled={isGenerating}>
+								{isGenerating ? "Generating..." : "Generate"}
 							</button>
+
+							{scheduleData?.schedule && (
+								<button
+									className="sched-action-btn sched-export-btn"
+									onClick={() => exportScheduleToExcel(scheduleData.schedule.schedule_by_day, breakdownScenes)}
+								>
+									<FaFileExcel />
+									<span>Export</span>
+								</button>
+							)}
 
 							<div className="sched-flex-grow" />
 
 							{scheduleData?.schedule &&
 								(isEditing ? (
 									<div className="sched-flex-row sched-gap-10" style={{ alignItems: "center" }}>
-										<button onClick={handleSaveChanges} className="sched-action-btn-success">
+										<button onClick={handleSaveChanges} className="sched-action-btn sched-action-btn-success">
 											Save
 										</button>
 
@@ -4141,9 +4178,9 @@ const ManageSchedules = () => {
 											type="date"
 											value={newScheduleDayInput}
 											onChange={(e) => setNewScheduleDayInput(e.target.value)}
-											className="sched-date-picker"
+											className="sched-edit-date-input"
 										/>
-										<button onClick={handleAddScheduleDay} className="sched-action-btn-primary" disabled={!newScheduleDayInput}>
+										<button onClick={handleAddScheduleDay} className="sched-action-btn sched-action-btn-primary" disabled={!newScheduleDayInput}>
 											Add Day
 										</button>
 										<button
@@ -4151,7 +4188,7 @@ const ManageSchedules = () => {
 												setScheduleDays(originalScheduleDays);
 												setIsEditing(false);
 											}}
-											className="sched-action-btn-danger"
+											className="sched-action-btn sched-action-btn-cancel"
 										>
 											Cancel
 										</button>
@@ -4162,17 +4199,23 @@ const ManageSchedules = () => {
 											setOriginalScheduleDays(JSON.parse(JSON.stringify(scheduleDays)));
 											setIsEditing(true);
 										}}
-										className="sched-action-btn"
+										className="sched-action-btn sched-action-btn-edit"
 									>
 										Edit
 									</button>
 								))}
 
 							{scheduleMode == "hours" && (
-								<button className="sched-action-btn" onClick={handleSaveHours}>
+								<button className="sched-action-btn sched-action-btn-primary" onClick={handleSaveHours}>
 									Save Est. Hours
 								</button>
 							)}
+
+						{scheduleData?.schedule && (
+							<button className="sched-action-btn sched-action-btn-clear" onClick={handleClearSchedule}>
+								Clear Schedule
+							</button>
+						)}
 						</div>
 					</div>
 

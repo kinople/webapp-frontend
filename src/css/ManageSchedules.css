@@ -37,50 +37,6 @@
 	padding: 0;
 }
 
-/* Header */
-.sched-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 16px 24px;
-	width: 100%;
-	border-bottom: 1px solid #e6ecf8;
-	background-color: #fff;
-}
-
-.sched-header-left {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.sched-page-title {
-	font-size: 22px;
-	font-weight: 700;
-	margin: 0;
-	color: #0f1724;
-}
-
-.sched-header-right {
-	text-align: right;
-}
-
-.sched-date-info {
-	font-size: 13px;
-	color: #6b7280;
-	line-height: 1.6;
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.sched-date-info div {
-	padding: 4px 12px;
-	background: #f8f9fb;
-	border-radius: 6px;
-	border: 1px solid #e6ecf8;
-}
-
 /* Content Layout */
 .sched-content {
 	display: flex;
@@ -112,24 +68,8 @@
 	top: 16px;
 }
 
-.sched-sync-btn {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 4px;
-	padding: 5px 10px 6px 10px;
-	border-radius: 3px;
-	border: 1px solid grey;
-	background: transparent;
-	cursor: pointer;
-	transition: background 0.15s ease;
-	white-space: nowrap;
-	color: grey;
-	margin-left: 900px;
-}
-
 .sched-left-panel-header {
-	padding: 16px 20px;
+	padding: 14px 20px;
 	text-align: center;
 	font-size: 16px;
 	font-weight: 700;
@@ -140,25 +80,70 @@
 	position: sticky;
 	top: 0;
 	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 }
 
-.sched-left-panel > button:first-child {
-	margin: 16px;
-	padding: 10px 16px;
-	border-radius: 8px;
-	border: 1px solid #ff6758;
-	background: linear-gradient(180deg, #ff6454 0%, #ff4c3a 100%);
-	color: #fff;
+.sched-left-panel-project-name {
+	font-size: 17px;
+	font-weight: 800;
+	color: #0f1724;
+	letter-spacing: -0.2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sched-left-panel-header-title {
+	font-size: 11px;
 	font-weight: 600;
-	font-size: 13px;
-	cursor: pointer;
-	transition: all 0.15s ease;
-	box-shadow: 0px 3px 6px -1px rgba(202, 34, 18, 0.1);
-	flex-shrink: 0;
+	color: #6b7280;
+	text-transform: uppercase;
+	letter-spacing: 0.6px;
 }
 
-.sched-left-panel > button:first-child:hover {
-	background: linear-gradient(180deg, #ff5040 0%, #ff3828 100%);
+/* Dates bar below header */
+.sched-left-panel-dates-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 16px;
+	background: #f8f9fb;
+	border-bottom: 1px solid #e6ecf8;
+	flex-shrink: 0;
+	gap: 10px;
+}
+
+.sched-date-info-inline {
+	display: flex;
+	gap: 12px;
+}
+
+.sched-date-info-item {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.sched-date-info-label {
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: #9ca3af;
+}
+
+.sched-date-info-value {
+	font-size: 12px;
+	font-weight: 600;
+	color: #0f1724;
+}
+
+.sched-dood-btn {
+	flex-shrink: 0;
+	font-size: 12px !important;
+	padding: 6px 14px !important;
 }
 
 /* Element Selector */
@@ -586,14 +571,28 @@
 	letter-spacing: 0.5px;
 }
 
-.sched-generate-button:hover {
-	background: linear-gradient(180deg, #ff5040 0%, #ff3828 100%);
+.sched-export-btn:hover {
+	background: rgba(22, 163, 74, 0.08);
 }
 
-.sched-generate-button:disabled {
-	background: #d1d5db;
-	box-shadow: none;
-	cursor: not-allowed;
+/* Edit Button */
+.sched-action-btn-edit {
+	border-color: #3b82f6;
+	color: #3b82f6;
+}
+
+.sched-action-btn-edit:hover {
+	background: rgba(59, 130, 246, 0.08);
+}
+
+/* Clear Schedule Button */
+.sched-action-btn-clear {
+	border-color: #ef4444;
+	color: #ef4444;
+}
+
+.sched-action-btn-clear:hover {
+	background: rgba(239, 68, 68, 0.08);
 }
 
 /* Action Buttons */
@@ -616,7 +615,7 @@
 
 .sched-action-btn-primary {
 	background: linear-gradient(180deg, #ff6454 0%, #ff4c3a 100%);
-	border-color: #ca2212;
+	border-color: #ff6758;
 	color: #fff;
 	box-shadow: 0px 3px 6px -1px rgba(202, 34, 18, 0.1);
 }
@@ -625,29 +624,55 @@
 	background: linear-gradient(180deg, #ff5040 0%, #ff3828 100%);
 }
 
+.sched-action-btn-primary:disabled {
+	background: #d1d5db;
+	border-color: #d1d5db;
+	box-shadow: none;
+	cursor: not-allowed;
+}
+
 .sched-action-btn-success {
-	background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
-	border-color: #16a34a;
-	color: #fff;
+	border-color: #22c55e;
+	color: #22c55e;
+	background: transparent;
 }
 
 .sched-action-btn-success:hover {
-	background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+	background: rgba(34, 197, 94, 0.08);
 }
 
-.sched-action-btn-danger {
-	background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
-	border-color: #dc2626;
-	color: #fff;
+.sched-action-btn-cancel {
+	border-color: #9ca3af;
+	color: #6b7280;
+	background: transparent;
 }
 
-.sched-action-btn-danger:hover {
-	background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%);
+.sched-action-btn-cancel:hover {
+	background: rgba(107, 114, 128, 0.08);
+	border-color: #6b7280;
 }
 
 .sched-action-btn:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
+}
+
+/* Edit-mode date input */
+.sched-edit-date-input {
+	padding: 7px 12px;
+	border: 1px solid #e6ecf8;
+	border-radius: 6px;
+	font-size: 13px;
+	font-family: "Inter", sans-serif;
+	background-color: #fff;
+	color: #0f1724;
+	cursor: pointer;
+	transition: border-color 0.15s ease;
+}
+
+.sched-edit-date-input:focus {
+	outline: none;
+	border-color: #ff6758;
 }
 
 /* Schedule Content Area */
@@ -1446,14 +1471,9 @@
 }
 
 @media (max-width: 768px) {
-	.sched-header {
+	.sched-left-panel-dates-bar {
 		flex-direction: column;
-		gap: 12px;
 		align-items: flex-start;
-	}
-
-	.sched-date-info {
-		text-align: left;
 	}
 
 	.sched-controls-section {
