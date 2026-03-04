@@ -68,7 +68,7 @@ export default function CrewList() {
 				// Update existing crew list - we need to handle departments and crew separately
 				// For now, we'll delete and recreate to ensure clean state
 				// First delete the old crew list
-				const deleteRes = await fetch(`/api/crewlists/${crewListId}`, {
+				const deleteRes = await fetch(`/api/crewlists/${crewListId}?project_id=${projectId}`, {
 					method: "DELETE"
 				});
 				if (!deleteRes.ok) {
@@ -82,6 +82,7 @@ export default function CrewList() {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
+					project_id: projectId,
 					shoot_date: new Date().toISOString().slice(0, 10),
 					notes: "",
 					departments: departments.map((dept) => ({
@@ -178,7 +179,7 @@ export default function CrewList() {
 	}
 
 	function handleEditDeptName(idx, name) {
-		setDepartments((prev) => prev.map((d, i) => (i === idx ? { ...d, name } : d)));
+		setDepartments((prev) => prev.map((d, i) => (i === idx ? { ...d, name, project_id: id } : d)));
 	}
 
 	async function handleDeleteDept(idx) {
@@ -186,7 +187,7 @@ export default function CrewList() {
 		const target = departments[idx];
 		if (target?.id) {
 			try {
-				const response = await fetch(`/api/crew-departments/${target.id}`, {
+				const response = await fetch(`/api/crew-departments/${target.id}?project_id=${id}`, {
 					method: "DELETE"
 				});
 				if (!response.ok) {
@@ -216,7 +217,7 @@ export default function CrewList() {
 	}
 
 	function handleAddCrew(idx) {
-		const newCrew = { name: "", role: "" };
+			const newCrew = { name: "", role: "", project_id: id };
 		setDepartments((prev) =>
 			prev.map((d, i) => (i === idx ? { ...d, crew: [...d.crew, newCrew] } : d))
 		);
@@ -237,7 +238,7 @@ export default function CrewList() {
 		const target = departments[deptIdx]?.crew?.[crewIdx];
 		if (target?.id) {
 			try {
-				const response = await fetch(`/api/crew/${target.id}`, {
+				const response = await fetch(`/api/crew/${target.id}?project_id=${id}`, {
 					method: "DELETE"
 				});
 				if (!response.ok) {
