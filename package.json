@@ -23,6 +23,7 @@
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
     "gh-pages": "^6.3.0",
+    "google-maps": "^4.3.3",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.14.0",
     "jspdf": "^4.1.0",

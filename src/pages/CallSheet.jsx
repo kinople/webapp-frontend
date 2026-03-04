@@ -3,26 +3,26 @@ import { useParams } from 'react-router-dom';
 import ProjectHeader from '../components/ProjectHeader'
 import { getApiUrl } from '../utils/api';
 
-const formatScheduleData = (scheduleText) => {
-    const lines = scheduleText.split('\n').filter(line => line.trim());
-    const headers = lines[1].split('\t');
-    const data = lines.slice(2).map(line => {
-        const values = line.split('\t');
-        return headers.reduce((obj, header, index) => {
-            obj[header.trim()] = values[index] || '';
-            return obj;
-        }, {});
-    });
+const formatScheduleData = (schedulePayload) => {
+    const scheduleByDay = schedulePayload?.schedule?.schedule_by_day || {};
+    const groupedByDate = {};
 
-    // Group scenes by date
-    const groupedByDate = data.reduce((acc, scene) => {
-        const date = scene['Date'];
-        if (!acc[date]) {
-            acc[date] = [];
-        }
-        acc[date].push(scene);
-        return acc;
-    }, {});
+    Object.values(scheduleByDay).forEach((day, index) => {
+        const dateKey = day?.date || `Day ${index + 1}`;
+        const dayScenes = Array.isArray(day?.scenes) ? day.scenes : [];
+
+        groupedByDate[dateKey] = dayScenes.map((scene) => ({
+            'Date': day?.date || '',
+            'Scene Number': scene?.scene_number || scene?.scene_id || '',
+            'INT/EXT': scene?.int_ext || scene?.ie || '',
+            'Day/Night': scene?.day_night || '',
+            'Location': scene?.location || scene?.set || '',
+            'Synopsis': scene?.description || scene?.synopsis || '',
+            'Cast ID': scene?.cast_ids || (Array.isArray(scene?.character_ids) ? scene.character_ids.join(', ') : ''),
+            'Pages': scene?.pages || scene?.page_eighths || '',
+            'Notes': scene?.notes || ''
+        }));
+    });
 
     return groupedByDate;
 };
@@ -59,39 +59,9 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
     const handleGenerateCallSheet = async () => {
         try {
             setIsGenerating(true);
-            const response = await fetch(getApiUrl(`/api/${id}/call-sheet/${scheduleName}`), {
-                method: 'GET',
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate call sheet');
-            }
-
-            // Get the filename from the Content-Disposition header, or use a default name
-            const contentDisposition = response.headers.get('Content-Disposition');
-            const filenameMatch = contentDisposition && contentDisposition.match(/filename="(.+)"/);
-            const filename = filenameMatch ? filenameMatch[1] : `${scheduleName}_call_sheet.pdf`;
-
-            // Convert the response to a blob
-            const blob = await response.blob();
-
-            // Create a URL for the blob
-            const url = window.URL.createObjectURL(blob);
-
-            // Create a temporary link element and trigger the download
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-
-            // Clean up
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-
+            window.print();
         } catch (error) {
             console.error('Error generating call sheet:', error);
-            // You could add an error notification here
         } finally {
             setIsGenerating(false);
         }
@@ -403,7 +373,6 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
 
 const CallSheet = () => {
     const { id, scheduleName } = useParams();
-    const [scheduleData, setScheduleData] = useState(null);
     const [groupedData, setGroupedData] = useState({});
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -413,12 +382,11 @@ const CallSheet = () => {
         const fetchScheduleData = async () => {
             try {
                 setIsLoading(true);
-                const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleName}.schedule.tsv`));
+                const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleName}`));
                 if (!response.ok) {
                     throw new Error('Failed to fetch schedule data');
                 }
-                const data = await response.text();
-                setScheduleData(data);
+                const data = await response.json();
                 const grouped = formatScheduleData(data);
                 setGroupedData(grouped);
             } catch (error) {

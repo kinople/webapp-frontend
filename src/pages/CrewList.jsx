@@ -137,7 +137,7 @@ export default function CrewList() {
 				const nextDepartments = (latest?.departments || []).map((dept) => ({
 					id: dept.id,
 					name: dept.name,
-					crew: (dept.crew_members || []).map((crew) => ({
+					crew: (dept.crew_members || dept.crew || []).map((crew) => ({
 						id: crew.id,
 						name: crew.name || "",
 						role: crew.role || ""

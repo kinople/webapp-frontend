@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useJsApiLoader } from '@react-google-maps/api';
 import html2pdf from 'html2pdf.js';
 import { useNavigate, useParams } from 'react-router-dom';
 import ProjectHeader from '../components/ProjectHeader';
@@ -31,6 +30,7 @@ import InlineLocationMap from '../components/InlineLocationMap';
 import '../css/ManageShootDays.css';
 import { getApiUrl } from '../utils/api';
 import { getToken } from '../utils/auth';
+import useGoogleMapsLoader from '../hooks/useGoogleMapsLoader';
 
 const libraries = ['places'];
 
@@ -89,9 +89,9 @@ const ManageShootDays = () => {
     const [showLocationPicker, setShowLocationPicker] = useState(false);
     const [previewWidth, setPreviewWidth] = useState(480);
     const [isResizing, setIsResizing] = useState(false);
-    const { isLoaded } = useJsApiLoader({
+    const { isLoaded } = useGoogleMapsLoader({
         id: 'google-map-script',
-        googleMapsApiKey: "AIzaSyBGLCFBaUHw6fGo2XbLIQXNIiLTlMjfITo",
+        apiKey: "AIzaSyBGLCFBaUHw6fGo2XbLIQXNIiLTlMjfITo",
         libraries
     });
 
@@ -669,7 +669,7 @@ const ManageShootDays = () => {
         if (!selectedDayId) return;
         setIsSaving(true);
         try {
-            const res = await fetch(`/api/shoot-days/${selectedDayId}`, {
+            const res = await fetch(`/api/shoot-days/${selectedDayId}?project_id=${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
@@ -1984,7 +1984,7 @@ const ManageShootDays = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {dept.crew_members.map(crew => {
+                                        {(dept.crew_members || dept.crew || []).map(crew => {
                                             const time = getCrewTime(crew.id);
                                             const mode = getCrewMode(crew.id);
                                             const keySelected = isKey(crew.id);
@@ -2245,7 +2245,7 @@ const ManageShootDays = () => {
                     newDay.characters = updatedCharacters;
 
                     // Save immediately
-                    await fetch(`/api/shoot-days/${newDay.id}`, {
+                    await fetch(`/api/shoot-days/${newDay.id}?project_id=${id}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(newDay)
@@ -2270,7 +2270,7 @@ const ManageShootDays = () => {
         if (!window.confirm("Are you sure you want to delete this shoot day? This cannot be undone.")) return;
 
         try {
-            const res = await fetch(`/api/shoot-days/${dayId}`, { method: 'DELETE' });
+            const res = await fetch(`/api/shoot-days/${dayId}?project_id=${id}`, { method: 'DELETE' });
             if (res.ok) {
                 setShootDays(prev => prev.filter(d => d.id !== dayId));
                 if (selectedDayId === dayId) {
