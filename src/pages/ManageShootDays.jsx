@@ -118,9 +118,11 @@ const ManageShootDays = () => {
             latitude: null, longitude: null,
             hospital: { name: '', loc: '' },
             emergency: { name: '', phone: '' },
+            safety_hotline: { name: '', phone: '' },
             instructions: ['']
         },
 
+        meals: { breakfast: '', lunch: '', dinner: '', snacks: '' },
         weather: { temp: '', high: '', low: '', desc: '', sunrise: '', sunset: '' },
         useful_contacts: [],
         scenes: [],
@@ -559,11 +561,10 @@ const ManageShootDays = () => {
             }
 
             // Fetch Crew List (Source of Truth)
-            const crewRes = await fetch(`/api/projects/${id}/crewlists`);
+            const crewRes = await fetch(`/api/projects/${id}/crewlist`);
             if (crewRes.ok) {
-                const lists = await crewRes.json();
-                // Use the latest crew list for now
-                if (lists.length > 0) setCrewList(lists[lists.length - 1]);
+                const crewData = await crewRes.json();
+                setCrewList(crewData);
             }
 
             // Fetch Cast List
@@ -617,16 +618,31 @@ const ManageShootDays = () => {
     const handleDaySelect = (day) => {
         setViewMode('editor');
         setSelectedDayId(day.id);
-        // Merge fetched data with default structure to ensure all fields exist
+        // Load day data with fresh default structure (no merging with previous day)
+        const freshDefaults = {
+            set_name: '', address: '',
+            contact_name: '', contact_phone: '',
+            latitude: null, longitude: null,
+            hospital: { name: '', loc: '' },
+            emergency: { name: '', phone: '' },
+            safety_hotline: { name: '', phone: '' },
+            instructions: ['']
+        };
+        
+        const freshMeals = {
+            breakfast: '', lunch: '', dinner: '', snacks: ''
+        };
+        
         setFormData(prev => ({
             ...prev,
             ...day,
-            meals: { ...prev.meals, ...(day.meals || {}) },
+            meals: { ...freshMeals, ...(day.meals || {}) },
             location_details: {
-                ...prev.location_details,
+                ...freshDefaults,
                 ...(day.location_details || {}),
-                hospital: { ...prev.location_details.hospital, ...(day.location_details?.hospital || {}) },
-                emergency: { ...prev.location_details.emergency, ...(day.location_details?.emergency || {}) },
+                hospital: { name: '', loc: '', ...(day.location_details?.hospital || {}) },
+                emergency: { name: '', phone: '', ...(day.location_details?.emergency || {}) },
+                safety_hotline: { name: '', phone: '', ...(day.location_details?.safety_hotline || {}) },
                 instructions: Array.isArray(day.location_details?.instructions)
                     ? day.location_details.instructions
                     : (day.location_details?.instructions ? [day.location_details.instructions] : [''])
@@ -1123,6 +1139,12 @@ const ManageShootDays = () => {
             <div className="msd-grid-2">
                 <label className="msd-label">Name <input type="text" className="msd-input" value={formData.location_details.emergency.name || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.emergency.name', e.target.value))} /></label>
                 <label className="msd-label">Phone <input type="text" className="msd-input" value={formData.location_details.emergency.phone || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.emergency.phone', e.target.value))} /></label>
+            </div>
+
+            <div className="msd-sub-header">🛡️ Safety Hotline</div>
+            <div className="msd-grid-2">
+                <label className="msd-label">Name <input type="text" className="msd-input" value={formData.location_details.safety_hotline.name || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.safety_hotline.name', e.target.value))} placeholder="e.g., Safe Set Hotline" /></label>
+                <label className="msd-label">Phone <input type="text" className="msd-input" value={formData.location_details.safety_hotline.phone || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.safety_hotline.phone', e.target.value))} placeholder="e.g., (555) 123-4567" /></label>
             </div>
 
             <label className="msd-label">

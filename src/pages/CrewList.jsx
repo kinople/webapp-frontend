@@ -62,44 +62,29 @@ export default function CrewList() {
 
 			const projectId = id;
 
-			// If we have a crew list ID, update it; otherwise create a new one
-			let response;
-			if (crewListId) {
-				// Update existing crew list - we need to handle departments and crew separately
-				// For now, we'll delete and recreate to ensure clean state
-				// First delete the old crew list
-				const deleteRes = await fetch(`/api/crewlists/${crewListId}?project_id=${projectId}`, {
-					method: "DELETE"
-				});
-				if (!deleteRes.ok) {
-					setSaveStatus("Failed to update Crew List.");
-					return;
-				}
-			}
+			const payload = {
+				notes: "",
+				departments: departments.map((dept) => ({
+					id: dept.id,
+					name: dept.name,
+					crew: dept.crew
+						.filter((crew) => crew.name.trim())
+						.map((crew) => ({
+							id: crew.id,
+							name: crew.name,
+							role: crew.role
+						}))
+				}))
+			};
 
-			// Create new crew list (either fresh or replacement)
-			response = await fetch(`/api/projects/${projectId}/crewlists`, {
-				method: "POST",
+			// Always update the single crew list
+			const response = await fetch(`/api/projects/${projectId}/crewlist`, {
+				method: "PUT",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					project_id: projectId,
-					shoot_date: new Date().toISOString().slice(0, 10),
-					notes: "",
-					departments: departments.map((dept) => ({
-						name: dept.name,
-						crew: dept.crew
-							.filter((crew) => crew.name.trim())
-							.map((crew) => ({
-								name: crew.name,
-								role: crew.role
-							}))
-					}))
-				})
+				body: JSON.stringify(payload)
 			});
 
 			if (response.ok) {
-				const newCrewList = await response.json();
-				setCrewListId(newCrewList.id); // Store the new ID
 				setSaveStatus("Crew List saved successfully!");
 			} else {
 				setSaveStatus("Failed to save Crew List.");
@@ -108,7 +93,6 @@ export default function CrewList() {
 			setSaveStatus("Error saving Crew List.");
 		}
 	}
-	const [crewListId, setCrewListId] = useState(null);
 	const [newDept, setNewDept] = useState("");
 	const [expanded, setExpanded] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -122,20 +106,15 @@ export default function CrewList() {
 		async function loadCrewList() {
 			setLoading(true);
 			try {
-				const response = await fetch(`/api/projects/${id}/crewlists`);
+				const response = await fetch(`/api/projects/${id}/crewlist`);
 				if (!response.ok) {
 					return;
 				}
-				const crewlists = await response.json();
+				const crewData = await response.json();
 				if (!isActive) {
 					return;
 				}
-				const latest = Array.isArray(crewlists) ? crewlists[crewlists.length - 1] : null;
-				// Store the crew list ID for updates
-				if (latest?.id) {
-					setCrewListId(latest.id);
-				}
-				const nextDepartments = (latest?.departments || []).map((dept) => ({
+				const nextDepartments = (crewData?.departments || []).map((dept) => ({
 					id: dept.id,
 					name: dept.name,
 					crew: (dept.crew_members || dept.crew || []).map((crew) => ({
@@ -187,7 +166,7 @@ export default function CrewList() {
 		const target = departments[idx];
 		if (target?.id) {
 			try {
-				const response = await fetch(`/api/crew-departments/${target.id}?project_id=${id}`, {
+				const response = await fetch(`/api/projects/${id}/crew-departments/${target.id}`, {
 					method: "DELETE"
 				});
 				if (!response.ok) {
@@ -238,7 +217,7 @@ export default function CrewList() {
 		const target = departments[deptIdx]?.crew?.[crewIdx];
 		if (target?.id) {
 			try {
-				const response = await fetch(`/api/crew/${target.id}?project_id=${id}`, {
+				const response = await fetch(`/api/projects/${id}/crew/${target.id}`, {
 					method: "DELETE"
 				});
 				if (!response.ok) {

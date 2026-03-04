@@ -327,7 +327,7 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                 <div className="csp-banner-divider"></div>
                 <div className="csp-banner-col">
                     <strong>🛡️ HARASSMENT & SAFETY</strong><br />
-                    Safe set hotline: (555) SAFETY-1
+                    {data.location_details?.safety_hotline?.name || 'Safe set hotline'}: {data.location_details?.safety_hotline?.phone || 'N/A'}
                 </div>
             </div>
         </div>
