@@ -327,9 +327,9 @@ const ScriptBreakdownNew = () => {
 	}, [allScripts]);
 
 	const generatedScripts = useMemo(() => {
-		if (!allScripts || allScripts.length <= 1) return [];
+		if (!allScripts) return [];
 		// All scripts except the master (oldest one)
-		return allScripts.slice(0, -1);
+		return allScripts;
 	}, [allScripts]);
 
 	// View-only mode when on generated tab
@@ -371,6 +371,7 @@ const ScriptBreakdownNew = () => {
 				return;
 			}
 			const data = await res.json();
+			console.log("generated breakdown data ------------ ", data);
 			if (data.parsing) {
 				setParsing(data.parsing);
 			} else {
@@ -477,8 +478,8 @@ const ScriptBreakdownNew = () => {
 					// Always load master script (oldest one, last in sorted array) by default
 					fetchMasterBreakdown();
 
-					// Set default generated script to the newest (first in sorted array) if there are multiple scripts
-					if (sorted.length > 1) {
+					// Set default generated script to the newest (first in sorted array)
+					if (sorted.length > 0) {
 						setSelectedGeneratedScript(sorted[0]);
 					}
 				}
@@ -574,31 +575,21 @@ const ScriptBreakdownNew = () => {
 		setAllCharacters(mergedCharacters);
 	}, [castList]);
 
-	// Load correct breakdown when tab changes
+	// Load breakdown when tab or generated script selection changes
 	useEffect(() => {
 		if (activeTab === "master" && masterScript) {
-			setSelectedScript("masterScript");
+			setSelectedScript(masterScript);
 			fetchMasterBreakdown();
 		} else if (activeTab === "generated" && selectedGeneratedScript) {
 			setSelectedScript(selectedGeneratedScript);
+			console.log("selected generated script ------------ ");
 			fetchBreakdown(selectedGeneratedScript.id);
 		}
-		// Reset view mode when switching tabs
+		// Reset view mode when switching tabs or selecting text
 		setViewMode("table");
 		setEditingScene(null);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [activeTab, masterScript]);
-
-	// Load breakdown when generated script selection changes
-	useEffect(() => {
-		if (activeTab === "generated" && selectedGeneratedScript) {
-			setSelectedScript(selectedGeneratedScript);
-			fetchBreakdown(selectedGeneratedScript.id);
-			setViewMode("table");
-			setEditingScene(null);
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedGeneratedScript]);
+	}, [activeTab, masterScript, selectedGeneratedScript]);
 
 	// Helper function to convert snake_case to Title Case for display
 	const snakeCaseToTitleCase = (str) => {

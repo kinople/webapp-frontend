@@ -968,6 +968,19 @@ const ManageSchedules = () => {
 			}
 		};
 
+		const handleCloseGenerateModal = () => {
+			setShowGenerateModal(false);
+			setModalElementType("character");
+			setModalElement("");
+			setModalAvailableDates([]);
+			setModalUnavailableDates([]);
+			setModalDatePickerMode("flexible");
+			setModalDatePickerValue("range");
+			setModalDateRangeStart("");
+			setModalDateRangeEnd("");
+			setModalAddMode("available");
+		};
+
 		const handleModalGenerate = async () => {
 			if (!scheduleStartDate || !scheduleEndDate) {
 				alert("Please select both start and end dates for the schedule");
@@ -1025,7 +1038,7 @@ const ManageSchedules = () => {
 			}
 
 			try {
-				setShowGenerateModal(false);
+				handleCloseGenerateModal();
 				setIsGenerating(true);
 				const response = await fetch(getApiUrl(`/api/${id}/generate-schedule/${scheduleId}`), {
 					method: "POST",
@@ -1068,11 +1081,11 @@ const ManageSchedules = () => {
 		};
 
 		return (
-			<div className="sched-conflicts-modal-overlay" onClick={() => setShowGenerateModal(false)}>
+			<div className="sched-conflicts-modal-overlay" onClick={handleCloseGenerateModal}>
 				<div className="sched-generate-modal" ref={modalContentRef} onClick={(e) => e.stopPropagation()}>
 					<div className="sched-conflicts-modal-header">
 						<h2 className="sched-conflicts-modal-heading">Generate Schedule</h2>
-						<button className="sched-conflicts-modal-close-button" onClick={() => setShowGenerateModal(false)}>
+						<button className="sched-conflicts-modal-close-button" onClick={handleCloseGenerateModal}>
 							×
 						</button>
 					</div>

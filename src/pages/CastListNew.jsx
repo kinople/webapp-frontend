@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
 import {
@@ -319,30 +319,52 @@ const CastListNew = () => {
 	const [scenesForChar2, setScenesForChar2] = useState(new Set());
 	const [splitCharacterScenes, setSplitCharacterScenes] = useState([]);
 
-	useEffect(() => {
-		const CalculateScenceChars = (data) => {
-			var newSceneChars = {};
+	// Compute castIdToSceneIds: map from cast_id -> array of scene IDs (scene.id)
+	// Derived from the scenes (breakdown) data using characters_ids
+	const castIdToSceneIds = useMemo(() => {
+		const mapping = {};
+		if (!Array.isArray(scenes) || scenes.length === 0) return mapping;
 
-			data["cast_list"].forEach((cast) => {
-				cast["scenes"].forEach((scene) => {
-					if (!(scene in newSceneChars)) {
-						newSceneChars[scene] = [];
-					}
-					newSceneChars[scene].push(cast["cast_id"]);
-				});
+		scenes.forEach((scene) => {
+			const sceneId = scene.id;
+			if (sceneId === undefined || sceneId === null) return;
+			const charIds = scene.characters_ids || [];
+			charIds.forEach((cid) => {
+				const cidStr = String(cid);
+				if (!mapping[cidStr]) {
+					mapping[cidStr] = [];
+				}
+				mapping[cidStr].push(sceneId);
 			});
+		});
 
-			setSceneChars(newSceneChars);
-			return;
-		};
+		return mapping;
+	}, [scenes]);
 
+	// Build sceneChars (scene_id -> list of cast_ids) from scenes breakdown data
+	useEffect(() => {
+		if (!Array.isArray(scenes) || scenes.length === 0) return;
+
+		const newSceneChars = {};
+		scenes.forEach((scene) => {
+			const sceneId = scene.id;
+			if (sceneId === undefined || sceneId === null) return;
+			const charIds = scene.characters_ids || [];
+			if (charIds.length > 0) {
+				newSceneChars[sceneId] = charIds.map(String);
+			}
+		});
+
+		setSceneChars(newSceneChars);
+	}, [scenes]);
+
+	useEffect(() => {
 		const fetchCastList = async () => {
 			setIsLoading(true);
 			try {
 				const res = await fetch(getApiUrl(`/api/${id}/cast-list`));
 				if (!res.ok) throw new Error("Failed to fetch cast list");
 				const data = await res.json();
-				CalculateScenceChars(data);
 				setCastData(data);
 				console.log("cast-list ------------ ", data);
 				if (Array.isArray(data?.cast_list)) setExpandedOptions(new Set(data.cast_list.map((_, i) => i)));
@@ -355,43 +377,43 @@ const CastListNew = () => {
 		fetchCastList();
 	}, [id]);
 
-	useEffect(() => {
-		const fetchScenes = async () => {
-			try {
-				const scriptsResponse = await fetch(getApiUrl(`/api/${id}/script-list`));
-				if (!scriptsResponse.ok) {
-					throw new Error("Failed to fetch script list");
-				}
-				const scripts = await scriptsResponse.json();
-				const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
-
-				if (sortedScripts.length > 0) {
-					const masterScript = sortedScripts[sortedScripts.length - 1];
-					const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?project_id=${id}`));
-					if (!breakdownResponse.ok) {
-						if (breakdownResponse.status === 404) {
-							return;
-						}
-						throw new Error("Failed to fetch breakdown");
-					}
-					const breakdownData = await breakdownResponse.json();
-
-					// Use scene_breakdowns (JSON format) to get the 'set' field
-					if (breakdownData.scene_breakdowns) {
-						setScenes(breakdownData.scene_breakdowns);
-						console.log("break-down------------- ", breakdownData.scene_breakdowns);
-					} else if (breakdownData.tsv_content) {
-						// Fallback to TSV parsing if scene_breakdowns not available
-						const parsedScenes = parseTSV(breakdownData.tsv_content);
-						setScenes(parsedScenes);
-						console.log("break-down (tsv)------------- ", parsedScenes);
-					}
-				}
-			} catch (error) {
-				console.error("Error fetching scenes:", error);
+	const fetchScenes = async () => {
+		try {
+			const scriptsResponse = await fetch(getApiUrl(`/api/${id}/script-list`));
+			if (!scriptsResponse.ok) {
+				throw new Error("Failed to fetch script list");
 			}
-		};
+			const scripts = await scriptsResponse.json();
+			const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
 
+			if (sortedScripts.length > 0) {
+				const masterScript = sortedScripts[sortedScripts.length - 1];
+				const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?project_id=${id}`));
+				if (!breakdownResponse.ok) {
+					if (breakdownResponse.status === 404) {
+						return;
+					}
+					throw new Error("Failed to fetch breakdown");
+				}
+				const breakdownData = await breakdownResponse.json();
+
+				// Use scene_breakdowns (JSON format) to get the 'set' field
+				if (breakdownData.scene_breakdowns) {
+					setScenes(breakdownData.scene_breakdowns);
+					console.log("break-down------------- ", breakdownData.scene_breakdowns);
+				} else if (breakdownData.tsv_content) {
+					// Fallback to TSV parsing if scene_breakdowns not available
+					const parsedScenes = parseTSV(breakdownData.tsv_content);
+					setScenes(parsedScenes);
+					console.log("break-down (tsv)------------- ", parsedScenes);
+				}
+			}
+		} catch (error) {
+			console.error("Error fetching scenes:", error);
+		}
+	};
+
+	useEffect(() => {
 		fetchScenes();
 	}, [id]);
 
@@ -421,16 +443,16 @@ const CastListNew = () => {
 		fetchLocations();
 	}, [id]);
 
-	function analyzeScenes(CharScenes) {
+	function analyzeScenes(CharSceneIds) {
 		const result = { total: 0, intCount: 0, extCount: 0, intExtCount: 0, locationGroupIds: new Set() };
-		if (!Array.isArray(CharScenes)) return result;
+		if (!Array.isArray(CharSceneIds)) return result;
 
-		result.total = CharScenes.length;
+		result.total = CharSceneIds.length;
 
 		scenes.forEach((scene) => {
-			// Support both JSON format (scene_number) and TSV format (Scene Number)
-			const sceneNumber = scene.scene_number || scene["Scene Number"];
-			if (CharScenes.includes(sceneNumber)) {
+			// Match by scene id (not scene_number)
+			const sceneId = String(scene.id !== undefined ? scene.id : "");
+			if (CharSceneIds.includes(sceneId)) {
 				// Support both JSON format (int_ext) and TSV format (Int./Ext.)
 				const intExt = (scene.int_ext || scene["Int./Ext."] || "").toUpperCase();
 				if (intExt.includes("INT.") && intExt.includes("EXT.")) {
@@ -572,6 +594,9 @@ const CastListNew = () => {
 			const jsonData = await refreshResponse.json();
 			setCastData(jsonData);
 
+			// Re-fetch breakdown to update scene mappings
+			await fetchScenes();
+
 			setExpandedOptions((prev) => {
 				const next = new Set(prev);
 				next.add(jsonData.cast_list.length - 1);
@@ -613,6 +638,9 @@ const CastListNew = () => {
 			const jsonData = await refreshResponse.json();
 			setCastData(jsonData);
 
+			// Re-fetch breakdown to update scene mappings
+			await fetchScenes();
+
 			const defaultExpandedOptions = new Set(jsonData.cast_list?.map((_, index) => index) || []);
 			setExpandedOptions(defaultExpandedOptions);
 		} catch (error) {
@@ -634,20 +662,15 @@ const CastListNew = () => {
 	const getData = (s, field) => {
 		var data = "";
 		const searchStr = String(s);
-		scenes.forEach((scene, idx) => {
-			// Support both JSON format (scene_number) and TSV format (Scene Number)
-			const sceneNumber = scene.scene_number || scene["Scene Number"];
-			// Also check by 'id' field or array index (what castlist stores as scene ID)
-			const sceneId = String(scene.id !== undefined ? scene.id : idx);
-			const arrayIndex = String(idx);
-
-			// Match by scene_number, id field, or array index
-			if (sceneNumber === searchStr || sceneId === searchStr || arrayIndex === searchStr) {
+		scenes.forEach((scene) => {
+			// Match only by scene id from the breakdown
+			const sceneId = String(scene.id !== undefined ? scene.id : "");
+			if (sceneId === searchStr) {
 				// Map field names between TSV and JSON formats
 				const fieldMap = {
 					"Scene Number": scene.scene_number || scene["Scene Number"],
 					"Int./Ext.": scene.int_ext || scene["Int./Ext."],
-					Location: scene.location || scene["Location"], // Use set first
+					Location: scene.set || scene.location || scene["Location"],
 					Time: scene.time || scene["Time"],
 					"Page Eighths": scene.page_eighths || scene["Page Eighths"],
 					Synopsis: scene.synopsis || scene["Synopsis"],
@@ -783,6 +806,9 @@ const CastListNew = () => {
 			}
 			const jsonData = await refreshResponse.json();
 			setCastData(jsonData);
+
+			// Re-fetch breakdown to update scene mappings
+			await fetchScenes();
 
 			alert(`Characters merged successfully! ${data.scenes_updated} scene(s) updated.`);
 		} catch (error) {
@@ -948,6 +974,9 @@ const CastListNew = () => {
 			const jsonData = await refreshResponse.json();
 			setCastData(jsonData);
 
+			// Re-fetch breakdown to update scene mappings
+			await fetchScenes();
+
 			alert(
 				`Character split successfully! ${data.scenes_to_char_1} scene(s) assigned to "${splitNewName1.trim().toUpperCase()}" and ${data.scenes_to_char_2} scene(s) assigned to "${splitNewName2.trim().toUpperCase()}".`,
 			);
@@ -972,8 +1001,8 @@ const CastListNew = () => {
 		if (selectedCharacters.size === 1) {
 			const idx = Array.from(selectedCharacters)[0];
 			const member = castData.cast_list[idx];
-			const sceneAnalysis = analyzeScenes(member.scenes || []);
-			deleteCastGroup(member.cast_id, member.character, sceneAnalysis.total);
+			const memberSceneCount = (castIdToSceneIds[String(member.cast_id)] || []).length;
+			deleteCastGroup(member.cast_id, member.character, memberSceneCount);
 		}
 		setShowRemoveCharModal(false);
 		setSelectedCharacters(new Set());
@@ -1104,8 +1133,11 @@ const CastListNew = () => {
 
 							{/* Character Cards */}
 							<div className="cln-cards-container">
-								{castData.cast_list.map((member, idx) => {
-									const sceneAnalysis = analyzeScenes(member.scenes || []);
+								{[...castData.cast_list].sort((a, b) => Number(a.cast_id) - Number(b.cast_id)).map((member, idx) => {
+									// Get scene IDs for this character from the scenes breakdown using cast_id
+									const memberSceneIds = castIdToSceneIds[String(member.cast_id)] || [];
+									const memberSceneIdsStr = memberSceneIds.map(String);
+									const sceneAnalysis = analyzeScenes(memberSceneIdsStr);
 									const locationArray = Array.from(sceneAnalysis.locationGroupIds);
 									const isCollapsed = collapsedCards.has(idx);
 									const isSelected = selectedCharacters.has(idx);
@@ -1136,9 +1168,8 @@ const CastListNew = () => {
 
 													{/* Character Info */}
 													<div className={`cln-character-info ${isCollapsed ? "cln-character-info-inline" : ""}`}>
-														<span className="cln-cast-id-box">{idx + 1}</span>
+														<span className="cln-cast-id-box">{member.cast_id}</span>
 														<span className="cln-character-name">{member.character}</span>
-														<span className="cln-extra-id">#{member.cast_id}</span>
 													</div>
 
 													{/* Collapse Button - only show here when expanded */}
@@ -1556,7 +1587,7 @@ const CastListNew = () => {
 																	</div>
 																)
 															) : // Scenes Table
-															(member.scenes || []).length > 0 ? (
+															memberSceneIds.length > 0 ? (
 																<table className="cln-data-table">
 																	<thead>
 																		<tr>
@@ -1569,7 +1600,7 @@ const CastListNew = () => {
 																		</tr>
 																	</thead>
 																	<tbody>
-																		{(member.scenes || []).map((s, i) => {
+																		{memberSceneIds.map((s, i) => {
 																			const sceneNo = getData(s, "Scene Number");
 																			const intExt = getData(s, "Int./Ext.");
 																			const location = getData(s, "Location");

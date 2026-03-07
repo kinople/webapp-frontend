@@ -1473,7 +1473,6 @@ const Locations = () => {
 													<div className={`loc-location-info ${isCollapsed ? "loc-location-info-inline" : ""}`}>
 														<span className="loc-location-id-box">{idx + 1}</span>
 														<span className="loc-location-name">{location.location}</span>
-														<span className="loc-extra-id">#{location.location_id}</span>
 													</div>
 
 													{/* Collapse Button - only show here when expanded */}
