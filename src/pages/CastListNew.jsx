@@ -1133,49 +1133,99 @@ const CastListNew = () => {
 
 							{/* Character Cards */}
 							<div className="cln-cards-container">
-								{[...castData.cast_list].sort((a, b) => Number(a.cast_id) - Number(b.cast_id)).map((member, idx) => {
-									// Get scene IDs for this character from the scenes breakdown using cast_id
-									const memberSceneIds = castIdToSceneIds[String(member.cast_id)] || [];
-									const memberSceneIdsStr = memberSceneIds.map(String);
-									const sceneAnalysis = analyzeScenes(memberSceneIdsStr);
-									const locationArray = Array.from(sceneAnalysis.locationGroupIds);
-									const isCollapsed = collapsedCards.has(idx);
-									const isSelected = selectedCharacters.has(idx);
-									const showOptions = expandedOptions.has(idx);
-									const showScenes = expandedScenes.has(idx);
+								{[...castData.cast_list]
+									.sort((a, b) => Number(a.cast_id) - Number(b.cast_id))
+									.map((member, idx) => {
+										// Get scene IDs for this character from the scenes breakdown using cast_id
+										const memberSceneIds = castIdToSceneIds[String(member.cast_id)] || [];
+										const memberSceneIdsStr = memberSceneIds.map(String);
+										const sceneAnalysis = analyzeScenes(memberSceneIdsStr);
+										const locationArray = Array.from(sceneAnalysis.locationGroupIds);
+										const isCollapsed = collapsedCards.has(idx);
+										const isSelected = selectedCharacters.has(idx);
+										const showOptions = expandedOptions.has(idx);
+										const showScenes = expandedScenes.has(idx);
 
-									// locationArray already contains unique location IDs from sceneAnalysis
+										// locationArray already contains unique location IDs from sceneAnalysis
 
-									// Determine lock status text for compressed view
-									const hasLockedOption =
-										member.locked !== -1 && member.locked !== "-1" && member.locked !== null && member.locked !== undefined;
-									const lockStatusText = hasLockedOption ? "Option locked" : "Option not locked";
+										// Determine lock status text for compressed view
+										const hasLockedOption =
+											member.locked !== -1 && member.locked !== "-1" && member.locked !== null && member.locked !== undefined;
+										const lockStatusText = hasLockedOption ? "Option locked" : "Option not locked";
 
-									return (
-										<div key={idx} className={`cln-character-card ${isCollapsed ? "cln-collapsed" : ""}`}>
-											{/* Card Header - Compressed View when collapsed */}
-											<div className={`cln-card-header ${isCollapsed ? "cln-card-header-compressed" : ""}`}>
-												<div className="cln-card-header-left">
-													{/* Character Checkbox - Only show when in selection mode */}
-													{characterSelectionMode && (
-														<div
-															className={`cln-character-checkbox ${isSelected ? "" : "cln-unchecked"}`}
-															onClick={() => toggleCharacterSelection(idx)}
-														>
-															{isSelected ? <PiCheckSquareFill /> : <PiSquare />}
+										return (
+											<div key={idx} className={`cln-character-card ${isCollapsed ? "cln-collapsed" : ""}`}>
+												{/* Card Header - Compressed View when collapsed */}
+												<div className={`cln-card-header ${isCollapsed ? "cln-card-header-compressed" : ""}`}>
+													<div className="cln-card-header-left">
+														{/* Character Checkbox - Only show when in selection mode */}
+														{characterSelectionMode && (
+															<div
+																className={`cln-character-checkbox ${isSelected ? "" : "cln-unchecked"}`}
+																onClick={() => toggleCharacterSelection(idx)}
+															>
+																{isSelected ? <PiCheckSquareFill /> : <PiSquare />}
+															</div>
+														)}
+
+														{/* Character Info */}
+														<div className={`cln-character-info ${isCollapsed ? "cln-character-info-inline" : ""}`}>
+															<span className="cln-cast-id-box">{member.cast_id}</span>
+															<span className="cln-character-name">{member.character}</span>
+														</div>
+
+														{/* Collapse Button - only show here when expanded */}
+														{!isCollapsed && (
+															<button
+																className={`cln-collapse-btn ${isCollapsed ? "cln-collapsed" : ""}`}
+																onClick={() => {
+																	setCollapsedCards((prev) => {
+																		const next = new Set(prev);
+																		if (next.has(idx)) next.delete(idx);
+																		else next.add(idx);
+																		return next;
+																	});
+																}}
+															>
+																{isCollapsed ? <PiCaretDown /> : <PiCaretUp />}
+															</button>
+														)}
+													</div>
+
+													{/* Compressed Stats - Only show when collapsed */}
+													{isCollapsed && (
+														<div className="cln-compressed-stats">
+															<div className="cln-compressed-divider"></div>
+															<div className="cln-compressed-stat-item">
+																<PiFilmSlateFill className="cln-compressed-icon" />
+																<span className="cln-compressed-stat-text">
+																	<span className="cln-compressed-value">{sceneAnalysis.total}</span>
+																	<span className="cln-compressed-label"> : Scenes</span>
+																</span>
+															</div>
+															<div className="cln-compressed-divider"></div>
+															<div className="cln-compressed-stat-item">
+																<PiMapPinFill className="cln-compressed-icon" />
+																<span className="cln-compressed-stat-text">
+																	<span className="cln-compressed-value">{locationArray.length}</span>
+																	<span className="cln-compressed-label"> : Locations</span>
+																</span>
+															</div>
+															<div className="cln-compressed-divider"></div>
+															<div className="cln-compressed-stat-item">
+																<PiUserFill className="cln-compressed-icon" />
+																<span className="cln-compressed-stat-text cln-compressed-label">
+																	{lockStatusText}
+																</span>
+															</div>
+															<div className="cln-compressed-divider"></div>
 														</div>
 													)}
 
-													{/* Character Info */}
-													<div className={`cln-character-info ${isCollapsed ? "cln-character-info-inline" : ""}`}>
-														<span className="cln-cast-id-box">{member.cast_id}</span>
-														<span className="cln-character-name">{member.character}</span>
-													</div>
-
-													{/* Collapse Button - only show here when expanded */}
-													{!isCollapsed && (
+													{/* Collapse/Expand Button - Right side when collapsed */}
+													{isCollapsed && (
 														<button
-															className={`cln-collapse-btn ${isCollapsed ? "cln-collapsed" : ""}`}
+															className="cln-collapse-btn cln-collapse-btn-right"
 															onClick={() => {
 																setCollapsedCards((prev) => {
 																	const next = new Set(prev);
@@ -1185,394 +1235,421 @@ const CastListNew = () => {
 																});
 															}}
 														>
-															{isCollapsed ? <PiCaretDown /> : <PiCaretUp />}
+															<PiCaretDown />
 														</button>
+													)}
+
+													{/* Card Header Actions */}
+													{!isCollapsed && (
+														<div className="cln-card-header-actions">
+															<button
+																className="cln-btn-add-option"
+																onClick={() => {
+																	setSelectedCharacterIndex(member.cast_id);
+																	setShowAddOptionModal(true);
+																	setOptionForm({
+																		actorName: "",
+																		media: "",
+																		contact: "",
+																		availableDates: [],
+																		details: "",
+																		notes: "",
+																	});
+																}}
+															>
+																<PiPlusBold />
+																Add Option
+															</button>
+
+															<button
+																className={`cln-btn-remove-option ${isSelectingMode.has(idx) ? "cln-active" : ""}`}
+																onClick={() => {
+																	if (!isSelectingMode.has(idx)) {
+																		setIsSelectingMode((prev) => new Set(prev).add(idx));
+																	} else {
+																		const selectedForCharacter = Array.from(selectedOptions)
+																			.filter((key) => key.startsWith(`${idx}-`))
+																			.map((key) => key.split("-")[1]);
+
+																		if (selectedForCharacter.length === 0) {
+																			alert("Please select options to remove");
+																			return;
+																		}
+
+																		if (
+																			window.confirm(
+																				`Are you sure you want to remove ${selectedForCharacter.length} selected option(s)?`,
+																			)
+																		) {
+																			selectedForCharacter.forEach((optId) => {
+																				removeActorOption(idx, optId);
+																			});
+																			setSelectedOptions((prev) => {
+																				const next = new Set(prev);
+																				selectedForCharacter.forEach((optId) => {
+																					next.delete(`${idx}-${optId}`);
+																				});
+																				return next;
+																			});
+																			setIsSelectingMode((prev) => {
+																				const next = new Set(prev);
+																				next.delete(idx);
+																				return next;
+																			});
+																		}
+																	}
+																}}
+															>
+																<PiMinusCircle />
+																{!isSelectingMode.has(idx)
+																	? "Remove Option"
+																	: `Remove Selected (${
+																			Array.from(selectedOptions).filter((key) =>
+																				key.startsWith(`${idx}-`),
+																			).length
+																		})`}
+															</button>
+														</div>
 													)}
 												</div>
 
-												{/* Compressed Stats - Only show when collapsed */}
-												{isCollapsed && (
-													<div className="cln-compressed-stats">
-														<div className="cln-compressed-divider"></div>
-														<div className="cln-compressed-stat-item">
-															<PiFilmSlateFill className="cln-compressed-icon" />
-															<span className="cln-compressed-stat-text">
-																<span className="cln-compressed-value">{sceneAnalysis.total}</span>
-																<span className="cln-compressed-label"> : Scenes</span>
-															</span>
-														</div>
-														<div className="cln-compressed-divider"></div>
-														<div className="cln-compressed-stat-item">
-															<PiMapPinFill className="cln-compressed-icon" />
-															<span className="cln-compressed-stat-text">
-																<span className="cln-compressed-value">{locationArray.length}</span>
-																<span className="cln-compressed-label"> : Locations</span>
-															</span>
-														</div>
-														<div className="cln-compressed-divider"></div>
-														<div className="cln-compressed-stat-item">
-															<PiUserFill className="cln-compressed-icon" />
-															<span className="cln-compressed-stat-text cln-compressed-label">
-																{lockStatusText}
-															</span>
-														</div>
-														<div className="cln-compressed-divider"></div>
-													</div>
-												)}
-
-												{/* Collapse/Expand Button - Right side when collapsed */}
-												{isCollapsed && (
-													<button
-														className="cln-collapse-btn cln-collapse-btn-right"
-														onClick={() => {
-															setCollapsedCards((prev) => {
-																const next = new Set(prev);
-																if (next.has(idx)) next.delete(idx);
-																else next.add(idx);
-																return next;
-															});
-														}}
-													>
-														<PiCaretDown />
-													</button>
-												)}
-
-												{/* Card Header Actions */}
+												{/* Card Body */}
 												{!isCollapsed && (
-													<div className="cln-card-header-actions">
-														<button
-															className="cln-btn-add-option"
-															onClick={() => {
-																setSelectedCharacterIndex(idx);
-																setShowAddOptionModal(true);
-																setOptionForm({
-																	actorName: "",
-																	media: "",
-																	contact: "",
-																	availableDates: [],
-																	details: "",
-																	notes: "",
-																});
-															}}
-														>
-															<PiPlusBold />
-															Add Option
-														</button>
-
-														<button
-															className={`cln-btn-remove-option ${isSelectingMode.has(idx) ? "cln-active" : ""}`}
-															onClick={() => {
-																if (!isSelectingMode.has(idx)) {
-																	setIsSelectingMode((prev) => new Set(prev).add(idx));
-																} else {
-																	const selectedForCharacter = Array.from(selectedOptions)
-																		.filter((key) => key.startsWith(`${idx}-`))
-																		.map((key) => key.split("-")[1]);
-
-																	if (selectedForCharacter.length === 0) {
-																		alert("Please select options to remove");
-																		return;
-																	}
-
-																	if (
-																		window.confirm(
-																			`Are you sure you want to remove ${selectedForCharacter.length} selected option(s)?`,
-																		)
-																	) {
-																		selectedForCharacter.forEach((optId) => {
-																			removeActorOption(idx, optId);
-																		});
-																		setSelectedOptions((prev) => {
-																			const next = new Set(prev);
-																			selectedForCharacter.forEach((optId) => {
-																				next.delete(`${idx}-${optId}`);
-																			});
-																			return next;
-																		});
-																		setIsSelectingMode((prev) => {
-																			const next = new Set(prev);
-																			next.delete(idx);
-																			return next;
-																		});
-																	}
-																}
-															}}
-														>
-															<PiMinusCircle />
-															{!isSelectingMode.has(idx)
-																? "Remove Option"
-																: `Remove Selected (${
-																		Array.from(selectedOptions).filter((key) => key.startsWith(`${idx}-`))
-																			.length
-																	})`}
-														</button>
-													</div>
-												)}
-											</div>
-
-											{/* Card Body */}
-											{!isCollapsed && (
-												<div className="cln-card-body">
-													{/* Left Panel */}
-													<div className="cln-left-panel">
-														{/* Stats Bar */}
-														<div className="cln-stats-bar">
-															<div className="cln-stat-item">
-																<span className="cln-stat-label">Scenes:</span>
-																<span className="cln-stat-value">{sceneAnalysis.total}</span>
-															</div>
-															<div className="cln-stat-item">
-																<span className="cln-stat-label">Int:</span>
-																<span className="cln-stat-value">{sceneAnalysis.intCount}</span>
-															</div>
-															<div className="cln-stat-item">
-																<span className="cln-stat-label">Ext:</span>
-																<span className="cln-stat-value">{sceneAnalysis.extCount}</span>
-															</div>
-															<div className="cln-stat-item">
-																<span className="cln-stat-label">Int/Ext:</span>
-																<span className="cln-stat-value">{sceneAnalysis.intExtCount}</span>
-															</div>
-														</div>
-
-														{/* Sets Group - shows unique set IDs */}
-														<div className="cln-locations-section">
-															<span className="cln-section-title">Sets </span>
-															<div className="cln-location-badges-container">
-																<div className="cln-location-badges">
-																	{locationArray.length > 0 ? (
-																		locationArray.map((locationName, i) => {
-																			const locationId = locationMap[locationName] || locationName;
-																			return (
-																				<div
-																					key={i}
-																					className="cln-location-badge"
-																					title={locationName}
-																				>
-																					{locationId}
-																				</div>
-																			);
-																		})
-																	) : (
-																		<span className="cln-empty-badge">No locations</span>
-																	)}
+													<div className="cln-card-body">
+														{/* Left Panel */}
+														<div className="cln-left-panel">
+															{/* Stats Bar */}
+															<div className="cln-stats-bar">
+																<div className="cln-stat-item">
+																	<span className="cln-stat-label">Scenes:</span>
+																	<span className="cln-stat-value">{sceneAnalysis.total}</span>
+																</div>
+																<div className="cln-stat-item">
+																	<span className="cln-stat-label">Int:</span>
+																	<span className="cln-stat-value">{sceneAnalysis.intCount}</span>
+																</div>
+																<div className="cln-stat-item">
+																	<span className="cln-stat-label">Ext:</span>
+																	<span className="cln-stat-value">{sceneAnalysis.extCount}</span>
+																</div>
+																<div className="cln-stat-item">
+																	<span className="cln-stat-label">Int/Ext:</span>
+																	<span className="cln-stat-value">{sceneAnalysis.intExtCount}</span>
 																</div>
 															</div>
-														</div>
 
-														{/* View Buttons */}
-														<div className="cln-view-buttons">
-															<button
-																className={`cln-btn-view ${
-																	showOptions ? "cln-btn-view-primary" : "cln-btn-view-outline"
-																}`}
-																onClick={() => {
-																	setExpandedOptions((p) => {
-																		const n = new Set(p);
-																		if (n.has(idx)) n.delete(idx);
-																		else n.add(idx);
-																		return n;
-																	});
-																	setExpandedScenes((p) => {
-																		const n = new Set(p);
-																		n.delete(idx);
-																		return n;
-																	});
-																}}
-															>
-																View Options
-															</button>
-
-															<button
-																className={`cln-btn-view ${
-																	showScenes ? "cln-btn-view-primary" : "cln-btn-view-outline"
-																}`}
-																onClick={() => {
-																	setExpandedScenes((p) => {
-																		const n = new Set(p);
-																		if (n.has(idx)) n.delete(idx);
-																		else n.add(idx);
-																		return n;
-																	});
-																	setExpandedOptions((p) => {
-																		const n = new Set(p);
-																		n.delete(idx);
-																		return n;
-																	});
-																}}
-															>
-																View Scenes
-															</button>
-														</div>
-													</div>
-
-													{/* Right Panel */}
-													<div className="cln-right-panel">
-														{/* Table Header Bar - Only show for Options view */}
-														{!showScenes && (
-															<div className="cln-table-header-bar">
-																{isSelectingMode.has(idx) && (
-																	<div className="cln-table-header-cell" style={{ width: 50 }}></div>
-																)}
-																<div className="cln-table-header-cell cln-col-sno">S.No</div>
-																<div className="cln-table-header-cell cln-col-actor">Actor Name</div>
-																<div className="cln-table-header-cell cln-col-media">Media</div>
-																<div className="cln-table-header-cell cln-col-contact">Contact</div>
-																<div className="cln-table-header-cell cln-col-details">Details</div>
-																<div className="cln-table-header-cell cln-col-notes">Notes</div>
-																<div className="cln-table-header-cell cln-col-dates">Dates</div>
-																<div className="cln-table-header-cell cln-col-lock">Lock</div>
-															</div>
-														)}
-
-														{/* Table Content */}
-														<div className="cln-table-content">
-															{!showScenes ? (
-																// Options Table
-																member.cast_options && Object.keys(member.cast_options).length > 0 ? (
-																	<table className="cln-data-table">
-																		<tbody>
-																			{Object.entries(member.cast_options).map(([optId, opt], i) => {
-																				const key = `${idx}-${optId}`;
-																				const locked =
-																					member.locked === optId ||
-																					member.locked === parseInt(optId) ||
-																					String(member.locked) === optId;
-																				const hasAnyLocked =
-																					member.locked !== -1 &&
-																					member.locked !== "-1" &&
-																					member.locked !== null &&
-																					member.locked !== undefined;
-																				const otherLocked = hasAnyLocked && !locked;
-
-																				const ActorName = getOptionField(opt, [
-																					"actor_name",
-																					"location",
-																					"location_name",
-																					"name",
-																					"Location Name",
-																					"place",
-																				]);
-																				const media = getOptionField(opt, [
-																					"media",
-																					"media_links",
-																					"links",
-																					"photos",
-																					"mediaLink",
-																					"mediaLinks",
-																					"actorName",
-																				]);
-																				const contact = getOptionField(opt, [
-																					"contact",
-																					"addr",
-																					"locationAddress",
-																					"location_address",
-																					"Address",
-																				]);
-																				const details = getOptionField(opt, [
-																					"details",
-																					"gmap_pin",
-																					"gmapPin",
-																					"gmap_link",
-																					"google_map",
-																					"google_map_link",
-																				]);
-																				const notes = getOptionField(opt, ["notes"]);
-																				const dates =
-																					opt.available_dates || opt.availableDates || [];
-																				const formatDate = (dateStr) => {
-																					const d = new Date(dateStr);
-																					return d.toLocaleDateString("en-US", {
-																						month: "short",
-																						day: "numeric",
-																					});
-																				};
-																				const datesDisplay =
-																					Array.isArray(dates) && dates.length > 0
-																						? dates.length <= 3
-																							? dates.map(formatDate).join(", ")
-																							: `${dates
-																									.slice(0, 2)
-																									.map(formatDate)
-																									.join(", ")} +${
-																									dates.length - 2
-																								} more`
-																						: "-";
-
+															{/* Sets Group - shows unique set IDs */}
+															<div className="cln-locations-section">
+																<span className="cln-section-title">Sets </span>
+																<div className="cln-location-badges-container">
+																	<div className="cln-location-badges">
+																		{locationArray.length > 0 ? (
+																			locationArray.map((locationName, i) => {
+																				const locationId =
+																					locationMap[locationName] || locationName;
 																				return (
-																					<tr
-																						key={optId}
-																						className={locked ? "cln-row-locked" : ""}
+																					<div
+																						key={i}
+																						className="cln-location-badge"
+																						title={locationName}
 																					>
-																						{isSelectingMode.has(idx) && (
-																							<td style={{ width: 50 }}>
-																								<input
-																									type="checkbox"
-																									className="cln-select-checkbox"
-																									checked={selectedOptions.has(key)}
-																									onChange={(e) => {
-																										setSelectedOptions((prev) => {
-																											const next = new Set(
-																												prev,
-																											);
-																											if (e.target.checked) {
-																												next.add(key);
-																											} else {
-																												next.delete(key);
-																											}
-																											return next;
-																										});
-																									}}
-																								/>
-																							</td>
-																						)}
-																						<td style={{ width: 70 }}>{i + 1}</td>
-																						<td style={{ width: 140 }}>{ActorName}</td>
-																						<td style={{ width: 90 }}>{media}</td>
-																						<td style={{ width: 110 }}>{contact}</td>
-																						<td style={{ width: 100 }}>{details}</td>
-																						<td style={{ width: 90 }}>{notes}</td>
-																						<td
-																							style={{ width: 90 }}
-																							title={
-																								Array.isArray(dates) && dates.length > 0
-																									? `Available dates:\n${dates.join(
-																											"\n",
-																										)}`
-																									: "No dates set"
-																							}
-																						>
-																							{datesDisplay}
-																						</td>
-																						<td>
-																							<button
-																								className={`cln-lock-btn ${
-																									locked ? "cln-locked" : ""
-																								} ${otherLocked ? "cln-disabled" : ""}`}
-																								onClick={() =>
-																									toggleLockOption(
-																										idx,
-																										optId,
-																										member.cast_id,
-																									)
-																								}
-																								disabled={otherLocked}
-																								title={
-																									locked
-																										? "Click to unlock"
-																										: otherLocked
-																											? "Another option is locked"
-																											: "Click to lock"
+																						{locationId}
+																					</div>
+																				);
+																			})
+																		) : (
+																			<span className="cln-empty-badge">No locations</span>
+																		)}
+																	</div>
+																</div>
+															</div>
+
+															{/* View Buttons */}
+															<div className="cln-view-buttons">
+																<button
+																	className={`cln-btn-view ${
+																		showOptions ? "cln-btn-view-primary" : "cln-btn-view-outline"
+																	}`}
+																	onClick={() => {
+																		setExpandedOptions((p) => {
+																			const n = new Set(p);
+																			if (n.has(idx)) n.delete(idx);
+																			else n.add(idx);
+																			return n;
+																		});
+																		setExpandedScenes((p) => {
+																			const n = new Set(p);
+																			n.delete(idx);
+																			return n;
+																		});
+																	}}
+																>
+																	View Options
+																</button>
+
+																<button
+																	className={`cln-btn-view ${
+																		showScenes ? "cln-btn-view-primary" : "cln-btn-view-outline"
+																	}`}
+																	onClick={() => {
+																		setExpandedScenes((p) => {
+																			const n = new Set(p);
+																			if (n.has(idx)) n.delete(idx);
+																			else n.add(idx);
+																			return n;
+																		});
+																		setExpandedOptions((p) => {
+																			const n = new Set(p);
+																			n.delete(idx);
+																			return n;
+																		});
+																	}}
+																>
+																	View Scenes
+																</button>
+															</div>
+														</div>
+
+														{/* Right Panel */}
+														<div className="cln-right-panel">
+															{/* Table Header Bar - Only show for Options view */}
+															{!showScenes && (
+																<div className="cln-table-header-bar">
+																	{isSelectingMode.has(idx) && (
+																		<div className="cln-table-header-cell" style={{ width: 50 }}></div>
+																	)}
+																	<div className="cln-table-header-cell cln-col-sno">S.No</div>
+																	<div className="cln-table-header-cell cln-col-actor">Actor Name</div>
+																	<div className="cln-table-header-cell cln-col-media">Media</div>
+																	<div className="cln-table-header-cell cln-col-contact">Contact</div>
+																	<div className="cln-table-header-cell cln-col-details">Details</div>
+																	<div className="cln-table-header-cell cln-col-notes">Notes</div>
+																	<div className="cln-table-header-cell cln-col-dates">Dates</div>
+																	<div className="cln-table-header-cell cln-col-lock">Lock</div>
+																</div>
+															)}
+
+															{/* Table Content */}
+															<div className="cln-table-content">
+																{!showScenes ? (
+																	// Options Table
+																	member.cast_options && Object.keys(member.cast_options).length > 0 ? (
+																		<table className="cln-data-table">
+																			<tbody>
+																				{Object.entries(member.cast_options).map(
+																					([optId, opt], i) => {
+																						const key = `${idx}-${optId}`;
+																						const locked =
+																							member.locked === optId ||
+																							member.locked === parseInt(optId) ||
+																							String(member.locked) === optId;
+																						const hasAnyLocked =
+																							member.locked !== -1 &&
+																							member.locked !== "-1" &&
+																							member.locked !== null &&
+																							member.locked !== undefined;
+																						const otherLocked = hasAnyLocked && !locked;
+
+																						const ActorName = getOptionField(opt, [
+																							"actor_name",
+																							"location",
+																							"location_name",
+																							"name",
+																							"Location Name",
+																							"place",
+																						]);
+																						const media = getOptionField(opt, [
+																							"media",
+																							"media_links",
+																							"links",
+																							"photos",
+																							"mediaLink",
+																							"mediaLinks",
+																							"actorName",
+																						]);
+																						const contact = getOptionField(opt, [
+																							"contact",
+																							"addr",
+																							"locationAddress",
+																							"location_address",
+																							"Address",
+																						]);
+																						const details = getOptionField(opt, [
+																							"details",
+																							"gmap_pin",
+																							"gmapPin",
+																							"gmap_link",
+																							"google_map",
+																							"google_map_link",
+																						]);
+																						const notes = getOptionField(opt, ["notes"]);
+																						const dates =
+																							opt.available_dates ||
+																							opt.availableDates ||
+																							[];
+																						const formatDate = (dateStr) => {
+																							const d = new Date(dateStr);
+																							return d.toLocaleDateString("en-US", {
+																								month: "short",
+																								day: "numeric",
+																							});
+																						};
+																						const datesDisplay =
+																							Array.isArray(dates) && dates.length > 0
+																								? dates.length <= 3
+																									? dates.map(formatDate).join(", ")
+																									: `${dates
+																											.slice(0, 2)
+																											.map(formatDate)
+																											.join(", ")} +${
+																											dates.length - 2
+																										} more`
+																								: "-";
+
+																						return (
+																							<tr
+																								key={optId}
+																								className={
+																									locked ? "cln-row-locked" : ""
 																								}
 																							>
-																								{locked ? (
-																									<PiLockSimple />
-																								) : (
-																									<PiLockSimpleOpen />
+																								{isSelectingMode.has(idx) && (
+																									<td style={{ width: 50 }}>
+																										<input
+																											type="checkbox"
+																											className="cln-select-checkbox"
+																											checked={selectedOptions.has(
+																												key,
+																											)}
+																											onChange={(e) => {
+																												setSelectedOptions(
+																													(prev) => {
+																														const next =
+																															new Set(
+																																prev,
+																															);
+																														if (
+																															e
+																																.target
+																																.checked
+																														) {
+																															next.add(
+																																key,
+																															);
+																														} else {
+																															next.delete(
+																																key,
+																															);
+																														}
+																														return next;
+																													},
+																												);
+																											}}
+																										/>
+																									</td>
 																								)}
-																								{locked ? "Locked" : "Lock"}
-																							</button>
-																						</td>
+																								<td style={{ width: 70 }}>{i + 1}</td>
+																								<td style={{ width: 140 }}>
+																									{ActorName}
+																								</td>
+																								<td style={{ width: 90 }}>{media}</td>
+																								<td style={{ width: 110 }}>
+																									{contact}
+																								</td>
+																								<td style={{ width: 100 }}>
+																									{details}
+																								</td>
+																								<td style={{ width: 90 }}>{notes}</td>
+																								<td
+																									style={{ width: 90 }}
+																									title={
+																										Array.isArray(dates) &&
+																										dates.length > 0
+																											? `Available dates:\n${dates.join(
+																													"\n",
+																												)}`
+																											: "No dates set"
+																									}
+																								>
+																									{datesDisplay}
+																								</td>
+																								<td>
+																									<button
+																										className={`cln-lock-btn ${
+																											locked
+																												? "cln-locked"
+																												: ""
+																										} ${otherLocked ? "cln-disabled" : ""}`}
+																										onClick={() =>
+																											toggleLockOption(
+																												member.cast_id,
+																												optId,
+																												member.cast_id,
+																											)
+																										}
+																										disabled={otherLocked}
+																										title={
+																											locked
+																												? "Click to unlock"
+																												: otherLocked
+																													? "Another option is locked"
+																													: "Click to lock"
+																										}
+																									>
+																										{locked ? (
+																											<PiLockSimple />
+																										) : (
+																											<PiLockSimpleOpen />
+																										)}
+																										{locked ? "Locked" : "Lock"}
+																									</button>
+																								</td>
+																							</tr>
+																						);
+																					},
+																				)}
+																			</tbody>
+																		</table>
+																	) : (
+																		<div className="cln-empty-state">
+																			<PiFolderPlus className="cln-empty-icon" />
+																			<span className="cln-empty-text">
+																				No Data added for this Character
+																			</span>
+																		</div>
+																	)
+																) : // Scenes Table
+																memberSceneIds.length > 0 ? (
+																	<table className="cln-data-table">
+																		<thead>
+																			<tr>
+																				<th>Scene No</th>
+																				<th>Int./Ext.</th>
+																				<th>Location</th>
+																				<th>Time</th>
+																				<th>Synopsis</th>
+																				<th>Characters</th>
+																			</tr>
+																		</thead>
+																		<tbody>
+																			{memberSceneIds.map((s, i) => {
+																				const sceneNo = getData(s, "Scene Number");
+																				const intExt = getData(s, "Int./Ext.");
+																				const location = getData(s, "Location");
+																				const time = getData(s, "Time");
+																				const synopsis = getData(s, "Synopsis");
+																				const characters = sceneChars[s]
+																					? sceneChars[s].join(", ")
+																					: "N/A";
+
+																				return (
+																					<tr key={i}>
+																						<td>{sceneNo !== "N/A" ? sceneNo : i + 1}</td>
+																						<td>{intExt}</td>
+																						<td>{location}</td>
+																						<td>{time}</td>
+																						<td>{synopsis}</td>
+																						<td>{characters}</td>
 																					</tr>
 																				);
 																			})}
@@ -1582,60 +1659,17 @@ const CastListNew = () => {
 																	<div className="cln-empty-state">
 																		<PiFolderPlus className="cln-empty-icon" />
 																		<span className="cln-empty-text">
-																			No Data added for this Character
+																			No scenes listed for this Character
 																		</span>
 																	</div>
-																)
-															) : // Scenes Table
-															memberSceneIds.length > 0 ? (
-																<table className="cln-data-table">
-																	<thead>
-																		<tr>
-																			<th>Scene No</th>
-																			<th>Int./Ext.</th>
-																			<th>Location</th>
-																			<th>Time</th>
-																			<th>Synopsis</th>
-																			<th>Characters</th>
-																		</tr>
-																	</thead>
-																	<tbody>
-																		{memberSceneIds.map((s, i) => {
-																			const sceneNo = getData(s, "Scene Number");
-																			const intExt = getData(s, "Int./Ext.");
-																			const location = getData(s, "Location");
-																			const time = getData(s, "Time");
-																			const synopsis = getData(s, "Synopsis");
-																			const characters = sceneChars[s]
-																				? sceneChars[s].join(", ")
-																				: "N/A";
-
-																			return (
-																				<tr key={i}>
-																					<td>{sceneNo !== "N/A" ? sceneNo : i + 1}</td>
-																					<td>{intExt}</td>
-																					<td>{location}</td>
-																					<td>{time}</td>
-																					<td>{synopsis}</td>
-																					<td>{characters}</td>
-																				</tr>
-																			);
-																		})}
-																	</tbody>
-																</table>
-															) : (
-																<div className="cln-empty-state">
-																	<PiFolderPlus className="cln-empty-icon" />
-																	<span className="cln-empty-text">No scenes listed for this Character</span>
-																</div>
-															)}
+																)}
+															</div>
 														</div>
 													</div>
-												</div>
-											)}
-										</div>
-									);
-								})}
+												)}
+											</div>
+										);
+									})}
 							</div>
 						</>
 					)}
