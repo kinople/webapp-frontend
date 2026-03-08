@@ -536,74 +536,75 @@ const ManageShootDays = () => {
     const loadData = async () => {
         setIsLoading(true);
         try {
-            // Fetch Shoot Days
-            const daysres = await fetch(`/api/projects/${id}/shoot-days`);
-            if (!daysres.ok) throw new Error("Failed to fetch shoot days");
-            const days = await daysres.json();
-            setShootDays(days);
+            const token = getToken();
 
-            // Fetch Project Details
-            try {
-                const token = getToken();
-                const projRes = await fetch(`/api/project-name/${id}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (projRes.ok) {
-                    const projData = await projRes.json();
-                    setProject({
-                        title: projData.projectName || projData.name || `Project ${id}`,
-                        productionCompany: 'Production Company', // Placeholder as API might not have this yet
-                        totalDays: days.length
-                    });
-                }
-            } catch (e) {
+            const pDays = fetch(getApiUrl(`/api/projects/${id}/shoot-days`)).then(async res => {
+                if (!res.ok) throw new Error("Failed to fetch shoot days");
+                const days = await res.json();
+                setShootDays(days);
+                return days;
+            });
+
+            const pProj = fetch(getApiUrl(`/api/project-name/${id}`), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(async res => {
+                if (res.ok) return await res.json();
+                return null;
+            }).catch(e => {
                 console.error("Failed to fetch project info", e);
-            }
+                return null;
+            });
 
-            // Fetch Crew List (Source of Truth)
-            const crewRes = await fetch(`/api/projects/${id}/crewlist`);
-            if (crewRes.ok) {
-                const crewData = await crewRes.json();
-                setCrewList(crewData);
-            }
+            const pCrew = fetch(getApiUrl(`/api/projects/${id}/crewlist`)).then(async res => {
+                if (res.ok) {
+                    const crewData = await res.json();
+                    setCrewList(crewData);
+                }
+            }).catch(e => console.error("Failed to fetch crew", e));
 
-            // Fetch Cast List
-            const castRes = await fetch(`/api/${id}/cast-list`);
-            if (castRes.ok) {
-                const castData = await castRes.json();
-                setCastList(castData.cast_list || []);
-            }
+            const pCast = fetch(getApiUrl(`/api/${id}/cast-list`)).then(async res => {
+                if (res.ok) {
+                    const castData = await res.json();
+                    setCastList(castData.cast_list || []);
+                }
+            }).catch(e => console.error("Failed to fetch cast", e));
 
-            // Fetch Scripts & Breakdown
-            const scriptsRes = await fetch(`/api/${id}/script-list`);
-            if (scriptsRes.ok) {
-                const scripts = await scriptsRes.json();
-                if (scripts.length > 0) {
-                    // Get latest script (first in list usually, but sort to be safe)
-                    const latestScript = scripts.sort((a, b) => (b.version || 0) - (a.version || 0))[0];
-                    if (latestScript && latestScript.id) {
-                        const bdRes = await fetch(`/api/fetch-breakdown?project_id=${id}`);
-                        if (bdRes.ok) {
-                            const bdData = await bdRes.json();
-                            if (bdData.scene_breakdowns) {
-                                setBreakdownScenes(bdData.scene_breakdowns);
+            const pScripts = fetch(getApiUrl(`/api/${id}/script-list`)).then(async res => {
+                if (res.ok) {
+                    const scripts = await res.json();
+                    if (scripts.length > 0) {
+                        const latestScript = scripts.sort((a, b) => (b.version || 0) - (a.version || 0))[0];
+                        if (latestScript && latestScript.id) {
+                            const bdRes = await fetch(getApiUrl(`/api/fetch-breakdown?project_id=${id}`));
+                            if (bdRes.ok) {
+                                const bdData = await bdRes.json();
+                                if (bdData.scene_breakdowns) {
+                                    setBreakdownScenes(bdData.scene_breakdowns);
+                                }
                             }
                         }
                     }
                 }
-            }
+            }).catch(e => console.error("Failed to fetch scripts", e));
 
-            // Fetch Schedules
-            try {
-                const schedRes = await fetch(`/api/${id}/schedules`);
-                if (schedRes.ok) {
-                    const schedData = await schedRes.json();
+            const pSched = fetch(getApiUrl(`/api/${id}/schedules`)).then(async res => {
+                if (res.ok) {
+                    const schedData = await res.json();
                     setSchedules(schedData.schedules || []);
                 }
-            } catch (e) {
-                console.error("Failed to fetch schedules", e);
-            }
+            }).catch(e => console.error("Failed to fetch schedules", e));
 
+            const [daysResult, projResult] = await Promise.all([
+                pDays, pProj, pCrew, pCast, pScripts, pSched
+            ]);
+
+            if (projResult) {
+                setProject({
+                    title: projResult.projectName || projResult.name || `Project ${id}`,
+                    productionCompany: 'Production Company',
+                    totalDays: daysResult ? daysResult.length : 0
+                });
+            }
             // if (days.length > 0 && !selectedDayId) {
             //     handleDaySelect(days[0]);
             // }
@@ -628,11 +629,11 @@ const ManageShootDays = () => {
             safety_hotline: { name: '', phone: '' },
             instructions: ['']
         };
-        
+
         const freshMeals = {
             breakfast: '', lunch: '', dinner: '', snacks: ''
         };
-        
+
         setFormData(prev => ({
             ...prev,
             ...day,
@@ -657,7 +658,7 @@ const ManageShootDays = () => {
 
     const handleCreateDay = async () => {
         try {
-            const res = await fetch(`/api/projects/${id}/shoot-days`, {
+            const res = await fetch(getApiUrl(`/api/projects/${id}/shoot-days`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -685,7 +686,7 @@ const ManageShootDays = () => {
         if (!selectedDayId) return;
         setIsSaving(true);
         try {
-            const res = await fetch(`/api/shoot-days/${selectedDayId}?project_id=${id}`, {
+            const res = await fetch(getApiUrl(`/api/shoot-days/${selectedDayId}?project_id=${id}`), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
@@ -877,7 +878,7 @@ const ManageShootDays = () => {
             // Iterate through available schedules to find matching date
             for (const sched of schedules) {
                 // Fetch full schedule details
-                const res = await fetch(`/api/${id}/schedule/${sched.id}`);
+                const res = await fetch(getApiUrl(`/api/${id}/schedule/${sched.id}`));
                 if (res.ok) {
                     const fullSched = await res.json();
                     const scheduleByDay = fullSched.schedule?.schedule_by_day;
@@ -991,7 +992,7 @@ const ManageShootDays = () => {
             try {
                 // Optimization: if we already fetched detailed schedule, use it?
                 // For now, fetch to be safe/simple.
-                const res = await fetch(`/api/${id}/schedule/${sched.id}`);
+                const res = await fetch(getApiUrl(`/api/${id}/schedule/${sched.id}`));
                 if (res.ok) {
                     const fullSched = await res.json();
                     const scheduleByDay = fullSched.schedule?.schedule_by_day;
@@ -2188,7 +2189,7 @@ const ManageShootDays = () => {
         setIsLoading(true);
         try {
             // 1. Create the Day
-            const res = await fetch(`/api/projects/${id}/shoot-days`, {
+            const res = await fetch(getApiUrl(`/api/projects/${id}/shoot-days`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2213,7 +2214,7 @@ const ManageShootDays = () => {
 
                 // Fetch/Find schedule again (or optimize)
                 for (const sched of schedules) {
-                    const resSched = await fetch(`/api/${id}/schedule/${sched.id}`);
+                    const resSched = await fetch(getApiUrl(`/api/${id}/schedule/${sched.id}`));
                     if (resSched.ok) {
                         const fullSched = await resSched.json();
                         const scheduleByDay = fullSched.schedule?.schedule_by_day;
@@ -2267,7 +2268,7 @@ const ManageShootDays = () => {
                     newDay.characters = updatedCharacters;
 
                     // Save immediately
-                    await fetch(`/api/shoot-days/${newDay.id}?project_id=${id}`, {
+                    await fetch(getApiUrl(`/api/shoot-days/${newDay.id}?project_id=${id}`), {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(newDay)
@@ -2292,7 +2293,7 @@ const ManageShootDays = () => {
         if (!window.confirm("Are you sure you want to delete this shoot day? This cannot be undone.")) return;
 
         try {
-            const res = await fetch(`/api/shoot-days/${dayId}?project_id=${id}`, { method: 'DELETE' });
+            const res = await fetch(getApiUrl(`/api/shoot-days/${dayId}?project_id=${id}`), { method: 'DELETE' });
             if (res.ok) {
                 setShootDays(prev => prev.filter(d => d.id !== dayId));
                 if (selectedDayId === dayId) {

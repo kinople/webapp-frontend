@@ -318,7 +318,7 @@ const ScriptBreakdownNew = () => {
 		wardrobe: "",
 		set_dressing: "",
 	});
-	
+
 	// Reference Images state
 	const [referenceImages, setReferenceImages] = useState([]);
 	const [showReferenceImageModal, setShowReferenceImageModal] = useState(false);
@@ -334,9 +334,9 @@ const ScriptBreakdownNew = () => {
 	}, [allScripts]);
 
 	const generatedScripts = useMemo(() => {
-		if (!allScripts || allScripts.length <= 1) return [];
+		if (!allScripts) return [];
 		// All scripts except the master (oldest one)
-		return allScripts.slice(0, -1);
+		return allScripts;
 	}, [allScripts]);
 
 	// View-only mode when on generated tab
@@ -485,7 +485,7 @@ const ScriptBreakdownNew = () => {
 					fetchMasterBreakdown();
 
 					// Set default generated script to the newest (first in sorted array) if there are multiple scripts
-					if (sorted.length > 1) {
+					if (sorted.length > 0) {
 						setSelectedGeneratedScript(sorted[0]);
 					}
 				}
@@ -533,7 +533,7 @@ const ScriptBreakdownNew = () => {
 				const data = await response.json();
 				setReferenceImages(data.reference_images || []);
 				setPreviewImageIndex(0);
-				
+
 				// Also sync sceneBreakdowns to keep both states in sync
 				setSceneBreakdowns((prev) => {
 					const updated = [...prev];
@@ -568,7 +568,7 @@ const ScriptBreakdownNew = () => {
 
 			// Reload reference images from API to get fresh data (single source of truth)
 			await loadReferenceImages(sceneIndex);
-			
+
 			alert('Image uploaded successfully!');
 		} catch (e) {
 			console.error('Error uploading image:', e);
@@ -591,7 +591,7 @@ const ScriptBreakdownNew = () => {
 
 				// Reload reference images from API to get fresh data
 				await loadReferenceImages(sceneIndex);
-				
+
 				alert('Image deleted successfully!');
 			} catch (e) {
 				console.error('Error deleting image:', e);
@@ -660,7 +660,7 @@ const ScriptBreakdownNew = () => {
 	// Load correct breakdown when tab changes
 	useEffect(() => {
 		if (activeTab === "master" && masterScript) {
-			setSelectedScript("masterScript");
+			setSelectedScript(masterScript);
 			fetchMasterBreakdown();
 		} else if (activeTab === "generated" && selectedGeneratedScript) {
 			setSelectedScript(selectedGeneratedScript);
@@ -670,18 +670,8 @@ const ScriptBreakdownNew = () => {
 		setViewMode("table");
 		setEditingScene(null);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [activeTab, masterScript]);
+	}, [activeTab, masterScript, selectedGeneratedScript]);
 
-	// Load breakdown when generated script selection changes
-	useEffect(() => {
-		if (activeTab === "generated" && selectedGeneratedScript) {
-			setSelectedScript(selectedGeneratedScript);
-			fetchBreakdown(selectedGeneratedScript.id);
-			setViewMode("table");
-			setEditingScene(null);
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedGeneratedScript]);
 
 	// Helper function to convert snake_case to Title Case for display
 	const snakeCaseToTitleCase = (str) => {
@@ -2071,7 +2061,7 @@ const ScriptBreakdownNew = () => {
 					{!isViewOnly && (
 						<div className="sbn-reference-images-section">
 							<h4 className="sbn-reference-title">Reference Images ({referenceImages.length})</h4>
-							
+
 							{/* Upload Area */}
 							<div className="sbn-image-upload-area">
 								<label className="sbn-image-upload-label">
@@ -2396,12 +2386,12 @@ const ScriptBreakdownNew = () => {
 												);
 											}
 
-										// If custom field, get from sceneBreakdowns
-										if (isCustomField) {
-											const customSceneNum = row["Scene Number"];
-											const customSceneData = sceneBreakdowns.find((s) => s.scene_number === customSceneNum);
-											if (customSceneData && customSceneData[fieldKey]) {
-												const arr = customSceneData[fieldKey];
+											// If custom field, get from sceneBreakdowns
+											if (isCustomField) {
+												const customSceneNum = row["Scene Number"];
+												const customSceneData = sceneBreakdowns.find((s) => s.scene_number === customSceneNum);
+												if (customSceneData && customSceneData[fieldKey]) {
+													const arr = customSceneData[fieldKey];
 												} else {
 													cellValue = "N/A";
 												}
@@ -3355,9 +3345,8 @@ const ScriptBreakdownNew = () => {
 										<span className="sbn-page-eighths-hint">
 											{mergeSceneForm.page_eighths <= 8
 												? `= ${mergeSceneForm.page_eighths}/8 page`
-												: `= ${Math.floor(mergeSceneForm.page_eighths / 8)} ${
-														mergeSceneForm.page_eighths % 8 > 0 ? `${mergeSceneForm.page_eighths % 8}/8` : ""
-													} pages`}
+												: `= ${Math.floor(mergeSceneForm.page_eighths / 8)} ${mergeSceneForm.page_eighths % 8 > 0 ? `${mergeSceneForm.page_eighths % 8}/8` : ""
+												} pages`}
 										</span>
 									</div>
 								</div>
@@ -3621,9 +3610,8 @@ const ScriptBreakdownNew = () => {
 										<span className="sbn-page-eighths-hint">
 											{newSceneForm.page_eighths <= 8
 												? `= ${newSceneForm.page_eighths}/8 page`
-												: `= ${Math.floor(newSceneForm.page_eighths / 8)} ${
-														newSceneForm.page_eighths % 8 > 0 ? `${newSceneForm.page_eighths % 8}/8` : ""
-													} pages`}
+												: `= ${Math.floor(newSceneForm.page_eighths / 8)} ${newSceneForm.page_eighths % 8 > 0 ? `${newSceneForm.page_eighths % 8}/8` : ""
+												} pages`}
 										</span>
 									</div>
 								</div>
