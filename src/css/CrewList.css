@@ -1,0 +1,828 @@
+/* CrewList.css - Enhanced UI matching CastListNew design */
+
+/* Page Container */
+.cl-page-container {
+	display: flex;
+	zoom: 1.1;
+	flex-direction: column;
+	height: 100vh;
+	background-color: #f3f4f7;
+	font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+	color: #323232;
+}
+
+/* Main Content */
+.cl-main-content {
+	display: flex;
+	flex-direction: column;
+	flex-grow: 1;
+	padding: 12px 16px;
+	min-height: 0;
+}
+
+.cl-content-area {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 0;
+	flex: 1;
+	overflow-y: auto;
+	min-height: 0;
+	padding-bottom: 70px;
+}
+
+/* Page Header */
+.cl-page-header {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+	margin-bottom: 8px;
+}
+
+.cl-header-left {
+	flex: 1;
+}
+
+.cl-header-actions {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.cl-title {
+	font-size: 22px;
+	font-weight: 600;
+	color: #323232;
+	margin: 0 0 8px 0;
+	letter-spacing: -0.4px;
+}
+
+.cl-desc {
+	font-size: 14px;
+	font-weight: 400;
+	color: #6b7280;
+	margin: 0;
+	line-height: 1.5;
+}
+
+/* Action Buttons */
+.cl-action-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border-radius: 8px;
+	border: 1px solid #d2d2d2;
+	background: #f1f0f1;
+	color: #7e7e7e;
+	font-family: "Inter", sans-serif;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	letter-spacing: -0.13px;
+}
+
+.cl-action-btn:hover:not(:disabled) {
+	background: #e8e7e8;
+	border-color: #c0c0c0;
+}
+
+.cl-action-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.cl-action-btn svg {
+	font-size: 14px;
+}
+
+/* Add Department Bar */
+.cl-add-dept-bar {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	justify-content: flex-end;
+	background: #f3f4f7;
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	padding: 12px 0 8px 0;
+	border-bottom: 1px solid #e0e3e8;
+	margin-bottom: 8px;
+}
+
+.cl-dept-input {
+	min-width: 260px;
+	max-width: 100%;
+	width: 360px;
+	height: 44px;
+	padding: 0 16px;
+	font-size: 15px;
+	border-radius: 8px;
+	border: 1px solid #d0d0d0;
+	background: #fff;
+	box-shadow: 0 1px 2px #0001;
+	transition: box-shadow 0.2s, border 0.2s;
+	font-family: "Inter", sans-serif;
+	color: #323232;
+}
+
+.cl-dept-input:focus {
+	outline: none;
+	border: 1.5px solid #ff6758;
+	box-shadow: 0 2px 8px rgba(255, 103, 88, 0.15);
+}
+
+.cl-dept-input::placeholder {
+	color: #9ca3af;
+}
+
+.cl-add-dept-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 44px;
+	padding: 0 20px;
+	border-radius: 8px;
+	border: none;
+	background: linear-gradient(180deg, #ff6454 0%, #ff4c3a 100%);
+	color: #f5f5f5;
+	font-family: "Inter", sans-serif;
+	font-size: 15px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	letter-spacing: -0.15px;
+	box-shadow: 0px 3px 6px -1px rgba(202, 34, 18, 0.1), inset 0px 1px 0px 1px #ee1500;
+}
+
+.cl-add-dept-btn:hover {
+	background: linear-gradient(180deg, #ff5040 0%, #d03430 100%);
+}
+
+.cl-add-dept-btn svg {
+	font-size: 18px;
+}
+
+/* Department List */
+.cl-department-list {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+/* Department Card */
+.cl-department-card {
+	background: #fff;
+	border-radius: 12px;
+	box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.15);
+	overflow: hidden;
+	transition: all 0.2s ease;
+}
+
+.cl-department-card:hover {
+	box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.2);
+}
+
+/* Collapsed card state */
+.cl-department-card.cl-collapsed {
+	border-radius: 16px;
+}
+
+.cl-department-card.cl-collapsed .cl-card-body {
+	display: none;
+}
+
+.cl-department-card.cl-collapsed .cl-card-header {
+	border-bottom: none;
+}
+
+/* Card Header */
+.cl-card-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 20px;
+	border-bottom: 1px solid #e6e6e6;
+	transition: background 0.18s;
+	cursor: default;
+}
+
+.cl-card-header-compressed {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 20px;
+	gap: 12px;
+	cursor: pointer;
+}
+
+.cl-card-header-compressed:hover {
+	background: rgba(243, 245, 249, 0.5);
+}
+
+.cl-card-header-left {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex: 1;
+}
+
+.cl-character-info {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+/* Department ID Box - similar to cast ID */
+.cl-dept-id-box {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 28px;
+	height: 24px;
+	padding: 0 8px;
+	background: linear-gradient(180deg, #ff6152 0%, #e33e38 100%);
+	color: #fff;
+	font-size: 13px;
+	font-weight: 700;
+	border-radius: 6px;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+	flex-shrink: 0;
+}
+
+.cl-dept-icon {
+	font-size: 24px;
+	color: #646464;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.cl-dept-title {
+	font-size: 18px;
+	font-weight: 600;
+	color: #000;
+	letter-spacing: -0.16px;
+}
+
+.cl-dept-title-input {
+	font-size: 18px;
+	font-weight: 600;
+	border: 1px solid #d0d0d0;
+	border-radius: 6px;
+	padding: 4px 10px;
+	min-width: 200px;
+	font-family: "Inter", sans-serif;
+	background: #fff;
+	color: #323232;
+}
+
+.cl-dept-title-input:focus {
+	outline: none;
+	border-color: #ff6758;
+	box-shadow: 0 0 0 3px rgba(255, 103, 88, 0.12);
+}
+
+.cl-crew-count-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 10px;
+	background: #f3f4f7;
+	border-radius: 6px;
+	font-size: 13px;
+	font-weight: 600;
+	color: #646464;
+}
+
+.cl-crew-count-badge svg {
+	font-size: 16px;
+}
+
+/* Collapse Button */
+.cl-collapse-btn {
+	width: 28px;
+	height: 28px;
+	border-radius: 6px;
+	border: 1px solid #646464;
+	background: #fff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	color: #646464;
+}
+
+.cl-collapse-btn:hover {
+	background: #f5f5f5;
+	border-color: #ff6758;
+	color: #ff6758;
+}
+
+.cl-collapse-btn svg {
+	font-size: 14px;
+}
+
+.cl-collapse-btn-right {
+	margin-left: auto;
+	flex-shrink: 0;
+}
+
+/* Compressed Stats */
+.cl-compressed-stats {
+	display: flex;
+	align-items: center;
+	gap: 0;
+	flex: 1;
+	margin-left: 20px;
+}
+
+.cl-compressed-divider {
+	width: 2px;
+	height: 50px;
+	background: linear-gradient(180deg, transparent 0%, #e6e6e6 15%, #e6e6e6 85%, transparent 100%);
+	margin: 0 16px;
+}
+
+.cl-compressed-stat-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	white-space: nowrap;
+}
+
+.cl-compressed-icon {
+	font-size: 18px;
+	color: #646464;
+	flex-shrink: 0;
+}
+
+.cl-compressed-stat-text {
+	font-size: 14px;
+	font-weight: 500;
+	color: #646464;
+	letter-spacing: -0.56px;
+}
+
+.cl-compressed-value {
+	color: #323232;
+	font-weight: 600;
+}
+
+.cl-compressed-label {
+	color: #646464;
+}
+
+/* Card Header Actions */
+.cl-card-header-actions {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+
+/* Icon Buttons */
+.cl-icon-btn {
+	width: 32px;
+	height: 32px;
+	border-radius: 6px;
+	border: 1px solid #d2d2d2;
+	background: #fff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	color: #7e7e7e;
+}
+
+.cl-icon-btn:hover {
+	background: #f5f5f5;
+	border-color: #c0c0c0;
+}
+
+.cl-icon-btn svg {
+	font-size: 16px;
+}
+
+.cl-edit-btn:hover {
+	border-color: #3b82f6;
+	color: #3b82f6;
+	background: rgba(59, 130, 246, 0.05);
+}
+
+.cl-delete-btn:hover {
+	border-color: #ef4444;
+	color: #ef4444;
+	background: rgba(239, 68, 68, 0.05);
+}
+
+/* Expand Toggle Button */
+.cl-expand-toggle-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border-radius: 6px;
+	border: 1px solid #ff6758;
+	background: transparent;
+	color: #ff6758;
+	font-family: "Inter", sans-serif;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.cl-expand-toggle-btn:hover {
+	background: rgba(255, 103, 88, 0.08);
+}
+
+.cl-expand-toggle-btn.cl-expanded {
+	background: linear-gradient(180deg, #ff6454 0%, #ff4c3a 100%);
+	border-color: #ca2212;
+	color: #f5f5f5;
+	box-shadow: 0px 3px 6px -1px rgba(202, 34, 18, 0.1), inset 0px 1px 0px 1px #ee1500;
+}
+
+.cl-expand-toggle-btn svg {
+	font-size: 14px;
+}
+
+/* Card Body */
+.cl-card-body {
+	padding: 20px;
+	background: #fff;
+}
+
+/* Crew Table Container */
+.cl-crew-table-container {
+	width: 100%;
+	overflow: auto;
+	margin-bottom: 16px;
+	border-radius: 8px;
+	border: 1px solid #e6e6e6;
+	max-height: 420px;
+}
+
+.cl-crew-table {
+	width: 100%;
+	min-width: 700px;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 14px;
+	background: #fff;
+}
+
+.cl-crew-table th {
+	background: #f8fafc;
+	padding: 12px 16px;
+	text-align: left;
+	font-weight: 600;
+	font-size: 13px;
+	color: #646464;
+	border-bottom: 1px solid #e6e6e6;
+	white-space: nowrap;
+}
+
+.cl-crew-table th:first-child {
+	border-top-left-radius: 8px;
+}
+
+.cl-crew-table th:last-child {
+	border-top-right-radius: 8px;
+}
+
+.cl-crew-table tbody tr {
+	background: #fff;
+	transition: background 0.18s;
+}
+
+.cl-crew-table tbody tr:nth-child(even) {
+	background: #fafbfc;
+}
+
+.cl-crew-table tbody tr:hover {
+	background: rgba(243, 245, 249, 0.8);
+}
+
+.cl-crew-table td {
+	padding: 12px 16px;
+	border-bottom: 1px solid #f0f0f0;
+	vertical-align: middle;
+}
+
+.cl-crew-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+/* Crew Input Fields - Now always visible */
+.cl-crew-input {
+	width: 100%;
+	min-width: 100px;
+	font-size: 14px;
+	padding: 8px 12px;
+	border-radius: 6px;
+	border: 1px solid #e0e0e0;
+	background: #fff;
+	transition: all 0.18s ease;
+	font-family: "Inter", sans-serif;
+	color: #323232;
+}
+
+.cl-crew-input:hover {
+	border-color: #d0d0d0;
+	background: #fafbfc;
+}
+
+.cl-crew-input:focus {
+	outline: none;
+	border: 1.5px solid #ff6758;
+	box-shadow: 0 2px 8px rgba(255, 103, 88, 0.15);
+	background: #fff;
+}
+
+.cl-crew-input::placeholder {
+	color: #9ca3af;
+	font-size: 13px;
+}
+
+/* Input wrapper for icon + input */
+.cl-crew-contact-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	position: relative;
+}
+
+.cl-input-icon {
+	color: #9ca3af;
+	flex-shrink: 0;
+	position: absolute;
+	left: 12px;
+	pointer-events: none;
+}
+
+.cl-crew-input-with-icon {
+	padding-left: 32px;
+}
+
+/* Actions Column */
+.cl-actions-col {
+	width: 80px;
+	text-align: right;
+}
+
+.cl-crew-actions {
+	display: flex;
+	gap: 6px;
+	justify-content: flex-end;
+}
+
+.cl-edit-crew-btn,
+.cl-delete-crew-btn {
+	width: 28px;
+	height: 28px;
+	border-radius: 5px;
+}
+
+.cl-edit-crew-btn svg,
+.cl-delete-crew-btn svg {
+	font-size: 14px;
+}
+
+/* Empty Crew State */
+.cl-crew-empty {
+	text-align: center;
+	color: #888;
+	font-size: 14px;
+	padding: 40px 16px;
+}
+
+.cl-empty-crew-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	color: #9ca3af;
+}
+
+.cl-empty-crew-state svg {
+	color: #d1d5db;
+}
+
+.cl-empty-crew-state span {
+	font-size: 14px;
+	color: #6b7280;
+}
+
+/* Add Crew Button */
+.cl-add-crew-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 10px 16px;
+	border-radius: 8px;
+	border: 1px solid #ff6758;
+	background: transparent;
+	color: #ff6758;
+	font-family: "Inter", sans-serif;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.2s;
+	justify-content: center;
+}
+
+.cl-add-crew-btn:hover {
+	background: rgba(255, 103, 88, 0.08);
+}
+
+.cl-add-crew-btn svg {
+	font-size: 16px;
+}
+
+/* Save Bar */
+.cl-save-bar {
+	position: sticky;
+	bottom: 0;
+	margin-top: 10px;
+	padding: 8px 0 4px;
+	background: linear-gradient(180deg, rgba(243, 244, 247, 0), #f3f4f7 40%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+}
+
+.cl-save-btn {
+	padding: 10px 32px;
+	font-size: 18px;
+	background: #2d72d9;
+	color: #fff;
+	border: none;
+	border-radius: 6px;
+	cursor: pointer;
+	box-shadow: 0px 6px 12px -6px rgba(45, 114, 217, 0.5);
+}
+
+.cl-save-btn:hover {
+	background: #2563c4;
+}
+
+.cl-save-status {
+	font-size: 14px;
+}
+
+.cl-save-status.is-success {
+	color: #16a34a;
+}
+
+.cl-save-status.is-error {
+	color: #dc2626;
+}
+
+/* Empty State */
+.cl-empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	padding: 60px 24px;
+	background: #fff;
+	border-radius: 12px;
+	box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.08);
+	margin-top: 24px;
+}
+
+.cl-empty-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 80px;
+	height: 80px;
+	border-radius: 50%;
+	background: linear-gradient(135deg, rgba(255, 103, 88, 0.1), rgba(255, 76, 58, 0.05));
+	color: #ff6758;
+}
+
+.cl-empty-content {
+	text-align: center;
+	max-width: 500px;
+}
+
+.cl-empty-title {
+	font-size: 20px;
+	font-weight: 600;
+	color: #323232;
+	margin: 0 0 8px 0;
+}
+
+.cl-empty-desc {
+	font-size: 15px;
+	font-weight: 400;
+	color: #6b7280;
+	margin: 0;
+	line-height: 1.6;
+}
+
+/* Skeleton Loader */
+.cl-skeleton-card {
+	background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+	background-size: 200% 100%;
+	animation: skeleton-loading 1.5s infinite;
+	border-radius: 12px;
+}
+
+@keyframes skeleton-loading {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+	.cl-page-header {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.cl-header-actions {
+		width: 100%;
+		justify-content: flex-start;
+	}
+
+	.cl-add-dept-bar {
+		flex-direction: column;
+		align-items: stretch;
+		padding: 10px 0 8px 0;
+	}
+
+	.cl-dept-input {
+		width: 100%;
+		min-width: 0;
+	}
+
+	.cl-add-dept-btn {
+		width: 100%;
+		justify-content: center;
+	}
+
+	.cl-crew-table {
+		min-width: 600px;
+		font-size: 13px;
+	}
+
+	.cl-crew-input {
+		min-width: 80px;
+		font-size: 13px;
+		padding: 6px 10px;
+	}
+
+	.cl-crew-input-with-icon {
+		padding-left: 28px;
+	}
+
+	.cl-card-header-compressed {
+		flex-wrap: wrap;
+	}
+
+	.cl-compressed-stats {
+		flex-wrap: wrap;
+		margin-left: 0;
+		margin-top: 12px;
+		width: 100%;
+		order: 3;
+	}
+
+	.cl-compressed-divider:first-child {
+		display: none;
+	}
+}
+
+@media (max-width: 500px) {
+	.cl-crew-table {
+		min-width: 500px;
+		font-size: 12px;
+	}
+
+	.cl-crew-input {
+		min-width: 70px;
+		font-size: 12px;
+		padding: 6px 8px;
+	}
+
+	.cl-character-info {
+		flex-wrap: wrap;
+	}
+}

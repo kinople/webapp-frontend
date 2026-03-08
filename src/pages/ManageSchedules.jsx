@@ -235,7 +235,7 @@ const CalendarSceneBlock = ({ scene, isEditing }) => {
 					{scene.time_of_day && <span>{scene.time_of_day}</span>}
 				</div>
 			</b>
-			
+
 		</div>
 	);
 };
@@ -375,8 +375,6 @@ const ManageSchedules = () => {
 	const [doodData, setDoodData] = useState({}); // { elementName: { id, dates: [], unavailable_dates: [], flexible: bool } }
 	const [doodOriginalData, setDoodOriginalData] = useState({}); // Original data when modal opens, used to track changes
 	const [doodIsSaving, setDoodIsSaving] = useState(false);
-	const [doodStartDate, setDoodStartDate] = useState("");
-	const [doodEndDate, setDoodEndDate] = useState("");
 	const [doodSelectionMode, setDoodSelectionMode] = useState("available"); // "available" or "unavailable"
 	const [doodViewMode, setDoodViewMode] = useState("available"); // "available" or "scheduled"
 
@@ -562,12 +560,15 @@ const ManageSchedules = () => {
 
 				// Load saved unavailable dates
 				const savedUnavailableDates = elementData?.unavailable_dates || [];
-				setModalUnavailableDates(filterDatesInRange(savedUnavailableDates));
+				const filteredUnavailable = filterDatesInRange(savedUnavailableDates);
+				setModalUnavailableDates(filteredUnavailable);
 
 				// Load available dates
+				let filteredAvailable = [];
 				if (elementData?.dates && elementData.dates.length > 0) {
 					const existingDates = parseDateRanges(elementData.dates);
-					setModalAvailableDates(filterDatesInRange(existingDates));
+					filteredAvailable = filterDatesInRange(existingDates);
+					setModalAvailableDates(filteredAvailable);
 				} else {
 					// Try to get locked dates as default available dates
 					let lockedDates = [];
@@ -592,14 +593,24 @@ const ManageSchedules = () => {
 					}
 
 					if (lockedDates.length > 0) {
-						setModalAvailableDates(filterDatesInRange(lockedDates));
+						filteredAvailable = filterDatesInRange(lockedDates);
+						setModalAvailableDates(filteredAvailable);
 					} else {
 						setModalAvailableDates([]);
 					}
 				}
+
+				// Auto-select flexible/fixed mode based on whether dates exist
+				const hasDates = filteredAvailable.length > 0 || filteredUnavailable.length > 0;
+				if (hasDates) {
+					setModalDatePickerMode("fixed");
+				} else {
+					setModalDatePickerMode("flexible");
+				}
 			} else {
 				setModalAvailableDates([]);
 				setModalUnavailableDates([]);
+				setModalDatePickerMode("flexible");
 			}
 
 			// Restore scroll position after state update
@@ -957,6 +968,19 @@ const ManageSchedules = () => {
 			}
 		};
 
+		const handleCloseGenerateModal = () => {
+			setShowGenerateModal(false);
+			setModalElementType("character");
+			setModalElement("");
+			setModalAvailableDates([]);
+			setModalUnavailableDates([]);
+			setModalDatePickerMode("flexible");
+			setModalDatePickerValue("range");
+			setModalDateRangeStart("");
+			setModalDateRangeEnd("");
+			setModalAddMode("available");
+		};
+
 		const handleModalGenerate = async () => {
 			if (!scheduleStartDate || !scheduleEndDate) {
 				alert("Please select both start and end dates for the schedule");
@@ -1014,7 +1038,7 @@ const ManageSchedules = () => {
 			}
 
 			try {
-				setShowGenerateModal(false);
+				handleCloseGenerateModal();
 				setIsGenerating(true);
 				const response = await fetch(getApiUrl(`/api/${id}/generate-schedule/${scheduleId}`), {
 					method: "POST",
@@ -1036,10 +1060,10 @@ const ManageSchedules = () => {
 						if (refreshResponse.ok) {
 							const refreshedData = await refreshResponse.json();
 							setScheduleData(refreshedData);
-							setGeneratedMaxScenes(refreshedData["generated_schedule"]["max_scenes_per_day"] || "N/A");
-							setConstraintType(refreshedData["generated_schedule"]["constraint_type"] || "N/A");
-							setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["max_page_eighths_per_day"] || "N/A");
-							setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["max_hours_per_day"] || "N/A");
+							setGeneratedMaxScenes(refreshedData["generated_schedule"]["constraints"]["max_scenes_per_day"] || "N/A");
+							setConstraintType(refreshedData["generated_schedule"]["constraints"]["constraint_type"] || "N/A");
+							setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["constraints"]["max_page_eighths_per_day"] || "N/A");
+							setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["constraints"]["max_hours_per_day"] || "N/A");
 							alert("Schedule generated successfully!");
 						} else {
 							throw new Error("Failed to refresh schedule data");
@@ -1057,11 +1081,11 @@ const ManageSchedules = () => {
 		};
 
 		return (
-			<div className="sched-conflicts-modal-overlay" onClick={() => setShowGenerateModal(false)}>
+			<div className="sched-conflicts-modal-overlay" onClick={handleCloseGenerateModal}>
 				<div className="sched-generate-modal" ref={modalContentRef} onClick={(e) => e.stopPropagation()}>
 					<div className="sched-conflicts-modal-header">
 						<h2 className="sched-conflicts-modal-heading">Generate Schedule</h2>
-						<button className="sched-conflicts-modal-close-button" onClick={() => setShowGenerateModal(false)}>
+						<button className="sched-conflicts-modal-close-button" onClick={handleCloseGenerateModal}>
 							×
 						</button>
 					</div>
@@ -1263,13 +1287,20 @@ const ManageSchedules = () => {
 										</div>
 
 										{modalDatePickerMode === "flexible" && (
-											<button
-												onClick={() => handleModalSaveDates(true)}
-												className="sched-add-range-button"
-												disabled={modalIsSaving}
-											>
-												{modalIsSaving ? "Saving..." : "Save Flexible Dates"}
-											</button>
+											<>
+												{modalAvailableDates.length === 0 && modalUnavailableDates.length === 0 && (
+													<p className="sched-flexible-info-text">
+														No dates are set for this {modalElementType}. It will be considered <strong>flexible</strong> and can be scheduled on any available day.
+													</p>
+												)}
+												<button
+													onClick={() => handleModalSaveDates(true)}
+													className="sched-add-range-button"
+													disabled={modalIsSaving}
+												>
+													{modalIsSaving ? "Saving..." : "Save Flexible Dates"}
+												</button>
+											</>
 										)}
 
 										{modalDatePickerMode === "fixed" && (
@@ -1384,11 +1415,14 @@ const ManageSchedules = () => {
 		if (!showDoodModal) return null;
 
 		// Generate array of dates between start and end
+		const doodStart = scheduleStartDate || scheduleData?.first_date || "";
+		const doodEnd = scheduleEndDate || scheduleData?.last_date || "";
+
 		const generateDateColumns = () => {
-			if (!doodStartDate || !doodEndDate) return [];
+			if (!doodStart || !doodEnd) return [];
 			const dates = [];
-			const start = new Date(doodStartDate);
-			const end = new Date(doodEndDate);
+			const start = new Date(doodStart);
+			const end = new Date(doodEnd);
 			const current = new Date(start);
 			while (current <= end) {
 				dates.push(current.toISOString().split("T")[0]);
@@ -1548,6 +1582,23 @@ const ManageSchedules = () => {
 			return false;
 		};
 
+		// Check if any element has dates outside the doodStart-doodEnd range
+		const hasDatesOutOfRange = () => {
+			if (!doodStart || !doodEnd || Object.keys(doodData).length === 0) return false;
+			const rangeStart = new Date(doodStart);
+			const rangeEnd = new Date(doodEnd);
+			for (const elementName of Object.keys(doodData)) {
+				const data = doodData[elementName];
+				if (data.flexible) continue;
+				const allDates = [...(data.dates || []), ...(data.unavailable_dates || [])];
+				for (const dateStr of allDates) {
+					const d = new Date(dateStr);
+					if (d < rangeStart || d > rangeEnd) return true;
+				}
+			}
+			return false;
+		};
+
 		// Toggle a single cell based on selection mode
 		const toggleCell = (elementName, date) => {
 			if (isElementFlexible(elementName)) return; // Can't toggle if flexible
@@ -1690,18 +1741,29 @@ const ManageSchedules = () => {
 				const payload = {
 					characters: {},
 					locations: {},
-					start_date: doodStartDate,
-					end_date: doodEndDate,
+					start_date: doodStart,
+					end_date: doodEnd,
 				};
 
 				const targetKey = doodElementType === "character" ? "characters" : "locations";
 
+				// Filter helper: only keep dates within doodStart to doodEnd range
+				const filterDatesInRange = (dates) => {
+					if (!dates || dates.length === 0 || !doodStart || !doodEnd) return dates || [];
+					const rangeStart = new Date(doodStart);
+					const rangeEnd = new Date(doodEnd);
+					return dates.filter((dateStr) => {
+						const d = new Date(dateStr);
+						return d >= rangeStart && d <= rangeEnd;
+					});
+				};
+
 				Object.entries(doodData).forEach(([name, data]) => {
 					payload[targetKey][name] = {
 						id: data.id,
-						dates: data.flexible ? [] : data.dates,
+						dates: data.flexible ? [] : filterDatesInRange(data.dates),
 						flexible: data.flexible,
-						unavailable_dates: data.flexible ? [] : data.unavailable_dates || [],
+						unavailable_dates: data.flexible ? [] : filterDatesInRange(data.unavailable_dates || []),
 					};
 				});
 
@@ -1770,45 +1832,7 @@ const ManageSchedules = () => {
 
 					{doodModalTab === "dood" ? (
 						<div className="sched-dood-modal-content" ref={doodContentRef}>
-							{/* Date Range Selection */}
 							<div className="sched-dood-controls">
-								<div className="sched-dood-date-range">
-									<label>
-										Start Date:
-										<input
-											type="date"
-											value={doodStartDate}
-											onChange={(e) => {
-												const scrollTop = doodContentRef.current?.scrollTop;
-												setDoodStartDate(e.target.value);
-												requestAnimationFrame(() => {
-													if (doodContentRef.current && scrollTop !== undefined) {
-														doodContentRef.current.scrollTop = scrollTop;
-													}
-												});
-											}}
-											className="sched-date-range-input"
-										/>
-									</label>
-									<label>
-										End Date:
-										<input
-											type="date"
-											value={doodEndDate}
-											min={doodStartDate}
-											onChange={(e) => {
-												const scrollTop = doodContentRef.current?.scrollTop;
-												setDoodEndDate(e.target.value);
-												requestAnimationFrame(() => {
-													if (doodContentRef.current && scrollTop !== undefined) {
-														doodContentRef.current.scrollTop = scrollTop;
-													}
-												});
-											}}
-											className="sched-date-range-input"
-										/>
-									</label>
-								</div>
 
 								<div className="sched-dood-type-selector">
 									<label>
@@ -1862,11 +1886,11 @@ const ManageSchedules = () => {
 									</div>
 								)}
 
-								{doodViewMode === "available" && hasDoodChanges() && (
+								{doodViewMode === "available" && (hasDoodChanges() || hasDatesOutOfRange()) && (
 									<button
 										onClick={handleDoodSave}
 										className="sched-action-btn-success"
-										disabled={doodIsSaving || !doodStartDate || !doodEndDate}
+										disabled={doodIsSaving || !doodStart || !doodEnd}
 									>
 										{doodIsSaving ? "Saving..." : "Save All"}
 									</button>
@@ -1874,7 +1898,7 @@ const ManageSchedules = () => {
 							</div>
 
 							{/* DOOD Grid */}
-							{doodStartDate && doodEndDate && dateColumns.length > 0 ? (
+							{doodStart && doodEnd && dateColumns.length > 0 ? (
 								<div className="sched-dood-grid-wrapper" ref={doodGridRef}>
 									<div className="sched-dood-grid">
 										<table className="sched-dood-table">
@@ -1945,51 +1969,51 @@ const ManageSchedules = () => {
 															)}
 															{doodViewMode === "available"
 																? // Available dates view - editable
-																	dateColumns.map((date) => {
-																		const isFlexible = isElementFlexible(elem.name);
-																		const isSelected = isCellSelected(elem.name, date);
-																		const isUnavailable = isCellUnavailable(elem.name, date);
+																dateColumns.map((date) => {
+																	const isFlexible = isElementFlexible(elem.name);
+																	const isSelected = isCellSelected(elem.name, date);
+																	const isUnavailable = isCellUnavailable(elem.name, date);
 
-																		let cellClass = "sched-dood-cell";
-																		let cellContent = "";
+																	let cellClass = "sched-dood-cell";
+																	let cellContent = "";
 
-																		if (isFlexible) {
-																			cellClass += " sched-dood-cell-flexible";
-																			cellContent = "F";
-																		} else if (isUnavailable) {
-																			cellClass += " sched-dood-cell-unavailable";
-																			cellContent = "✕";
-																		} else if (isSelected) {
-																			cellClass += " sched-dood-cell-selected";
-																			cellContent = "✓";
-																		} else {
-																			cellClass += " sched-dood-cell-empty";
-																		}
+																	if (isFlexible) {
+																		cellClass += " sched-dood-cell-flexible";
+																		cellContent = "F";
+																	} else if (isUnavailable) {
+																		cellClass += " sched-dood-cell-unavailable";
+																		cellContent = "✕";
+																	} else if (isSelected) {
+																		cellClass += " sched-dood-cell-selected";
+																		cellContent = "✓";
+																	} else {
+																		cellClass += " sched-dood-cell-empty";
+																	}
 
-																		return (
-																			<td
-																				key={date}
-																				className={cellClass}
-																				onClick={() => toggleCell(elem.name, date)}
-																			>
-																				{cellContent}
-																			</td>
-																		);
-																	})
+																	return (
+																		<td
+																			key={date}
+																			className={cellClass}
+																			onClick={() => toggleCell(elem.name, date)}
+																		>
+																			{cellContent}
+																		</td>
+																	);
+																})
 																: // Scheduled dates view - read only
-																	dateColumns.map((date) => {
-																		const isScheduled = isDateScheduled(elem.name, date);
+																dateColumns.map((date) => {
+																	const isScheduled = isDateScheduled(elem.name, date);
 
-																		return (
-																			<td
-																				key={date}
-																				className={`sched-dood-cell ${isScheduled ? "sched-dood-cell-scheduled" : "sched-dood-cell-empty"}`}
-																				style={{ cursor: "default" }}
-																			>
-																				{isScheduled ? "✓" : ""}
-																			</td>
-																		);
-																	})}
+																	return (
+																		<td
+																			key={date}
+																			className={`sched-dood-cell ${isScheduled ? "sched-dood-cell-scheduled" : "sched-dood-cell-empty"}`}
+																			style={{ cursor: "default" }}
+																		>
+																			{isScheduled ? "✓" : ""}
+																		</td>
+																	);
+																})}
 														</tr>
 													);
 												})}
@@ -1999,7 +2023,7 @@ const ManageSchedules = () => {
 								</div>
 							) : (
 								<div className="sched-dood-placeholder">
-									{!doodStartDate || !doodEndDate
+									{!doodStart || !doodEnd
 										? "Please set a schedule date range first (in the Generate Schedule modal)"
 										: "No data to display"}
 								</div>
@@ -2525,11 +2549,11 @@ const ManageSchedules = () => {
 			const data = await response.json();
 			console.log("schedule-data ------------ ", data);
 			setScheduleData(data);
-			setGeneratedMaxScenes(data["generated_schedule"]["max_scenes_per_day"] || "N/A");
-			setConstraintType(data["generated_schedule"]["constraint_type"] || "N/A");
-			console.log("conatraont type set as ::: ", typeof data["generated_schedule"]["constraint_type"]);
-			setGeneratedMaxPageEightsPerDay(data["generated_schedule"]["max_page_eighths_per_day"] || "N/A");
-			setGeneratedMaxHoursPerDay(data["generated_schedule"]["max_hours_per_day"] || "N/A");
+			setGeneratedMaxScenes(data["generated_schedule"]["constraints"]["max_scenes_per_day"] || "N/A");
+			setConstraintType(data["generated_schedule"]["constraints"]["constraint_type"] || "N/A");
+			console.log("conatraont type set as ::: ", typeof data["generated_schedule"]["constraints"]["constraint_type"]);
+			setGeneratedMaxPageEightsPerDay(data["generated_schedule"]["constraints"]["max_page_eighths_per_day"] || "N/A");
+			setGeneratedMaxHoursPerDay(data["generated_schedule"]["constraints"]["max_hours_per_day"] || "N/A");
 		} catch (error) {
 			console.error("Error fetching schedule data:", error);
 			setError(error.message);
@@ -2553,17 +2577,17 @@ const ManageSchedules = () => {
 
 	// Initialize Generate Schedule modal dates from schedule data
 	useEffect(() => {
-		if (showGenerateModal && scheduleData) {
+		if (scheduleData) {
 			const startDate = scheduleData.first_date || "";
 			const endDate = scheduleData.last_date || "";
-			if (startDate && !scheduleStartDate) {
+			if (startDate) {
 				setScheduleStartDate(startDate);
 			}
-			if (endDate && !scheduleEndDate) {
+			if (endDate) {
 				setScheduleEndDate(endDate);
 			}
 		}
-	}, [showGenerateModal, scheduleData]);
+	}, [scheduleData]);
 
 	// Filter modal dates when start/end dates change
 	useEffect(() => {
@@ -2598,11 +2622,9 @@ const ManageSchedules = () => {
 	// Initialize DOOD modal when it opens
 	useEffect(() => {
 		if (showDoodModal && scheduleData) {
-			// Set dates from schedule data
-			const startDate = scheduleData.first_date || scheduleStartDate || "";
-			const endDate = scheduleData.last_date || scheduleEndDate || "";
-			setDoodStartDate(startDate);
-			setDoodEndDate(endDate);
+			// Use Generate Schedule modal dates first, fall back to scheduleData
+			const startDate = scheduleStartDate || scheduleData.first_date || "";
+			const endDate = scheduleEndDate || scheduleData.last_date || "";
 
 			// Initialize doodData with existing availability data
 			if (startDate && endDate) {
@@ -2650,45 +2672,48 @@ const ManageSchedules = () => {
 		}
 	}, [showDoodModal, doodElementType, scheduleData, castList, locationList]);
 
-	// Filter DOOD dates when start/end dates change
+	// Sync Generate Schedule modal's selected element dates when scheduleData changes (e.g. after DOOD save)
 	useEffect(() => {
-		if (!doodStartDate || !doodEndDate || Object.keys(doodData).length === 0) return;
+		if (!modalElement || !scheduleData?.dates) return;
 
-		const startDate = new Date(doodStartDate);
-		const endDate = new Date(doodEndDate);
+		const datesSection = modalElementType === "location" ? "locations" : "characters";
+		const elementData = scheduleData.dates[datesSection]?.[modalElement];
 
-		let hasChanges = false;
-		const filteredData = {};
-
-		Object.entries(doodData).forEach(([elementName, elementData]) => {
-			const currentDates = elementData.dates || [];
-			const currentUnavailableDates = elementData.unavailable_dates || [];
-
-			const filteredDates = currentDates.filter((dateStr) => {
-				const date = new Date(dateStr);
-				return date >= startDate && date <= endDate;
+		// Helper to filter dates within schedule range
+		const filterDatesInRange = (dates) => {
+			if (!scheduleStartDate || !scheduleEndDate || !dates || dates.length === 0) return dates || [];
+			const start = new Date(scheduleStartDate);
+			const end = new Date(scheduleEndDate);
+			return dates.filter((dateStr) => {
+				const d = new Date(dateStr);
+				return d >= start && d <= end;
 			});
+		};
 
-			const filteredUnavailableDates = currentUnavailableDates.filter((dateStr) => {
-				const date = new Date(dateStr);
-				return date >= startDate && date <= endDate;
-			});
-
-			if (filteredDates.length !== currentDates.length || filteredUnavailableDates.length !== currentUnavailableDates.length) {
-				hasChanges = true;
+		if (elementData) {
+			// Update available dates
+			if (elementData.dates && elementData.dates.length > 0) {
+				const existingDates = parseDateRanges(elementData.dates);
+				setModalAvailableDates(filterDatesInRange(existingDates));
+			} else {
+				setModalAvailableDates([]);
 			}
 
-			filteredData[elementName] = {
-				...elementData,
-				dates: filteredDates,
-				unavailable_dates: filteredUnavailableDates,
-			};
-		});
+			// Update unavailable dates
+			const savedUnavailableDates = elementData.unavailable_dates || [];
+			setModalUnavailableDates(filterDatesInRange(savedUnavailableDates));
 
-		if (hasChanges) {
-			setDoodData(filteredData);
+			// Update flexible/fixed mode
+			const hasDates = (elementData.dates && elementData.dates.length > 0) || savedUnavailableDates.length > 0;
+			setModalDatePickerMode(hasDates ? "fixed" : "flexible");
+		} else {
+			setModalAvailableDates([]);
+			setModalUnavailableDates([]);
+			setModalDatePickerMode("flexible");
 		}
-	}, [doodStartDate, doodEndDate]);
+	}, [scheduleData, modalElement, modalElementType]);
+
+
 
 	// Create character name to ID map from breakdown characters
 	const characterNameToIdMap = useMemo(() => {
@@ -2801,7 +2826,6 @@ const ManageSchedules = () => {
 			});
 
 			if (scenes.length > 0) {
-				let id = 0;
 				const days = Object.values(scheduleData.schedule.schedule_by_day).map((day) => ({
 					id: String(day.date),
 					date: day.date,
@@ -2815,7 +2839,7 @@ const ManageSchedules = () => {
 							const newScene = {};
 
 							if (breakdownScene) {
-								newScene.id = id++;
+								newScene.id = String(scheduledScene.scene_id ?? breakdownScene.id);
 								newScene.scene_id = scheduledScene.scene_id;
 								newScene.scene_number = scheduledScene.scene_number || breakdownScene.scene_number;
 								newScene.int_ext = breakdownScene.int_ext;
@@ -2837,7 +2861,7 @@ const ManageSchedules = () => {
 								// Fallback to TSV scenes data if breakdown scene not found
 								const fullScene = scenes.find((s) => (s["Scene Number"] || s["Scene No."]) === String(scheduledScene.scene_number));
 								if (fullScene) {
-									newScene.id = id++;
+									newScene.id = String(scheduledScene.scene_id);
 									newScene.scene_id = scheduledScene.scene_id;
 									newScene.scene_number = scheduledScene.scene_number || fullScene["Scene Number"];
 									newScene.int_ext = fullScene["Int./Ext."];
@@ -3342,10 +3366,10 @@ const ManageSchedules = () => {
 					if (refreshResponse.ok) {
 						const refreshedData = await refreshResponse.json();
 						setScheduleData(refreshedData);
-						setGeneratedMaxScenes(refreshedData["generated_schedule"]["max_scenes_per_day"] || "N/A");
-						setConstraintType(refreshedData["generated_schedule"]["constraint_type"] || "N/A");
-						setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["max_page_eighths_per_day"] || "N/A");
-						setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["max_hours_per_day"] || "N/A");
+						setGeneratedMaxScenes(refreshedData["generated_schedule"]["constraints"]["max_scenes_per_day"] || "N/A");
+						setConstraintType(refreshedData["generated_schedule"]["constraints"]["constraint_type"] || "N/A");
+						setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["constraints"]["max_page_eighths_per_day"] || "N/A");
+						setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["constraints"]["max_hours_per_day"] || "N/A");
 
 						alert("Schedule generated successfully!");
 					} else {
@@ -3668,7 +3692,7 @@ const ManageSchedules = () => {
 			}
 			const scripts = await scriptsResponse.json();
 			const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
-
+			console.log("Scene Hours ::::: ", sceneHours)
 			if (sortedScripts.length > 0) {
 				// Use master script (oldest/first uploaded) for scheduling
 				const masterScript = sortedScripts[sortedScripts.length - 1];
@@ -3702,6 +3726,38 @@ const ManageSchedules = () => {
 		}
 	};
 	const projectName = useSelector((state) => state.project.projectName);
+
+	const handleClearSchedule = async () => {
+		if (!window.confirm("Are you sure you want to clear the schedule? This will remove the generated schedule and all availability dates for every location and character.")) {
+			return;
+		}
+		try {
+			const response = await fetch(getApiUrl(`/api/${id}/clear-schedule/${scheduleId}`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+			});
+			if (!response.ok) {
+				const errData = await response.json().catch(() => ({}));
+				throw new Error(errData.message || "Failed to clear schedule");
+			}
+			// Reset local state
+			setScheduleDays([]);
+			setIsEditing(false);
+			setConstraintType("");
+			setGeneratedMaxScenes("");
+			setGeneratedMaxPageEightsPerDay("");
+			setGeneratedMaxHoursPerDay("");
+			setScheduleDates({ start: "N/A", end: "N/A" });
+			setSelectedDates([]);
+			setElement("");
+			setSelectedElement("");
+			alert("Schedule cleared successfully!");
+			fetchScheduleData();
+		} catch (error) {
+			console.error("Error clearing schedule:", error);
+			alert("Failed to clear schedule: " + error.message);
+		}
+	};
 
 	const exportScheduleToExcel = async (days, breakdown) => {
 		const sceneMap = {};
@@ -3846,30 +3902,25 @@ const ManageSchedules = () => {
 				</div>
 			)}
 
-			<div className="sched-header">
-				<div className="sched-header-left">
-					<h2 className="sched-page-title">Project : {projectName}</h2>
-				</div>
-				{scheduleData?.schedule && (
-					<button className="sched-sync-btn" onClick={() => exportScheduleToExcel(scheduleData.schedule.schedule_by_day, breakdownScenes)}>
-						<span>
-							<FaFileExcel />
-						</span>
-						<span>Export to Excel</span>
-					</button>
-				)}
-				<div className="sched-header-right">
-					<div className="sched-date-info">
-						<div>Schedule Start Date: {scheduleDates.start || "Not set"}</div>
-						<div>Schedule End Date: {scheduleDates.end || "Not set"}</div>
-					</div>
-				</div>
-			</div>
+
 			<div className="sched-content">
 				<div className="sched-left-panel">
-					<div className="sched-left-panel-header">Availability dates</div>
-					<div className="sched-left-panel-buttons">
-						<button className="sched-dood-button" onClick={() => setShowDoodModal(true)}>
+					<div className="sched-left-panel-header">
+						{projectName && <span className="sched-left-panel-project-name">{projectName}</span>}
+						<span className="sched-left-panel-header-title">Availability Dates</span>
+					</div>
+					<div className="sched-left-panel-dates-bar">
+						<div className="sched-date-info-inline">
+							<div className="sched-date-info-item">
+								<span className="sched-date-info-label">Start</span>
+								<span className="sched-date-info-value">{scheduleDates.start || "Not set"}</span>
+							</div>
+							<div className="sched-date-info-item">
+								<span className="sched-date-info-label">End</span>
+								<span className="sched-date-info-value">{scheduleDates.end || "Not set"}</span>
+							</div>
+						</div>
+						<button className="sched-action-btn sched-dood-btn" onClick={() => setShowDoodModal(true)}>
 							DOODS
 						</button>
 					</div>
@@ -4124,16 +4175,26 @@ const ManageSchedules = () => {
 						</div>
 
 						<div className="sched-controls-group">
-							<button className="sched-generate-button" onClick={() => setShowGenerateModal(true)} disabled={isGenerating}>
-								{isGenerating ? "GENERATING..." : "GENERATE"}
+							<button className="sched-action-btn sched-action-btn-primary sched-generate-button" onClick={() => setShowGenerateModal(true)} disabled={isGenerating}>
+								{isGenerating ? "Generating..." : (scheduleData?.schedule ? "REGENERATE" : "Generate")}
 							</button>
+
+							{scheduleData?.schedule && (
+								<button
+									className="sched-action-btn sched-export-btn"
+									onClick={() => exportScheduleToExcel(scheduleData.schedule.schedule_by_day, breakdownScenes)}
+								>
+									<FaFileExcel />
+									<span>Export</span>
+								</button>
+							)}
 
 							<div className="sched-flex-grow" />
 
 							{scheduleData?.schedule &&
 								(isEditing ? (
 									<div className="sched-flex-row sched-gap-10" style={{ alignItems: "center" }}>
-										<button onClick={handleSaveChanges} className="sched-action-btn-success">
+										<button onClick={handleSaveChanges} className="sched-action-btn sched-action-btn-success">
 											Save
 										</button>
 
@@ -4142,9 +4203,9 @@ const ManageSchedules = () => {
 											type="date"
 											value={newScheduleDayInput}
 											onChange={(e) => setNewScheduleDayInput(e.target.value)}
-											className="sched-date-picker"
+											className="sched-edit-date-input"
 										/>
-										<button onClick={handleAddScheduleDay} className="sched-action-btn-primary" disabled={!newScheduleDayInput}>
+										<button onClick={handleAddScheduleDay} className="sched-action-btn sched-action-btn-primary" disabled={!newScheduleDayInput}>
 											Add Day
 										</button>
 										<button
@@ -4152,7 +4213,7 @@ const ManageSchedules = () => {
 												setScheduleDays(originalScheduleDays);
 												setIsEditing(false);
 											}}
-											className="sched-action-btn-danger"
+											className="sched-action-btn sched-action-btn-cancel"
 										>
 											Cancel
 										</button>
@@ -4163,15 +4224,21 @@ const ManageSchedules = () => {
 											setOriginalScheduleDays(JSON.parse(JSON.stringify(scheduleDays)));
 											setIsEditing(true);
 										}}
-										className="sched-action-btn"
+										className="sched-action-btn sched-action-btn-edit"
 									>
 										Edit
 									</button>
 								))}
 
 							{scheduleMode == "hours" && (
-								<button className="sched-action-btn" onClick={handleSaveHours}>
+								<button className="sched-action-btn sched-action-btn-primary" onClick={handleSaveHours}>
 									Save Est. Hours
+								</button>
+							)}
+
+							{scheduleData?.schedule && (
+								<button className="sched-action-btn sched-action-btn-clear" onClick={handleClearSchedule}>
+									Clear Schedule
 								</button>
 							)}
 						</div>

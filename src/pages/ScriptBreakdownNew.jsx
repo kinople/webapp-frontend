@@ -4,15 +4,15 @@ import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
 import "../css/ScriptBreakdownNew.css";
 import { PiMagnifyingGlass, PiSlidersHorizontal } from "react-icons/pi";
-import { FaFileExcel, FaPlus, FaTrash } from "react-icons/fa";
+import { FaFileExcel, FaPlus, FaTrash, FaCamera } from "react-icons/fa";
 import * as XLSX from "xlsx";
 
 /*
   ScriptBreakdown page - final variant:
   - Table view: props columns (Action Props, Other Props, Picture Vehicles, Animals, Extras, Wardrobe, Set Dressing)
-    render as plain text in the table (no inline tag editors)
+	render as plain text in the table (no inline tag editors)
   - Scene editor view (opened when you click a row or press "Edit Breakdown") contains TagInput
-    for those props fields — add/remove tags only inside the edit view (exactly like prior behavior)
+	for those props fields — add/remove tags only inside the edit view (exactly like prior behavior)
   - Everything else (fetch/save, shadows, pdf preview) preserved
 */
 
@@ -319,6 +319,13 @@ const ScriptBreakdownNew = () => {
 		set_dressing: "",
 	});
 
+	// Reference Images state
+	const [referenceImages, setReferenceImages] = useState([]);
+	const [showReferenceImageModal, setShowReferenceImageModal] = useState(false);
+	const [isUploadingImage, setIsUploadingImage] = useState(false);
+	const [showImagePreviewModal, setShowImagePreviewModal] = useState(false);
+	const [previewImageIndex, setPreviewImageIndex] = useState(0);
+
 	// Derive master script (oldest/first uploaded) and generated scripts (all others)
 	const masterScript = useMemo(() => {
 		if (!allScripts || allScripts.length === 0) return null;
@@ -327,9 +334,9 @@ const ScriptBreakdownNew = () => {
 	}, [allScripts]);
 
 	const generatedScripts = useMemo(() => {
-		if (!allScripts || allScripts.length <= 1) return [];
+		if (!allScripts) return [];
 		// All scripts except the master (oldest one)
-		return allScripts.slice(0, -1);
+		return allScripts;
 	}, [allScripts]);
 
 	// View-only mode when on generated tab
@@ -478,7 +485,7 @@ const ScriptBreakdownNew = () => {
 					fetchMasterBreakdown();
 
 					// Set default generated script to the newest (first in sorted array) if there are multiple scripts
-					if (sorted.length > 1) {
+					if (sorted.length > 0) {
 						setSelectedGeneratedScript(sorted[0]);
 					}
 				}
@@ -517,6 +524,82 @@ const ScriptBreakdownNew = () => {
 			fetchBreakdown(script.id);
 		}
 	};
+
+	// ========== Reference Images Handlers ==========
+	const loadReferenceImages = useCallback(async (sceneIndex) => {
+		try {
+			const response = await fetch(getApiUrl(`/api/${id}/scene/${sceneIndex}/reference-images`));
+			if (response.ok) {
+				const data = await response.json();
+				setReferenceImages(data.reference_images || []);
+				setPreviewImageIndex(0);
+
+				// Also sync sceneBreakdowns to keep both states in sync
+				setSceneBreakdowns((prev) => {
+					const updated = [...prev];
+					if (updated[sceneIndex]) {
+						updated[sceneIndex].reference_images = data.reference_images || [];
+					}
+					return updated;
+				});
+			} else {
+				setReferenceImages([]);
+			}
+		} catch (e) {
+			console.error("Error loading reference images:", e);
+			setReferenceImages([]);
+		}
+	}, [id]);
+
+	const handleUploadReferenceImage = useCallback(async (file, sceneIndex) => {
+		if (!file) return;
+
+		setIsUploadingImage(true);
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+
+			const response = await fetch(getApiUrl(`/api/${id}/scene/${sceneIndex}/upload-reference-image`), {
+				method: 'POST',
+				body: formData,
+			});
+
+			if (!response.ok) throw new Error('Failed to upload image');
+
+			// Reload reference images from API to get fresh data (single source of truth)
+			await loadReferenceImages(sceneIndex);
+
+			alert('Image uploaded successfully!');
+		} catch (e) {
+			console.error('Error uploading image:', e);
+			alert('Failed to upload image');
+		} finally {
+			setIsUploadingImage(false);
+		}
+	}, [id, loadReferenceImages]);
+
+	const handleDeleteReferenceImage = useCallback(
+		async (imageId, sceneIndex) => {
+			if (!window.confirm('Are you sure you want to delete this image?')) return;
+
+			try {
+				const response = await fetch(getApiUrl(`/api/${id}/scene/${sceneIndex}/reference-image/${imageId}`), {
+					method: 'DELETE',
+				});
+
+				if (!response.ok) throw new Error('Failed to delete image');
+
+				// Reload reference images from API to get fresh data
+				await loadReferenceImages(sceneIndex);
+
+				alert('Image deleted successfully!');
+			} catch (e) {
+				console.error('Error deleting image:', e);
+				alert('Failed to delete image');
+			}
+		},
+		[id, loadReferenceImages]
+	);
 
 	useEffect(() => {
 		fetchAllScripts();
@@ -577,7 +660,7 @@ const ScriptBreakdownNew = () => {
 	// Load correct breakdown when tab changes
 	useEffect(() => {
 		if (activeTab === "master" && masterScript) {
-			setSelectedScript("masterScript");
+			setSelectedScript(masterScript);
 			fetchMasterBreakdown();
 		} else if (activeTab === "generated" && selectedGeneratedScript) {
 			setSelectedScript(selectedGeneratedScript);
@@ -587,18 +670,8 @@ const ScriptBreakdownNew = () => {
 		setViewMode("table");
 		setEditingScene(null);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [activeTab, masterScript]);
+	}, [activeTab, masterScript, selectedGeneratedScript]);
 
-	// Load breakdown when generated script selection changes
-	useEffect(() => {
-		if (activeTab === "generated" && selectedGeneratedScript) {
-			setSelectedScript(selectedGeneratedScript);
-			fetchBreakdown(selectedGeneratedScript.id);
-			setViewMode("table");
-			setEditingScene(null);
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedGeneratedScript]);
 
 	// Helper function to convert snake_case to Title Case for display
 	const snakeCaseToTitleCase = (str) => {
@@ -665,6 +738,7 @@ const ScriptBreakdownNew = () => {
 		setEditingScene(displayData);
 		setEditingSceneParsing(parsing[idx] || { heading: "", content: "" });
 
+
 		// Match characters by NAME from sceneData.characters to find IDs in allCharacters (castlist)
 		// This ensures consistency with the castlist regardless of old characters_ids
 		if (sceneData && sceneData.characters && Array.isArray(sceneData.characters)) {
@@ -681,6 +755,9 @@ const ScriptBreakdownNew = () => {
 		}
 		console.log(parsing[idx]);
 		setViewMode("scene");
+
+		// Load reference images for this scene
+		loadReferenceImages(idx);
 
 		// scroll to top so editor is visible
 		window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1164,9 +1241,9 @@ const ScriptBreakdownNew = () => {
 			const parseToArray = (str) =>
 				str
 					? str
-							.split(",")
-							.map((s) => s.trim())
-							.filter(Boolean)
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean)
 					: [];
 
 			// Prepare scene data for both scenes
@@ -1465,9 +1542,9 @@ const ScriptBreakdownNew = () => {
 			const parseToArray = (str) =>
 				str
 					? str
-							.split(",")
-							.map((s) => s.trim())
-							.filter(Boolean)
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean)
 					: [];
 
 			// Get character names from selected IDs
@@ -1676,9 +1753,9 @@ const ScriptBreakdownNew = () => {
 			const parseToArray = (str) =>
 				str
 					? str
-							.split(",")
-							.map((s) => s.trim())
-							.filter(Boolean)
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean)
 					: [];
 
 			// Get character names from selected IDs (using allCharacters from breakdown)
@@ -1980,6 +2057,64 @@ const ScriptBreakdownNew = () => {
 						);
 					})}
 
+					{/* Reference Images Section */}
+					{!isViewOnly && (
+						<div className="sbn-reference-images-section">
+							<h4 className="sbn-reference-title">Reference Images ({referenceImages.length})</h4>
+
+							{/* Upload Area */}
+							<div className="sbn-image-upload-area">
+								<label className="sbn-image-upload-label">
+									<input
+										type="file"
+										accept="image/*"
+										onChange={(e) => {
+											if (e.target.files && e.target.files[0]) {
+												handleUploadReferenceImage(e.target.files[0], editingSceneIndex);
+												e.target.value = ""; // Reset input
+											}
+										}}
+										disabled={isUploadingImage}
+										className="sbn-image-upload-input"
+										multiple={false}
+									/>
+									<span className="sbn-image-upload-btn">
+										{isUploadingImage ? "Uploading..." : "📸 Upload Image"}
+									</span>
+								</label>
+							</div>
+
+							{/* Images Gallery */}
+							{referenceImages.length > 0 && (
+								<div className="sbn-images-gallery">
+									{referenceImages.map((image, idx) => (
+										<div key={image.id} className="sbn-image-item">
+											<img
+												src={getApiUrl(`/api/${id}/reference-image/serve/${editingSceneIndex}/${image.id}`)}
+												alt={image.filename}
+												className="sbn-image-thumbnail"
+												onClick={() => {
+													setPreviewImageIndex(idx);
+													setShowImagePreviewModal(true);
+												}}
+											/>
+											<div className="sbn-image-info">
+												<span className="sbn-image-name">{image.filename}</span>
+												<button
+													className="sbn-image-delete-btn"
+													onClick={() => handleDeleteReferenceImage(image.id, editingSceneIndex)}
+													title="Delete image"
+												>
+													🗑️
+												</button>
+											</div>
+										</div>
+									))}
+								</div>
+							)}
+						</div>
+					)}
+
 					<div className="sbn-scene-actions">
 						{!isViewOnly && (
 							<button className="sbn-scene-save-btn" onClick={handleSaveSceneChanges}>
@@ -2002,9 +2137,9 @@ const ScriptBreakdownNew = () => {
 	};
 
 	/* ---------- Table render:
-       - Table cells show plain text; props columns are plain CSV strings in table
-       - Clicking a row opens the scene editor (where TagInput is available)
-       - Only show columns up to "Other Props"
+	   - Table cells show plain text; props columns are plain CSV strings in table
+	   - Clicking a row opens the scene editor (where TagInput is available)
+	   - Only show columns up to "Other Props"
   */
 	const renderTableContent = () => {
 		if (scriptBreakdown.length === 0) return null;
@@ -2026,15 +2161,19 @@ const ScriptBreakdownNew = () => {
 			"Extras",
 			"Wardrobe",
 			"Set Dressing",
+			"Reference",
 		];
 
 		// Add custom fields to visible columns
 		const customFieldDisplayNames = customFields.map((fieldKey) => snakeCaseToTitleCase(fieldKey));
 		const visibleColumns = [...defaultVisibleColumns, ...customFieldDisplayNames];
 
+		// Define special columns that are calculated dynamically (not in TSV data)
+		const specialColumns = ["Reference"];
+
 		// Filter headers to only show visible columns that exist in data
 		const headers = visibleColumns
-			.filter((col) => allHeaders.some((h) => h.toLowerCase() === col.toLowerCase()) || customFieldDisplayNames.includes(col))
+			.filter((col) => allHeaders.some((h) => h.toLowerCase() === col.toLowerCase()) || customFieldDisplayNames.includes(col) || specialColumns.includes(col))
 			.map((col) => allHeaders.find((h) => h.toLowerCase() === col.toLowerCase()) || col);
 
 		const filtered = scriptBreakdown.filter((row) => {
@@ -2114,9 +2253,8 @@ const ScriptBreakdownNew = () => {
 							{filtered.map((row, rIdx) => (
 								<React.Fragment key={rIdx}>
 									<tr
-										className={`sbn-data-row ${showPositionSelector ? "sbn-row-selectable" : ""} ${
-											removeSceneMode ? "sbn-row-removable" : ""
-										} ${splitSceneMode ? "sbn-row-splittable" : ""} ${mergeSceneMode ? "sbn-row-mergeable" : ""}`}
+										className={`sbn-data-row ${showPositionSelector ? "sbn-row-selectable" : ""} ${removeSceneMode ? "sbn-row-removable" : ""
+											} ${splitSceneMode ? "sbn-row-splittable" : ""} ${mergeSceneMode ? "sbn-row-mergeable" : ""}`}
 										onClick={() => {
 											if (showPositionSelector) return; // Disable row click in position selector mode
 											if (removeSceneMode) return; // Disable row click in remove mode
@@ -2230,13 +2368,30 @@ const ScriptBreakdownNew = () => {
 
 											let cellValue = row[header] ?? "";
 
-											// If custom field, get from sceneBreakdowns
-											if (isCustomField) {
+											// Handle Reference column
+											if (header === "Reference") {
 												const sceneNum = row["Scene Number"];
 												const sceneData = sceneBreakdowns.find((s) => s.scene_number === sceneNum);
-												if (sceneData && sceneData[fieldKey]) {
-													const arr = sceneData[fieldKey];
-													cellValue = Array.isArray(arr) && arr.length > 0 ? arr.join(", ") : "N/A";
+												const referenceImageCount = sceneData?.reference_images?.length || 0;
+												return (
+													<td key={cIdx} className="sbn-data-cell">
+														<div
+															className="sbn-reference-btn"
+															style={{ display: "flex", alignItems: "center", gap: "6px", padding: "4px 10px", borderRadius: "6px", background: referenceImageCount > 0 ? "#e3eaff" : "#f5f5f5", border: "1px solid #d0d0d0" }}
+														>
+															<FaCamera style={{ color: referenceImageCount > 0 ? "#3a6eea" : "#aaa", fontSize: "18px" }} />
+															<span style={{ fontWeight: 600, color: referenceImageCount > 0 ? "#3a6eea" : "#888", fontSize: "15px" }}>{referenceImageCount}</span>
+														</div>
+													</td>
+												);
+											}
+
+											// If custom field, get from sceneBreakdowns
+											if (isCustomField) {
+												const customSceneNum = row["Scene Number"];
+												const customSceneData = sceneBreakdowns.find((s) => s.scene_number === customSceneNum);
+												if (customSceneData && customSceneData[fieldKey]) {
+													const arr = customSceneData[fieldKey];
 												} else {
 													cellValue = "N/A";
 												}
@@ -2444,6 +2599,54 @@ const ScriptBreakdownNew = () => {
 							<button className="sbn-element-add-btn" onClick={handleAddElement} disabled={isAddingElement || !newElementName.trim()}>
 								{isAddingElement ? "Adding..." : "Add Element"}
 							</button>
+						</div>
+					</div>
+				</div>
+			)}
+			{/* Image Preview Modal */}
+			{showImagePreviewModal && referenceImages.length > 0 && (
+				<div className="sbn-overlay" onClick={() => setShowImagePreviewModal(false)}>
+					<div className="sbn-image-preview-modal" onClick={(e) => e.stopPropagation()}>
+						<button className="sbn-modal-close-btn" onClick={() => setShowImagePreviewModal(false)}>
+							×
+						</button>
+						<div className="sbn-image-preview-container">
+							<img
+								src={getApiUrl(
+									`/api/${id}/reference-image/serve/${editingSceneIndex}/${referenceImages[previewImageIndex].id}`
+								)}
+								alt={referenceImages[previewImageIndex].filename}
+								className="sbn-image-preview"
+							/>
+							<div className="sbn-image-nav">
+								<button
+									className="sbn-image-nav-btn"
+									onClick={() =>
+										setPreviewImageIndex(
+											previewImageIndex === 0 ? referenceImages.length - 1 : previewImageIndex - 1
+										)
+									}
+								>
+									‹ Previous
+								</button>
+								<span className="sbn-image-counter">
+									{previewImageIndex + 1} of {referenceImages.length}
+								</span>
+								<button
+									className="sbn-image-nav-btn"
+									onClick={() =>
+										setPreviewImageIndex(
+											previewImageIndex === referenceImages.length - 1 ? 0 : previewImageIndex + 1
+										)
+									}
+								>
+									Next ›
+								</button>
+							</div>
+							<div className="sbn-image-info-detail">
+								<p className="sbn-image-filename">{referenceImages[previewImageIndex].filename}</p>
+								<p className="sbn-image-date">{referenceImages[previewImageIndex].uploaded_at}</p>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -3142,9 +3345,8 @@ const ScriptBreakdownNew = () => {
 										<span className="sbn-page-eighths-hint">
 											{mergeSceneForm.page_eighths <= 8
 												? `= ${mergeSceneForm.page_eighths}/8 page`
-												: `= ${Math.floor(mergeSceneForm.page_eighths / 8)} ${
-														mergeSceneForm.page_eighths % 8 > 0 ? `${mergeSceneForm.page_eighths % 8}/8` : ""
-													} pages`}
+												: `= ${Math.floor(mergeSceneForm.page_eighths / 8)} ${mergeSceneForm.page_eighths % 8 > 0 ? `${mergeSceneForm.page_eighths % 8}/8` : ""
+												} pages`}
 										</span>
 									</div>
 								</div>
@@ -3408,9 +3610,8 @@ const ScriptBreakdownNew = () => {
 										<span className="sbn-page-eighths-hint">
 											{newSceneForm.page_eighths <= 8
 												? `= ${newSceneForm.page_eighths}/8 page`
-												: `= ${Math.floor(newSceneForm.page_eighths / 8)} ${
-														newSceneForm.page_eighths % 8 > 0 ? `${newSceneForm.page_eighths % 8}/8` : ""
-													} pages`}
+												: `= ${Math.floor(newSceneForm.page_eighths / 8)} ${newSceneForm.page_eighths % 8 > 0 ? `${newSceneForm.page_eighths % 8}/8` : ""
+												} pages`}
 										</span>
 									</div>
 								</div>
@@ -3755,9 +3956,8 @@ const ScriptBreakdownNew = () => {
 									Add Element
 								</button>
 								<button
-									className={`sbn-action-btn ${removeElementMode ? "sbn-action-btn-active" : ""} ${
-										removeElementMode && selectedElementToRemove ? "sbn-action-btn-remove" : ""
-									}`}
+									className={`sbn-action-btn ${removeElementMode ? "sbn-action-btn-active" : ""} ${removeElementMode && selectedElementToRemove ? "sbn-action-btn-remove" : ""
+										}`}
 									onClick={handleRemoveElementClick}
 								>
 									{removeElementMode && selectedElementToRemove ? "Confirm Remove" : removeElementMode ? "Cancel" : "Remove Element"}

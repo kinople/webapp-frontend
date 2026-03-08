@@ -474,7 +474,7 @@ const Locations = () => {
 					if (breakdownResponse.ok) {
 						const breakdownData = await breakdownResponse.json();
 						const scenes = breakdownData.scene_breakdowns || [];
-						
+
 						// Create mapping from scene_number to synopsis
 						const sceneToSynopsisMap = {};
 						scenes.forEach((scene) => {
@@ -623,7 +623,7 @@ const Locations = () => {
 			setIsLoading(true);
 
 			// Build request body with optional scene IDs
-			const requestBody = { 
+			const requestBody = {
 				locationName: newGroupName.trim(),
 				sceneIds: Array.from(selectedSceneIds),
 				scriptId: masterScriptId
@@ -712,9 +712,9 @@ const Locations = () => {
 	const getCastIdsForLocation = (locationScenes) => {
 		const castIds = new Set();
 		const castDetails = [];
-		
+
 		if (!locationScenes || !Array.isArray(locationScenes)) return [];
-		
+
 		locationScenes.forEach((scene) => {
 			const sceneNumber = String(scene.scene_number || scene.scene_id);
 			const sceneCasts = castMap[sceneNumber] || [];
@@ -725,7 +725,7 @@ const Locations = () => {
 				}
 			});
 		});
-		
+
 		// Sort cast details by cast_id in ascending order
 		return castDetails.sort((a, b) => {
 			const aId = parseInt(a.cast_id) || 0;
@@ -778,19 +778,19 @@ const Locations = () => {
 
 	const toggleLocationSelection = (idx) => {
 		if (!locationSelectionMode) return; // Don't allow selection if not in a mode
-		
+
 		setSelectedLocations((prev) => {
 			const next = new Set(prev);
 			if (next.has(idx)) {
 				next.delete(idx);
 				return next;
 			}
-			
+
 			// For remove and split modes, only allow 1 selection
 			if (locationSelectionMode === 'remove' || locationSelectionMode === 'split') {
 				return new Set([idx]);
 			}
-			
+
 			// For merge mode, allow up to 2 selections
 			if (locationSelectionMode === 'merge') {
 				if (next.size < 2) {
@@ -803,7 +803,7 @@ const Locations = () => {
 					return new Set(arr);
 				}
 			}
-			
+
 			return next;
 		});
 	};
@@ -930,18 +930,18 @@ const Locations = () => {
 		if (selectedLocations.size === 1) {
 			const idx = Array.from(selectedLocations)[0];
 			const location = locationData.locations[idx];
-			
+
 			// Get the scenes for this location
 			const locationScenes = location.scenes || [];
 			setSplitLocationScenes(locationScenes);
 			console.log("locationScenes ", locationScenes);
-			
+
 			// Reset split form
 			setSplitNewName1("");
 			setSplitNewName2("");
 			setScenesForSet1(new Set());
 			setScenesForSet2(new Set());
-			
+
 			// Fetch master script ID if not available
 			if (!masterScriptId) {
 				try {
@@ -957,7 +957,7 @@ const Locations = () => {
 					console.error("Error fetching scripts:", error);
 				}
 			}
-			
+
 			setShowSplitModal(true);
 		} else {
 			alert("Please select a set to split");
@@ -967,7 +967,7 @@ const Locations = () => {
 	// Toggle scene assignment for split
 	const toggleSceneForSplit = (sceneId, targetSet) => {
 		const sceneIdStr = String(sceneId);
-		
+
 		if (targetSet === 1) {
 			setScenesForSet1((prev) => {
 				const next = new Set(prev);
@@ -1178,7 +1178,7 @@ const Locations = () => {
 					}
 				}
 			}
-			
+
 
 			const response = await fetch(getApiUrl(`/api/${id}/location/regroup-scenes`), {
 				method: "POST",
@@ -1328,8 +1328,8 @@ const Locations = () => {
 											<span className="loc-selection-mode-label loc-regroup-label">
 												Regroup Mode: Drag scenes between sets ({sceneMoves.length} move{sceneMoves.length !== 1 ? 's' : ''} pending)
 											</span>
-											<button 
-												className="loc-btn-primary" 
+											<button
+												className="loc-btn-primary"
 												onClick={applyRegroupChanges}
 												disabled={sceneMoves.length === 0}
 											>
@@ -1351,9 +1351,9 @@ const Locations = () => {
 												<PiMinusCircle />
 												Remove Set
 											</button>
-											
+
 											<div className="loc-header-divider-vertical"></div>
-											
+
 											<button className="loc-btn-secondary" onClick={enterMergeMode}>
 												<PiArrowsMerge />
 												Merge Sets
@@ -1387,8 +1387,8 @@ const Locations = () => {
 									) : locationSelectionMode === 'remove' ? (
 										<>
 											<span className="loc-selection-mode-label">Select a set to remove:</span>
-											<button 
-												className="loc-btn-danger" 
+											<button
+												className="loc-btn-danger"
 												onClick={handleRemoveLocationsClick}
 												disabled={selectedLocations.size !== 1}
 											>
@@ -1405,8 +1405,8 @@ const Locations = () => {
 											<span className="loc-selection-mode-label">
 												Select 2 sets to merge ({selectedLocations.size}/2 selected):
 											</span>
-											<button 
-												className="loc-btn-primary" 
+											<button
+												className="loc-btn-primary"
 												onClick={handleMergeLocationsClick}
 												disabled={selectedLocations.size !== 2}
 											>
@@ -1423,8 +1423,8 @@ const Locations = () => {
 											<span className="loc-selection-mode-label">
 												Select a set to split ({selectedLocations.size}/1 selected):
 											</span>
-											<button 
-												className="loc-btn-primary" 
+											<button
+												className="loc-btn-primary"
 												onClick={handleSplitLocationClick}
 												disabled={selectedLocations.size !== 1}
 											>
@@ -1473,7 +1473,6 @@ const Locations = () => {
 													<div className={`loc-location-info ${isCollapsed ? "loc-location-info-inline" : ""}`}>
 														<span className="loc-location-id-box">{idx + 1}</span>
 														<span className="loc-location-name">{location.location}</span>
-														<span className="loc-extra-id">#{location.location_id}</span>
 													</div>
 
 													{/* Collapse Button - only show here when expanded */}
@@ -1610,10 +1609,9 @@ const Locations = () => {
 															<PiMinusCircle />
 															{!isSelectingMode.has(idx)
 																? "Remove Option"
-																: `Remove Selected (${
-																		Array.from(selectedOptions).filter((key) => key.startsWith(`${idx}-`))
-																			.length
-																  })`}
+																: `Remove Selected (${Array.from(selectedOptions).filter((key) => key.startsWith(`${idx}-`))
+																	.length
+																})`}
 														</button>
 													</div>
 												)}
@@ -1673,9 +1671,8 @@ const Locations = () => {
 																{/* View Buttons */}
 																<div className="loc-view-buttons">
 																	<button
-																		className={`loc-btn-view ${
-																			showOptions ? "loc-btn-view-primary" : "loc-btn-view-outline"
-																		} ${isRegroupMode ? "loc-btn-disabled" : ""}`}
+																		className={`loc-btn-view ${showOptions ? "loc-btn-view-primary" : "loc-btn-view-outline"
+																			} ${isRegroupMode ? "loc-btn-disabled" : ""}`}
 																		onClick={() => {
 																			if (isRegroupMode) return; // Disable in regroup mode
 																			setExpandedOptions((p) => {
@@ -1696,9 +1693,8 @@ const Locations = () => {
 																	</button>
 
 																	<button
-																		className={`loc-btn-view ${
-																			showScenes ? "loc-btn-view-primary" : "loc-btn-view-outline"
-																		} ${isRegroupMode ? "loc-btn-disabled" : ""}`}
+																		className={`loc-btn-view ${showScenes ? "loc-btn-view-primary" : "loc-btn-view-outline"
+																			} ${isRegroupMode ? "loc-btn-disabled" : ""}`}
 																		onClick={() => {
 																			if (isRegroupMode) return; // Disable in regroup mode
 																			setExpandedScenes((p) => {
@@ -1778,11 +1774,10 @@ const Locations = () => {
 																						? dates.length <= 3
 																							? dates.map(formatDate).join(", ")
 																							: `${dates
-																									.slice(0, 2)
-																									.map(formatDate)
-																									.join(", ")} +${
-																									dates.length - 2
-																							  } more`
+																								.slice(0, 2)
+																								.map(formatDate)
+																								.join(", ")} +${dates.length - 2
+																							} more`
 																						: "-";
 
 																				return (
@@ -1843,8 +1838,8 @@ const Locations = () => {
 																							title={
 																								Array.isArray(dates) && dates.length > 0
 																									? `Available dates:\n${dates.join(
-																											"\n"
-																									  )}`
+																										"\n"
+																									)}`
 																									: "No dates set"
 																							}
 																						>
@@ -1852,9 +1847,8 @@ const Locations = () => {
 																						</td>
 																						<td onClick={(e) => e.stopPropagation()}>
 																							<button
-																								className={`loc-lock-btn ${
-																									locked ? "loc-locked" : ""
-																								} ${otherLocked ? "loc-disabled" : ""}`}
+																								className={`loc-lock-btn ${locked ? "loc-locked" : ""
+																									} ${otherLocked ? "loc-disabled" : ""}`}
 																								onClick={() =>
 																									toggleLockOption(
 																										idx,
@@ -1867,8 +1861,8 @@ const Locations = () => {
 																									locked
 																										? "Click to unlock"
 																										: otherLocked
-																										? "Another option is locked"
-																										: "Click to lock"
+																											? "Another option is locked"
+																											: "Click to lock"
 																								}
 																							>
 																								{locked ? (
@@ -1893,54 +1887,54 @@ const Locations = () => {
 																	</div>
 																)
 															) : // Scenes Table
-															(location.scenes || []).length > 0 || isRegroupMode ? (
-																<div
-																	className={`loc-scenes-drop-zone ${isRegroupMode ? "loc-drop-active" : ""} ${draggedScene && dragSourceLocationId !== location.location_id ? "loc-drop-target" : ""}`}
-																	onDragOver={(e) => handleDragOver(e, location.location_id)}
-																	onDrop={(e) => handleDrop(e, location.location_id)}
-																>
-																	{isRegroupMode && (location.scenes || []).length === 0 && (
-																		<div className="loc-drop-placeholder">
-																			Drop scenes here
-																		</div>
-																	)}
-																	<table className="loc-data-table">
-																		<thead>
-																			<tr>
-																				<th>Scene No</th>
-																				<th>Int./Ext.</th>
-																				<th>Set</th>
-																				<th>Time</th>
-																				<th>Synopsis</th>
-																				<th>Cast</th>
-																			</tr>
-																		</thead>
-																		<tbody>
-																			{(location.scenes || []).map((scene, i) => (
-																				<tr 
-																					key={i}
-																					draggable={isRegroupMode}
-																					onDragStart={(e) => handleDragStart(e, scene, location.location_id)}
-																					onDragEnd={handleDragEnd}
-																					className={`${isRegroupMode ? "loc-scene-draggable" : ""} ${draggedScene && String(draggedScene.scene_id) === String(scene.scene_id) ? "loc-scene-dragging" : ""}`}
-																				>
-																					<td>{scene.scene_number}</td>
-																					<td>{scene.int_ext}</td>
-																					<td>{location.location}</td>
-																					<td>{scene.time}</td>
-																					<td className="loc-synopsis-cell">{getSynopsisForScene(scene.scene_number)}</td>
-																					<td>{getCastForScene(scene.scene_number)}</td>
+																(location.scenes || []).length > 0 || isRegroupMode ? (
+																	<div
+																		className={`loc-scenes-drop-zone ${isRegroupMode ? "loc-drop-active" : ""} ${draggedScene && dragSourceLocationId !== location.location_id ? "loc-drop-target" : ""}`}
+																		onDragOver={(e) => handleDragOver(e, location.location_id)}
+																		onDrop={(e) => handleDrop(e, location.location_id)}
+																	>
+																		{isRegroupMode && (location.scenes || []).length === 0 && (
+																			<div className="loc-drop-placeholder">
+																				Drop scenes here
+																			</div>
+																		)}
+																		<table className="loc-data-table">
+																			<thead>
+																				<tr>
+																					<th>Scene No</th>
+																					<th>Int./Ext.</th>
+																					<th>Set</th>
+																					<th>Time</th>
+																					<th>Synopsis</th>
+																					<th>Cast</th>
 																				</tr>
-																			))}
-																		</tbody>
-																	</table>
-																</div>
-															) : (
-																<div className="loc-empty-state">
-																	<PiFolderPlus className="loc-empty-icon" />
-																	<span className="loc-empty-text">No scenes listed for this Set</span>
-																</div>
-															)}
+																			</thead>
+																			<tbody>
+																				{(location.scenes || []).map((scene, i) => (
+																					<tr
+																						key={i}
+																						draggable={isRegroupMode}
+																						onDragStart={(e) => handleDragStart(e, scene, location.location_id)}
+																						onDragEnd={handleDragEnd}
+																						className={`${isRegroupMode ? "loc-scene-draggable" : ""} ${draggedScene && String(draggedScene.scene_id) === String(scene.scene_id) ? "loc-scene-dragging" : ""}`}
+																					>
+																						<td>{scene.scene_number}</td>
+																						<td>{scene.int_ext}</td>
+																						<td>{location.location}</td>
+																						<td>{scene.time}</td>
+																						<td className="loc-synopsis-cell">{getSynopsisForScene(scene.scene_number)}</td>
+																						<td>{getCastForScene(scene.scene_number)}</td>
+																					</tr>
+																				))}
+																			</tbody>
+																		</table>
+																	</div>
+																) : (
+																	<div className="loc-empty-state">
+																		<PiFolderPlus className="loc-empty-icon" />
+																		<span className="loc-empty-text">No scenes listed for this Set</span>
+																	</div>
+																)}
 														</div>
 													</div>
 												</div>
@@ -2066,11 +2060,11 @@ const Locations = () => {
 				<div className="loc-modal-overlay" onClick={() => setShowAddGroupModal(false)}>
 					<div className="loc-modal loc-add-group-modal" onClick={(e) => e.stopPropagation()}>
 						<h3 className="loc-modal-title">Add Set</h3>
-						<form 
+						<form
 							onSubmit={(e) => {
 								e.preventDefault();
 								addLocationGroup();
-							}} 
+							}}
 							className="loc-form"
 						>
 							<div className="loc-form-group">
@@ -2091,14 +2085,14 @@ const Locations = () => {
 								<button type="submit" className="loc-submit-btn" disabled={!newGroupName.trim()}>
 									Add Set
 								</button>
-								<button 
-									type="button" 
+								<button
+									type="button"
 									onClick={() => {
 										setShowAddGroupModal(false);
 										setNewGroupName("");
 										setSelectedSceneIds(new Set());
 										setAllScenes([]);
-									}} 
+									}}
 									className="loc-cancel-btn"
 								>
 									Cancel
@@ -2171,7 +2165,7 @@ const Locations = () => {
 									</div>
 								))}
 							</div>
-							
+
 							<div className="loc-form-group">
 								<label className="loc-label">New Merged Set Name:</label>
 								<input
@@ -2195,7 +2189,7 @@ const Locations = () => {
 									<span>Merge set options from both sets</span>
 								</label>
 								<p className="loc-merge-checkbox-hint">
-									{mergeOptions 
+									{mergeOptions
 										? "Set options from both sets will be combined. No option will be locked."
 										: "No set options will be kept in the merged set."
 									}
@@ -2207,9 +2201,9 @@ const Locations = () => {
 							</p>
 						</div>
 						<div className="loc-modal-buttons">
-							<button 
-								type="button" 
-								onClick={performMergeLocations} 
+							<button
+								type="button"
+								onClick={performMergeLocations}
 								className="loc-submit-btn"
 								disabled={!mergedLocationName.trim()}
 							>
@@ -2257,7 +2251,7 @@ const Locations = () => {
 									({splitLocationScenes.length} scenes)
 								</span>
 							</div>
-							
+
 							<div className="loc-split-names-row">
 								<div className="loc-form-group loc-split-name-group">
 									<label className="loc-label">New Set 1 Name: <span className="loc-required">*</span></label>
@@ -2288,7 +2282,7 @@ const Locations = () => {
 								<p className="loc-split-scenes-hint">
 									Click on a set column to assign each scene. Each scene can only belong to one set.
 								</p>
-								
+
 								{splitLocationScenes.length === 0 ? (
 									<div className="loc-split-no-scenes">
 										No scenes in this set to split.
@@ -2313,22 +2307,22 @@ const Locations = () => {
 											</thead>
 											<tbody>
 												{splitLocationScenes.map((scene, idx) => {
-													const sceneId = String(scene.scene_id );
+													const sceneId = String(scene.scene_id);
 													const isInSet1 = scenesForSet1.has(sceneId);
 													const isInSet2 = scenesForSet2.has(sceneId);
-													
+
 													return (
 														<tr key={idx} className="loc-split-scene-row">
 															<td className="loc-split-scene-number">{scene.scene_number}</td>
 															<td className="loc-split-scene-detail">{scene.int_ext || "-"}</td>
 															<td className="loc-split-scene-detail">{scene.time || "-"}</td>
-															<td 
+															<td
 																className={`loc-split-assign-cell ${isInSet1 ? "loc-split-assigned" : ""}`}
 																onClick={() => toggleSceneForSplit(sceneId, 1)}
 															>
 																{isInSet1 ? <PiCheckSquareFill /> : <PiSquare />}
 															</td>
-															<td 
+															<td
 																className={`loc-split-assign-cell ${isInSet2 ? "loc-split-assigned" : ""}`}
 																onClick={() => toggleSceneForSplit(sceneId, 2)}
 															>
@@ -2361,9 +2355,9 @@ const Locations = () => {
 							</p>
 						</div>
 						<div className="loc-modal-buttons">
-							<button 
-								type="button" 
-								onClick={performSplitLocation} 
+							<button
+								type="button"
+								onClick={performSplitLocation}
 								className="loc-submit-btn"
 								disabled={!splitNewName1.trim() || !splitNewName2.trim() || (scenesForSet1.size === 0 && scenesForSet2.size === 0)}
 							>

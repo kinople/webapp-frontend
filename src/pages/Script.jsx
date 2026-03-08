@@ -26,7 +26,7 @@ const Script = () => {
 	const [newFileName, setNewFileName] = useState("");
 	const [showFileNameModal, setShowFileNameModal] = useState(false);
 	const [tempFile, setTempFile] = useState(null);
-	const [selectedModel, setSelectedModel] = useState("gpt-4.1-2025-04-14");
+	const [selectedModel, setSelectedModel] = useState("gpt-5.2");
 	const [progress, setProgress] = useState(0);
 	const [breakdownMessage, setBreakdownMessage] = useState("");
 	const [activeDropdown, setActiveDropdown] = useState(null);
@@ -340,7 +340,7 @@ const Script = () => {
 		setShowFileNameModal(false);
 		setNewFileName("");
 		setTempFile(null);
-		setSelectedModel("gpt-4.1-2025-04-14");
+		setSelectedModel("gpt-5.2");
 		setIsGeneratingBreakdown(false);
 		setProgress(0);
 		setBreakdownMessage("");
@@ -518,7 +518,7 @@ const Script = () => {
 												className="script-model-select"
 												disabled={isProcessing}
 											>
-												<option value="gpt-4.1-2025-04-14">GPT-4.1 (2025-04-14)</option>
+												<option value="GPT-4.1 (2025-04-14)">GPT-4.1 (2025-04-14)</option>
 												<option value="gpt-5">GPT-5 (2025-08-07)</option>
 												<option value="gpt-5-nano-2025-08-07">GPT-5 Nano (2025-08-07)</option>
 												<option value="gpt-5-mini-2025-08-07">GPT-5 Mini (2025-08-07)</option>

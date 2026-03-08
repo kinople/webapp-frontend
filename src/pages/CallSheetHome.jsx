@@ -8,13 +8,13 @@ const CallSheetHome = () => {
 
     return (
         <div style={styles.pageContainer}>
-            <ProjectHeader />
+            <ProjectHeader hideProjectName />
             <div style={styles.content}>
                 <h2 style={styles.title}>Call Sheets</h2>
                 <div style={styles.buttonContainer}>
                     <button 
                         style={styles.button}
-                        onClick={() => navigate(`/${user}/${id}/crew`)}
+                        onClick={() => navigate(`/${user}/${id}/crew-list`)}
                     >
                         Crew List
                     </button>
