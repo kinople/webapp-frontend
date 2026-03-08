@@ -1743,3 +1743,20 @@
 		gap: 8px;
 	}
 }
+/* added for calendar available and unavailable dates */
+.cln-highlight-green {
+    background-color: #34a853 !important;
+    color: white !important;
+}
+
+.cln-highlight-red {
+    background-color: #ea4335 !important;
+    color: white !important;
+}
+
+.cln-disabled-date {
+    background-color: #f1f3f4 !important;
+    color: #bdc1c6 !important;
+    cursor: not-allowed !important;
+    opacity: 0.6;
+}

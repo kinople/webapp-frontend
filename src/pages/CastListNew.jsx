@@ -318,7 +318,7 @@ const CastListNew = () => {
 	const [scenesForChar1, setScenesForChar1] = useState(new Set());
 	const [scenesForChar2, setScenesForChar2] = useState(new Set());
 	const [splitCharacterScenes, setSplitCharacterScenes] = useState([]);
-
+    const [mapping, setMapping] = useState({});
 	// Compute castIdToSceneIds: map from cast_id -> array of scene IDs (scene.id)
 	// Derived from the scenes (breakdown) data using characters_ids
 	const castIdToSceneIds = useMemo(() => {
@@ -366,6 +366,13 @@ const CastListNew = () => {
 				if (!res.ok) throw new Error("Failed to fetch cast list");
 				const data = await res.json();
 				setCastData(data);
+                const mapping = Object.fromEntries(
+                  [...data.cast_list]
+                    .map((m, i) => ({ ...m, i }))
+                    .sort((a, b) => Number(a.cast_id) - Number(b.cast_id))
+                    .map((m, sortedIdx) => [sortedIdx, m.i])
+                );
+				setMapping(mapping);
 				console.log("cast-list ------------ ", data);
 				if (Array.isArray(data?.cast_list)) setExpandedOptions(new Set(data.cast_list.map((_, i) => i)));
 			} catch (e) {
@@ -1009,6 +1016,9 @@ const CastListNew = () => {
 		setCharacterSelectionMode(null);
 	};
 
+
+
+
 	return (
 		<div className="cln-page-container">
 			<div className="cln-main-content">
@@ -1133,9 +1143,12 @@ const CastListNew = () => {
 
 							{/* Character Cards */}
 							<div className="cln-cards-container">
-								{[...castData.cast_list]
+								{
+								
+								[...castData.cast_list]
 									.sort((a, b) => Number(a.cast_id) - Number(b.cast_id))
-									.map((member, idx) => {
+									.map((member, id) => {
+										const idx=mapping[id];
 										// Get scene IDs for this character from the scenes breakdown using cast_id
 										const memberSceneIds = castIdToSceneIds[String(member.cast_id)] || [];
 										const memberSceneIdsStr = memberSceneIds.map(String);
@@ -1245,7 +1258,7 @@ const CastListNew = () => {
 															<button
 																className="cln-btn-add-option"
 																onClick={() => {
-																	setSelectedCharacterIndex(member.cast_id);
+																	setSelectedCharacterIndex(idx);
 																	setShowAddOptionModal(true);
 																	setOptionForm({
 																		actorName: "",
@@ -1817,7 +1830,7 @@ const CastListNew = () => {
 							<div className="cln-merge-characters-list">
 								{Array.from(selectedCharacters).map((idx) => (
 									<div key={idx} className="cln-merge-character-item">
-										<span className="cln-merge-character-id">{idx + 1}</span>
+										<span className="cln-merge-character-id">{castData.cast_list[idx]?.cast_id}</span>
 										<span className="cln-merge-character-name">{castData.cast_list[idx]?.character}</span>
 										<span className="cln-merge-character-scenes">({castData.cast_list[idx]?.scene_count || 0} scenes)</span>
 									</div>
@@ -1897,7 +1910,7 @@ const CastListNew = () => {
 						<div className="cln-split-modal-content">
 							<p className="cln-split-info-text">You are splitting the character:</p>
 							<div className="cln-split-source-char">
-								<span className="cln-split-source-id">{Array.from(selectedCharacters)[0] + 1}</span>
+								<span className="cln-split-source-id">{castData.cast_list[Array.from(selectedCharacters)[0]]?.cast_id}</span>
 								<span className="cln-split-source-name">{castData.cast_list[Array.from(selectedCharacters)[0]]?.character}</span>
 								<span className="cln-split-source-scenes">({splitCharacterScenes.length} scenes)</span>
 							</div>

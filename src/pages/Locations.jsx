@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
 import {
@@ -291,6 +291,7 @@ const Locations = () => {
 	const [castMap, setCastMap] = useState({});
 	// Breakdown synopsis map
 	const [synopsisMap, setSynopsisMap] = useState({});
+	const [scenes, setScenes] = useState([]);
 	// Regroup mode state
 	const [isRegroupMode, setIsRegroupMode] = useState(false);
 	const [sceneMoves, setSceneMoves] = useState([]); // Track scene moves: [{ scene_id, from_location_id, to_location_id }]
@@ -380,7 +381,7 @@ const Locations = () => {
 		if (selectedSceneIds.size === allScenes.length) {
 			setSelectedSceneIds(new Set());
 		} else {
-			setSelectedSceneIds(new Set(allScenes.map((scene) => scene.scene_id || scene.scene_number)));
+			setSelectedSceneIds(new Set(allScenes.map((scene) => scene.id)));
 		}
 	}, [allScenes, selectedSceneIds.size]);
 
@@ -417,80 +418,41 @@ const Locations = () => {
 		fetchLocations();
 	}, [id]);
 
-	// Fetch cast list to get cast IDs for each scene
-	useEffect(() => {
-		const fetchCastList = async () => {
-			try {
-				const response = await fetch(getApiUrl(`/api/${id}/cast-list`));
-				if (!response.ok) return;
-				const data = await response.json();
+	// Fetch logic removed for cast list, since we use character_ids instead.
 
-				// Create mapping from scene number to cast IDs
-				const sceneTocastMap = {};
-				if (data?.cast_list) {
-					data.cast_list.forEach((cast) => {
-						if (cast.scenes && Array.isArray(cast.scenes)) {
-							cast.scenes.forEach((scene) => {
-								const sceneKey = String(scene);
-								if (!sceneTocastMap[sceneKey]) {
-									sceneTocastMap[sceneKey] = [];
-								}
-								sceneTocastMap[sceneKey].push({
-									cast_id: cast.cast_id,
-									character: cast.character
-								});
-							});
-						}
-					});
-				}
-				setCastMap(sceneTocastMap);
-			} catch (error) {
-				console.error("Error fetching cast list:", error);
-			}
-		};
-
-		fetchCastList();
-	}, [id]);
-
-	// Fetch breakdown data to get synopsis for each scene
-	useEffect(() => {
-		const fetchBreakdownForSynopsis = async () => {
-			try {
-				// First, get the list of scripts
-				const scriptsResponse = await fetch(getApiUrl(`/api/${id}/script-list`));
-				if (!scriptsResponse.ok) {
-					console.error("Failed to fetch scripts");
+	// Fetch breakdown data to get scenes and synopsis
+	const fetchBreakdownData = useCallback(async () => {
+		try {
+			const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?project_id=${id}`));
+			if (!breakdownResponse.ok) {
+				if (breakdownResponse.status === 404) {
 					return;
 				}
-				const scripts = await scriptsResponse.json();
-				const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
-
-				if (sortedScripts.length > 0) {
-					// Get master script (oldest/first uploaded)
-					const masterScript = sortedScripts[sortedScripts.length - 1];
-
-					// Fetch breakdown
-					const breakdownResponse = await fetch(getApiUrl(`/api/fetch-breakdown?project_id=${id}`));
-					if (breakdownResponse.ok) {
-						const breakdownData = await breakdownResponse.json();
-						const scenes = breakdownData.scene_breakdowns || [];
-						
-						// Create mapping from scene_number to synopsis
-						const sceneToSynopsisMap = {};
-						scenes.forEach((scene) => {
-							const sceneKey = String(scene.scene_number || scene.scene_id);
-							sceneToSynopsisMap[sceneKey] = scene.synopsis || "";
-						});
-						setSynopsisMap(sceneToSynopsisMap);
-					}
-				}
-			} catch (error) {
-				console.error("Error fetching breakdown for synopsis:", error);
+				throw new Error("Failed to fetch breakdown");
 			}
-		};
+			const breakdownData = await breakdownResponse.json();
 
-		fetchBreakdownForSynopsis();
+			// Use scene_breakdowns (JSON format) to get the 'set' field
+			if (breakdownData.scene_breakdowns) {
+				setScenes(breakdownData.scene_breakdowns);
+				console.log("break-down------------- ", breakdownData.scene_breakdowns);
+				
+				// Create mapping from scene_number to synopsis
+				const sceneToSynopsisMap = {};
+				breakdownData.scene_breakdowns.forEach((scene) => {
+					const sceneKey = String(scene.id);
+					sceneToSynopsisMap[sceneKey] = scene.synopsis || "";
+				});
+				setSynopsisMap(sceneToSynopsisMap);
+			}
+		} catch (error) {
+			console.error("Error fetching breakdown data:", error);
+		}
 	}, [id]);
+
+	useEffect(() => {
+		fetchBreakdownData();
+	}, [fetchBreakdownData]);
 
 	const addLocationOption = async (locationIndex, formData) => {
 		try {
@@ -716,12 +678,12 @@ const Locations = () => {
 		if (!locationScenes || !Array.isArray(locationScenes)) return [];
 		
 		locationScenes.forEach((scene) => {
-			const sceneNumber = String(scene.scene_number || scene.scene_id);
-			const sceneCasts = castMap[sceneNumber] || [];
-			sceneCasts.forEach((cast) => {
-				if (!castIds.has(cast.cast_id)) {
-					castIds.add(cast.cast_id);
-					castDetails.push(cast);
+			const charIds = scene.character_ids || scene.characters_ids || [];
+			charIds.forEach((cast_id) => {
+				const idStr = String(cast_id);
+				if (!castIds.has(idStr)) {
+					castIds.add(idStr);
+					castDetails.push({ cast_id: idStr, character: "" });
 				}
 			});
 		});
@@ -735,12 +697,10 @@ const Locations = () => {
 	};
 
 	// Get cast IDs for a specific scene
-	const getCastForScene = (sceneNumber) => {
-		const sceneKey = String(sceneNumber);
-		const sceneCasts = castMap[sceneKey] || [];
-		// Sort cast IDs in ascending order
-		const sortedCastIds = sceneCasts
-			.map(c => c.cast_id)
+	const getCastForScene = (scene) => {
+		const charIds = scene.character_ids || scene.characters_ids || [];
+		const sortedCastIds = charIds
+			.map(String)
 			.sort((a, b) => {
 				const aId = parseInt(a) || 0;
 				const bId = parseInt(b) || 0;
@@ -750,8 +710,8 @@ const Locations = () => {
 	};
 
 	// Get synopsis for a specific scene from breakdown
-	const getSynopsisForScene = (sceneNumber) => {
-		const sceneKey = String(sceneNumber);
+	const getSynopsisForScene = (id) => {
+		const sceneKey = String(id);
 		return synopsisMap[sceneKey] || "-";
 	};
 
@@ -929,7 +889,7 @@ const Locations = () => {
 	const handleSplitLocationClick = async () => {
 		if (selectedLocations.size === 1) {
 			const idx = Array.from(selectedLocations)[0];
-			const location = locationData.locations[idx];
+			const location = augmentedLocations[idx];
 			
 			// Get the scenes for this location
 			const locationScenes = location.scenes || [];
@@ -1114,7 +1074,7 @@ const Locations = () => {
 	const handleConfirmRemoveLocation = () => {
 		if (selectedLocations.size === 1) {
 			const idx = Array.from(selectedLocations)[0];
-			const location = locationData.locations[idx];
+			const location = augmentedLocations[idx];
 			deleteLocationGroup(location.location_id, location.location, location.scene_count);
 		}
 		setShowRemoveLocModal(false);
@@ -1153,6 +1113,7 @@ const Locations = () => {
 			}
 		};
 		fetchLocations();
+		fetchBreakdownData();
 	};
 
 	// Apply regroup changes
@@ -1238,12 +1199,12 @@ const Locations = () => {
 		if (!isRegroupMode || !draggedScene || !dragSourceLocationId) return;
 		if (targetLocationId === dragSourceLocationId) return;
 
-		const sceneId = String(draggedScene.scene_id);
+		const sceneId = String(draggedScene.id);
 
 		// Add the move to sceneMoves
 		setSceneMoves((prev) => {
 			// Check if this scene was already moved
-			const existingMoveIndex = prev.findIndex((m) => m.scene_id === sceneId);
+			const existingMoveIndex = prev.findIndex((m) => m.id === sceneId);
 			if (existingMoveIndex >= 0) {
 				// Update the existing move
 				const updated = [...prev];
@@ -1263,31 +1224,18 @@ const Locations = () => {
 			}];
 		});
 
-		// Update local state to reflect the move visually
-		setLocationData((prevData) => {
-			const newData = JSON.parse(JSON.stringify(prevData));
-			const sourceIdx = newData.locations.findIndex((l) => l.location_id === dragSourceLocationId);
-			const targetIdx = newData.locations.findIndex((l) => l.location_id === targetLocationId);
-
-			if (sourceIdx >= 0 && targetIdx >= 0) {
-				const sourceScenes = newData.locations[sourceIdx].scenes || [];
-				const sceneIndex = sourceScenes.findIndex((s) => String(s.scene_id) === sceneId);
-
-				if (sceneIndex >= 0) {
-					const [movedScene] = sourceScenes.splice(sceneIndex, 1);
-					if (!newData.locations[targetIdx].scenes) {
-						newData.locations[targetIdx].scenes = [];
+		// Update scenes state to reflect the move visually
+		const targetLoc = locationData.locations.find((l) => l.location_id === targetLocationId);
+		if (targetLoc) {
+			setScenes((prevScenes) =>
+				prevScenes.map((s) => {
+					if (String(s.id || s.scene_number) === sceneId) {
+						return { ...s, set: targetLoc.location };
 					}
-					newData.locations[targetIdx].scenes.push(movedScene);
-
-					// Update scene counts
-					newData.locations[sourceIdx].scene_count = sourceScenes.length;
-					newData.locations[targetIdx].scene_count = newData.locations[targetIdx].scenes.length;
-				}
-			}
-
-			return newData;
-		});
+					return s;
+				})
+			);
+		}
 
 		setDraggedScene(null);
 		setDragSourceLocationId(null);
@@ -1297,6 +1245,37 @@ const Locations = () => {
 		setDraggedScene(null);
 		setDragSourceLocationId(null);
 	};
+
+	const augmentedLocations = useMemo(() => {
+		if (!locationData || !locationData.locations) return [];
+		return locationData.locations.map((loc) => {
+			const locScenes = scenes.filter((s) => {
+				const sSet = s.set ? String(s.set).trim().toLowerCase() : "";
+				const lLoc = loc.location ? String(loc.location).trim().toLowerCase() : "";
+				return sSet === lLoc && sSet !== "";
+			});
+
+			const intExtTypesSet = new Set();
+			const timesSet = new Set();
+
+			locScenes.forEach((s) => {
+				if (s.int_ext && s.int_ext.trim() !== "") {
+					intExtTypesSet.add(s.int_ext.trim());
+				}
+				if (s.time && s.time.trim() !== "") {
+					timesSet.add(s.time.trim());
+				}
+			});
+
+			return {
+				...loc,
+				scenes: locScenes,
+				scene_count: locScenes.length,
+				int_ext_types: Array.from(intExtTypesSet).sort(),
+				times: Array.from(timesSet).sort(),
+			};
+		});
+	}, [locationData, scenes]);
 
 	return (
 		<div className="loc-page-container">
@@ -1319,7 +1298,7 @@ const Locations = () => {
 						<>
 							{/* Page Header */}
 							<div className="loc-page-header">
-								<h1 className="loc-title">Total Sets: {locationData.total_locations || locationData.locations.length}</h1>
+								<h1 className="loc-title">Total Sets: {locationData.total_locations || augmentedLocations.length}</h1>
 
 								{/* Header Action Buttons */}
 								<div className="loc-header-actions">
@@ -1376,7 +1355,7 @@ const Locations = () => {
 											<button
 												className="loc-btn-secondary"
 												onClick={() => {
-													const allIndices = new Set(locationData.locations.map((_, i) => i));
+													const allIndices = new Set(augmentedLocations.map((_, i) => i));
 													setCollapsedCards(allIndices);
 												}}
 											>
@@ -1444,7 +1423,7 @@ const Locations = () => {
 
 							{/* Location Cards */}
 							<div className="loc-cards-container">
-								{locationData.locations.map((location, idx) => {
+								{augmentedLocations.map((location, idx) => {
 									const isCollapsed = collapsedCards.has(idx);
 									const isSelected = selectedLocations.has(idx);
 									const showOptions = expandedOptions.has(idx);
@@ -1921,14 +1900,14 @@ const Locations = () => {
 																					draggable={isRegroupMode}
 																					onDragStart={(e) => handleDragStart(e, scene, location.location_id)}
 																					onDragEnd={handleDragEnd}
-																					className={`${isRegroupMode ? "loc-scene-draggable" : ""} ${draggedScene && String(draggedScene.scene_id) === String(scene.scene_id) ? "loc-scene-dragging" : ""}`}
+																					className={`${isRegroupMode ? "loc-scene-draggable" : ""} ${draggedScene && String(draggedScene.id) === String(scene.id) ? "loc-scene-dragging" : ""}`}
 																				>
 																					<td>{scene.scene_number}</td>
 																					<td>{scene.int_ext}</td>
 																					<td>{location.location}</td>
 																					<td>{scene.time}</td>
-																					<td className="loc-synopsis-cell">{getSynopsisForScene(scene.scene_number)}</td>
-																					<td>{getCastForScene(scene.scene_number)}</td>
+																					<td className="loc-synopsis-cell">{getSynopsisForScene(scene.id)}</td>
+																					<td>{getCastForScene(scene)}</td>
 																				</tr>
 																			))}
 																		</tbody>
@@ -2120,7 +2099,7 @@ const Locations = () => {
 						<div className="loc-remove-modal-content">
 							<p className="loc-remove-warning-text">
 								Are you sure you want to remove the set{" "}
-								<strong>"{locationData.locations[Array.from(selectedLocations)[0]]?.location}"</strong>?
+								<strong>"{augmentedLocations[Array.from(selectedLocations)[0]]?.location}"</strong>?
 							</p>
 							<p className="loc-remove-info-text">
 								This action cannot be undone. All set options associated with this set will also be deleted.
@@ -2163,9 +2142,9 @@ const Locations = () => {
 								{Array.from(selectedLocations).map((idx) => (
 									<div key={idx} className="loc-merge-location-item">
 										<span className="loc-merge-location-id">{idx + 1}</span>
-										<span className="loc-merge-location-name">{locationData.locations[idx]?.location}</span>
+										<span className="loc-merge-location-name">{augmentedLocations[idx]?.location}</span>
 										<span className="loc-merge-location-scenes">
-											({locationData.locations[idx]?.scene_count || 0} scenes)
+											({augmentedLocations[idx]?.scene_count || 0} scenes)
 										</span>
 									</div>
 								))}
@@ -2250,7 +2229,7 @@ const Locations = () => {
 							<div className="loc-split-source-set">
 								<span className="loc-split-source-id">{Array.from(selectedLocations)[0] + 1}</span>
 								<span className="loc-split-source-name">
-									{locationData.locations[Array.from(selectedLocations)[0]]?.location}
+									{augmentedLocations[Array.from(selectedLocations)[0]]?.location}
 								</span>
 								<span className="loc-split-source-scenes">
 									({splitLocationScenes.length} scenes)
@@ -2312,7 +2291,7 @@ const Locations = () => {
 											</thead>
 											<tbody>
 												{splitLocationScenes.map((scene, idx) => {
-													const sceneId = String(scene.scene_id );
+													const sceneId = String(scene.id );
 													const isInSet1 = scenesForSet1.has(sceneId);
 													const isInSet2 = scenesForSet2.has(sceneId);
 													
