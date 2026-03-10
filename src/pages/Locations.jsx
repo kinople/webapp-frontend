@@ -27,14 +27,16 @@ import "react-calendar/dist/Calendar.css";
 import "../css/Locations.css";
 
 // Create a memoized modal component
-const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm }) => {
+const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm, scheduleStartDate, scheduleEndDate }) => {
 	const [dateRangeStart, setDateRangeStart] = useState("");
 	const [dateRangeEnd, setDateRangeEnd] = useState("");
-	const [selectedDates, setSelectedDates] = useState(optionForm.availableDates || []);
+	const [availableDates, setAvailableDates] = useState(optionForm.availableDates || []);
+	const [unavailableDates, setUnavailableDates] = useState(optionForm.unavailableDates || []);
+	const [dateAddMode, setDateAddMode] = useState("available"); // 'available' or 'unavailable'
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
-		await onSubmit({ ...optionForm, availableDates: selectedDates });
+		await onSubmit({ ...optionForm, availableDates, unavailableDates });
 	};
 
 	const handleInputChange = useCallback(
@@ -56,6 +58,15 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 			alert("Start date must be before end date");
 			return;
 		}
+		
+		if (scheduleStartDate && dateRangeStart < scheduleStartDate) {
+			alert(`Start date cannot be before schedule start date (${scheduleStartDate})`);
+			return;
+		}
+		if (scheduleEndDate && dateRangeEnd > scheduleEndDate) {
+			alert(`End date cannot be after schedule end date (${scheduleEndDate})`);
+			return;
+		}
 
 		const rangeDates = [];
 		const currentDate = new Date(dateRangeStart);
@@ -66,15 +77,25 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 			currentDate.setDate(currentDate.getDate() + 1);
 		}
 
-		setSelectedDates((prev) => {
-			const newDates = [...prev];
-			rangeDates.forEach((date) => {
-				if (!newDates.includes(date)) {
-					newDates.push(date);
-				}
+		if (dateAddMode === "available") {
+			setAvailableDates((prev) => {
+				const newDates = [...prev];
+				rangeDates.forEach((date) => {
+					if (!newDates.includes(date)) newDates.push(date);
+				});
+				return newDates.sort();
 			});
-			return newDates.sort();
-		});
+			setUnavailableDates((prev) => prev.filter((d) => !rangeDates.includes(d)));
+		} else {
+			setUnavailableDates((prev) => {
+				const newDates = [...prev];
+				rangeDates.forEach((date) => {
+					if (!newDates.includes(date)) newDates.push(date);
+				});
+				return newDates.sort();
+			});
+			setAvailableDates((prev) => prev.filter((d) => !rangeDates.includes(d)));
+		}
 
 		setDateRangeStart("");
 		setDateRangeEnd("");
@@ -82,21 +103,42 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 
 	const handleCalendarDateClick = (date) => {
 		const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
-		setSelectedDates((prev) => {
-			if (prev.includes(dateStr)) {
-				return prev.filter((d) => d !== dateStr);
-			} else {
-				return [...prev, dateStr].sort();
-			}
-		});
+		
+		if (scheduleStartDate && dateStr < scheduleStartDate) return;
+		if (scheduleEndDate && dateStr > scheduleEndDate) return;
+
+		if (dateAddMode === "available") {
+			setAvailableDates((prev) => {
+				if (prev.includes(dateStr)) {
+					return prev.filter((d) => d !== dateStr);
+				} else {
+					return [...prev, dateStr].sort();
+				}
+			});
+			setUnavailableDates((prev) => prev.filter((d) => d !== dateStr));
+		} else {
+			setUnavailableDates((prev) => {
+				if (prev.includes(dateStr)) {
+					return prev.filter((d) => d !== dateStr);
+				} else {
+					return [...prev, dateStr].sort();
+				}
+			});
+			setAvailableDates((prev) => prev.filter((d) => d !== dateStr));
+		}
 	};
 
-	const removeDate = (dateToRemove) => {
-		setSelectedDates((prev) => prev.filter((d) => d !== dateToRemove));
+	const removeDate = (dateToRemove, type = "available") => {
+		if (type === "available") {
+			setAvailableDates((prev) => prev.filter((d) => d !== dateToRemove));
+		} else {
+			setUnavailableDates((prev) => prev.filter((d) => d !== dateToRemove));
+		}
 	};
 
 	const clearAllDates = () => {
-		setSelectedDates([]);
+		setAvailableDates([]);
+		setUnavailableDates([]);
 	};
 
 	const formatDisplayDate = (dateString) => {
@@ -111,11 +153,27 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 	const tileClassName = ({ date, view }) => {
 		if (view === "month") {
 			const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
-			if (selectedDates.includes(dateStr)) {
-				return "loc-calendar-selected";
+			
+			if (scheduleStartDate && dateStr < scheduleStartDate) return "calendar-disabled-date";
+			if (scheduleEndDate && dateStr > scheduleEndDate) return "calendar-disabled-date";
+
+			if (availableDates.includes(dateStr)) {
+				return "loc-calendar-selected-available";
+			}
+			if (unavailableDates.includes(dateStr)) {
+				return "loc-calendar-selected-unavailable";
 			}
 		}
 		return null;
+	};
+
+	const tileDisabled = ({ date, view }) => {
+		if (view === "month") {
+			const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
+			if (scheduleStartDate && dateStr < scheduleStartDate) return true;
+			if (scheduleEndDate && dateStr > scheduleEndDate) return true;
+		}
+		return false;
 	};
 
 	return (
@@ -177,12 +235,34 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 						</div>
 						<div className="loc-form-column">
 							<div className="loc-form-group">
-								<label className="loc-label">Available Dates:</label>
+								<label className="loc-label">Dates:</label>
 								<div className="loc-date-picker-container">
+									<div className="loc-date-mode-selector">
+										<label className="loc-mode-label">
+											<input
+												type="checkbox"
+												checked={dateAddMode === "available"}
+												onChange={() => setDateAddMode("available")}
+												className="loc-mode-checkbox"
+											/>
+											Mark Available (Green)
+										</label>
+										<label className="loc-mode-label">
+											<input
+												type="checkbox"
+												checked={dateAddMode === "unavailable"}
+												onChange={() => setDateAddMode("unavailable")}
+												className="loc-mode-checkbox"
+											/>
+											Mark Unavailable (Red)
+										</label>
+									</div>
 									<div className="loc-date-range-inputs">
 										<input
 											type="date"
 											value={dateRangeStart}
+											min={scheduleStartDate || undefined}
+											max={scheduleEndDate || undefined}
 											onChange={(e) => setDateRangeStart(e.target.value)}
 											className="loc-date-input"
 										/>
@@ -190,7 +270,8 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 										<input
 											type="date"
 											value={dateRangeEnd}
-											min={dateRangeStart}
+											min={dateRangeStart || scheduleStartDate || undefined}
+											max={scheduleEndDate || undefined}
 											onChange={(e) => setDateRangeEnd(e.target.value)}
 											className="loc-date-input"
 										/>
@@ -204,25 +285,17 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 										</button>
 									</div>
 									<div className="loc-calendar-wrapper">
-										<Calendar selectRange={false} onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
+										<Calendar selectRange={false} onClickDay={handleCalendarDateClick} tileClassName={tileClassName} tileDisabled={tileDisabled} />
 									</div>
-									{selectedDates.length > 0 && (
+									{(availableDates.length > 0 || unavailableDates.length > 0) && (
 										<div className="loc-selected-dates">
 											<div className="loc-selected-dates-header">
-												<span>Selected Dates ({selectedDates.length}):</span>
+												<span>
+													Available: {availableDates.length} | Unavailable: {unavailableDates.length}
+												</span>
 												<button type="button" onClick={clearAllDates} className="loc-clear-dates-btn">
 													Clear All
 												</button>
-											</div>
-											<div className="loc-dates-list">
-												{selectedDates.map((date) => (
-													<span key={date} className="loc-date-tag">
-														{formatDisplayDate(date)}
-														<button type="button" onClick={() => removeDate(date)} className="loc-remove-date-btn">
-															×
-														</button>
-													</span>
-												))}
 											</div>
 										</div>
 									)}
@@ -253,11 +326,14 @@ const Locations = () => {
 	const [expandedScenes, setExpandedScenes] = useState(new Set());
 	const [showAddOptionModal, setShowAddOptionModal] = useState(false);
 	const [selectedLocationIndex, setSelectedLocationIndex] = useState(null);
+	const [scheduleStartDate, setScheduleStartDate] = useState(null);
+	const [scheduleEndDate, setScheduleEndDate] = useState(null);
 	const [optionForm, setOptionForm] = useState({
 		locationName: "",
 		address: "",
 		notes: "",
 		availableDates: [],
+		unavailableDates: [],
 		media: "",
 		locationPinLink: "",
 	});
@@ -325,6 +401,7 @@ const Locations = () => {
 			address: "",
 			notes: "",
 			availableDates: [],
+			unavailableDates: [],
 			media: "",
 			locationPinLink: "",
 		});
@@ -450,6 +527,40 @@ const Locations = () => {
 		}
 	}, [id]);
 
+	// Fetch schedule data to get project start and end dates
+	useEffect(() => {
+		const fetchScheduleDates = async () => {
+			try {
+				const response = await fetch(getApiUrl(`/api/${id}/schedules`));
+				if (response.ok) {
+					const data = await response.json();
+					if (data.schedules && data.schedules.length > 0) {
+						// Assuming the first schedule or maybe we should find the active one
+						// For now, getting the first one's dates
+						if (data.schedules[0].id) {
+							const scheduleResponse = await fetch(getApiUrl(`/api/${id}/schedule/${data.schedules[0].id}`));
+							if (scheduleResponse.ok) {
+								const scheduleData = await scheduleResponse.json();
+								if (scheduleData && scheduleData.first_date) {
+									setScheduleStartDate(scheduleData.first_date.split('T')[0]);
+								}
+								if (scheduleData && scheduleData.last_date) {
+									setScheduleEndDate(scheduleData.last_date.split('T')[0]);
+								}
+							}
+						}
+					}
+				}
+			} catch (error) {
+				console.error("Error fetching schedule dates:", error);
+			}
+		};
+
+		if (id) {
+			fetchScheduleDates();
+		}
+	}, [id]);
+
 	useEffect(() => {
 		fetchBreakdownData();
 	}, [fetchBreakdownData]);
@@ -480,6 +591,7 @@ const Locations = () => {
 				address: "",
 				notes: "",
 				availableDates: [],
+				unavailableDates: [],
 				media: "",
 				locationPinLink: "",
 			});
@@ -1537,6 +1649,7 @@ const Locations = () => {
 																	address: "",
 																	notes: "",
 																	availableDates: [],
+																	unavailableDates: [],
 																	media: "",
 																	locationPinLink: "",
 																});
@@ -1743,7 +1856,10 @@ const Locations = () => {
 																				const notes = opt.notes || "-";
 																				const media = opt.media || "-";
 																				const pinLink = opt.location_pin_link || opt.locationPinLink || "";
+																				
 																				const dates = opt.available_dates || opt.availableDates || [];
+																				const unavailDates = opt.unavailable_dates || opt.unavailableDates || [];
+
 																				const formatDate = (dateStr) => {
 																					const d = new Date(dateStr);
 																					return d.toLocaleDateString("en-US", {
@@ -1751,6 +1867,7 @@ const Locations = () => {
 																						day: "numeric",
 																					});
 																				};
+
 																				const datesDisplay =
 																					Array.isArray(dates) && dates.length > 0
 																						? dates.length <= 3
@@ -1762,6 +1879,22 @@ const Locations = () => {
 																									dates.length - 2
 																							  } more`
 																						: "-";
+
+																				const unavailDisplay =
+																					Array.isArray(unavailDates) && unavailDates.length > 0
+																						? ` (${unavailDates.length} unavail)`
+																						: "";
+
+																				let datesTooltip = "";
+																				if (dates.length > 0) {
+																					datesTooltip += `Available dates:\n${dates.join("\n")}\n\n`;
+																				}
+																				if (unavailDates.length > 0) {
+																					datesTooltip += `Unavailable dates:\n${unavailDates.join("\n")}`;
+																				}
+																				if (dates.length === 0 && unavailDates.length === 0) {
+																					datesTooltip = "No dates set";
+																				}
 
 																				return (
 																					<tr
@@ -1818,15 +1951,9 @@ const Locations = () => {
 																						</td>
 																						<td
 																							style={{ width: 90 }}
-																							title={
-																								Array.isArray(dates) && dates.length > 0
-																									? `Available dates:\n${dates.join(
-																											"\n"
-																									  )}`
-																									: "No dates set"
-																							}
+																							title={datesTooltip}
 																						>
-																							{datesDisplay}
+																							{datesDisplay}{unavailDisplay}
 																						</td>
 																						<td onClick={(e) => e.stopPropagation()}>
 																							<button
@@ -1939,6 +2066,8 @@ const Locations = () => {
 					onSubmit={handleFormSubmit}
 					optionForm={optionForm}
 					setOptionForm={memoizedSetOptionForm}
+					scheduleStartDate={scheduleStartDate}
+					scheduleEndDate={scheduleEndDate}
 				/>
 			)}
 
@@ -2003,23 +2132,33 @@ const Locations = () => {
 
 							<div className="loc-option-modal-section loc-option-modal-dates-section">
 								<div className="loc-option-modal-label">
-									📅 Available Dates ({(optionDetailsModal.option.available_dates || optionDetailsModal.option.availableDates || []).length})
+									📅 Selected Dates
 								</div>
 								<div className="loc-option-modal-dates-container">
 									{(() => {
-										const dates = optionDetailsModal.option.available_dates || optionDetailsModal.option.availableDates || [];
-										if (dates.length === 0) {
+										const availDates = optionDetailsModal.option.available_dates || optionDetailsModal.option.availableDates || [];
+										const unavailDates = optionDetailsModal.option.unavailable_dates || optionDetailsModal.option.unavailableDates || [];
+
+										if (availDates.length === 0 && unavailDates.length === 0) {
 											return <span className="loc-option-modal-no-dates">No dates specified</span>;
 										}
 										return (
 											<div className="loc-option-modal-dates-list">
-												{dates.map((d) => (
-													<span key={d} className="loc-option-modal-date-tag">
+												{availDates.map((d) => (
+													<span key={`avail-${d}`} className="loc-option-modal-date-tag loc-date-tag available">
 														{new Date(d).toLocaleDateString("en-US", {
 															weekday: "short",
 															month: "short",
 															day: "numeric",
-															year: "numeric",
+														})}
+													</span>
+												))}
+												{unavailDates.map((d) => (
+													<span key={`unavail-${d}`} className="loc-option-modal-date-tag loc-date-tag unavailable">
+														{new Date(d).toLocaleDateString("en-US", {
+															weekday: "short",
+															month: "short",
+															day: "numeric",
 														})}
 													</span>
 												))}

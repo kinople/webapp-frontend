@@ -2225,3 +2225,121 @@
 	cursor: not-allowed;
 	pointer-events: none;
 }
+
+/* Unavailable Dates Additions */
+.loc-date-count-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px 6px;
+	border-radius: 12px;
+	font-size: 11px;
+	font-weight: 600;
+	color: white;
+	min-width: 32px;
+}
+
+.loc-date-count-badge.available {
+	background-color: #34a853;
+}
+
+.loc-date-count-badge.unavailable {
+	background-color: #ea4335;
+}
+
+.loc-dates-split-display {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.loc-date-tag.available {
+	background-color: #34a853;
+	border: 1px solid #34a853;
+	color: white;
+}
+
+.loc-date-tag.unavailable {
+	background-color: #ea4335;
+	border: 1px solid #ea4335;
+	color: white;
+}
+
+.calendar-disabled-date {
+	background-color: #f1f3f4 !important;
+	color: #bdc1c6 !important;
+	cursor: not-allowed !important;
+	opacity: 0.6;
+}
+
+.loc-calendar-selected-available {
+	background-color: #34a853 !important;
+	color: white !important;
+	font-weight: bold;
+}
+
+.loc-calendar-selected-unavailable {
+	background-color: #ea4335 !important;
+	color: white !important;
+	font-weight: bold;
+}
+
+.loc-date-mode-selector {
+	display: flex;
+	gap: 16px;
+	margin-bottom: 12px;
+	padding: 8px 12px;
+	background: #f8f9fb;
+	border-radius: 8px;
+	border: 1px solid #e5e7eb;
+}
+
+.loc-mode-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	color: #323232;
+	cursor: pointer;
+	user-select: none;
+}
+
+.loc-mode-checkbox {
+	width: 16px;
+	height: 16px;
+	cursor: pointer;
+	accent-color: #ff6758;
+}
+
+.loc-selected-dates {
+	background: #f8f9fc;
+	border-radius: 8px;
+	padding: 12px;
+	border: 1px solid #e6ecf8;
+}
+
+.loc-selected-dates-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 13px;
+	font-weight: 600;
+	color: #0f1724;
+}
+
+.loc-clear-dates-btn {
+	padding: 4px 10px;
+	border-radius: 4px;
+	border: 1px solid #ff6758;
+	background: #fff;
+	color: #ff6758;
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.loc-clear-dates-btn:hover {
+	background: rgba(255, 103, 88, 0.08);
+}

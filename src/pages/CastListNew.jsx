@@ -35,14 +35,18 @@ import "../css/CastListNew.css";
   - View Options / View Scenes buttons
 */
 
-const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm }) => {
+const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm, scheduleStartDate, scheduleEndDate }) => {
 	const [dateRangeStart, setDateRangeStart] = useState("");
 	const [dateRangeEnd, setDateRangeEnd] = useState("");
-	const [selectedDates, setSelectedDates] = useState(optionForm.availableDates || []);
+	const [availableDates, setAvailableDates] = useState(optionForm.availableDates || []);
+	const [unavailableDates, setUnavailableDates] = useState(optionForm.unavailableDates || []);
+	const [dateAddMode, setDateAddMode] = useState("available"); // "available" or "unavailable"
+
+	const hasScheduleRange = scheduleStartDate && scheduleEndDate;
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
-		await onSubmit({ ...optionForm, availableDates: selectedDates });
+		await onSubmit({ ...optionForm, availableDates: availableDates, unavailableDates: unavailableDates });
 	};
 
 	const handleInputChange = useCallback(
@@ -60,6 +64,15 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 			alert("Please select both start and end dates");
 			return;
 		}
+		// Validate against schedule range
+		if (hasScheduleRange && dateRangeStart < scheduleStartDate) {
+			alert("Range start date cannot be before schedule start date");
+			return;
+		}
+		if (hasScheduleRange && dateRangeEnd > scheduleEndDate) {
+			alert("Range end date cannot be after schedule end date");
+			return;
+		}
 		if (dateRangeStart > dateRangeEnd) {
 			alert("Start date must be before end date");
 			return;
@@ -74,15 +87,31 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 			currentDate.setDate(currentDate.getDate() + 1);
 		}
 
-		setSelectedDates((prev) => {
-			const newDates = [...prev];
-			rangeDates.forEach((date) => {
-				if (!newDates.includes(date)) {
-					newDates.push(date);
-				}
+		if (dateAddMode === "available") {
+			setAvailableDates((prev) => {
+				const newDates = [...prev];
+				rangeDates.forEach((date) => {
+					if (!newDates.includes(date)) {
+						newDates.push(date);
+					}
+				});
+				return newDates.sort();
 			});
-			return newDates.sort();
-		});
+			// Remove from unavailable if present
+			setUnavailableDates((prev) => prev.filter((d) => !rangeDates.includes(d)));
+		} else {
+			setUnavailableDates((prev) => {
+				const newDates = [...prev];
+				rangeDates.forEach((date) => {
+					if (!newDates.includes(date)) {
+						newDates.push(date);
+					}
+				});
+				return newDates.sort();
+			});
+			// Remove from available if present
+			setAvailableDates((prev) => prev.filter((d) => !rangeDates.includes(d)));
+		}
 
 		setDateRangeStart("");
 		setDateRangeEnd("");
@@ -90,21 +119,41 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 
 	const handleCalendarDateClick = (date) => {
 		const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
-		setSelectedDates((prev) => {
-			if (prev.includes(dateStr)) {
-				return prev.filter((d) => d !== dateStr);
-			} else {
-				return [...prev, dateStr].sort();
-			}
-		});
-	};
 
-	const removeDate = (dateToRemove) => {
-		setSelectedDates((prev) => prev.filter((d) => d !== dateToRemove));
+		// Validate against schedule range
+		if (hasScheduleRange && dateStr < scheduleStartDate) {
+			return;
+		}
+		if (hasScheduleRange && dateStr > scheduleEndDate) {
+			return;
+		}
+
+		if (dateAddMode === "available") {
+			setAvailableDates((prev) => {
+				if (prev.includes(dateStr)) {
+					return prev.filter((d) => d !== dateStr);
+				} else {
+					return [...prev, dateStr].sort();
+				}
+			});
+			// Remove from unavailable if present
+			setUnavailableDates((prev) => prev.filter((d) => d !== dateStr));
+		} else {
+			setUnavailableDates((prev) => {
+				if (prev.includes(dateStr)) {
+					return prev.filter((d) => d !== dateStr);
+				} else {
+					return [...prev, dateStr].sort();
+				}
+			});
+			// Remove from available if present
+			setAvailableDates((prev) => prev.filter((d) => d !== dateStr));
+		}
 	};
 
 	const clearAllDates = () => {
-		setSelectedDates([]);
+		setAvailableDates([]);
+		setUnavailableDates([]);
 	};
 
 	const formatDisplayDate = (dateString) => {
@@ -119,11 +168,33 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 	const tileClassName = ({ date, view }) => {
 		if (view === "month") {
 			const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
-			if (selectedDates.includes(dateStr)) {
-				return "cln-calendar-selected";
+
+			// Check if date is outside the schedule range
+			if (hasScheduleRange) {
+				if (dateStr < scheduleStartDate || dateStr > scheduleEndDate) {
+					return "cln-disabled-date";
+				}
+			}
+
+			// Show green for available dates, red for unavailable dates
+			if (availableDates.includes(dateStr)) {
+				return "cln-highlight-green";
+			}
+			if (unavailableDates.includes(dateStr)) {
+				return "cln-highlight-red";
 			}
 		}
 		return null;
+	};
+
+	const tileDisabled = ({ date, view }) => {
+		if (view === "month" && hasScheduleRange) {
+			const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
+			if (dateStr < scheduleStartDate || dateStr > scheduleEndDate) {
+				return true;
+			}
+		}
+		return false;
 	};
 
 	return (
@@ -187,12 +258,40 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 						</div>
 						<div className="cln-form-column">
 							<div className="cln-form-group">
-								<label className="cln-label">Available Dates:</label>
+								<label className="cln-label">Availability Dates:</label>
+								{hasScheduleRange && (
+									<p className="cln-input-hint" style={{ marginBottom: 6, marginTop: 0 }}>
+										Schedule range: {formatDisplayDate(scheduleStartDate)} – {formatDisplayDate(scheduleEndDate)}
+									</p>
+								)}
 								<div className="cln-date-picker-container">
+									{/* Available / Unavailable mode toggle */}
+									<div className="cln-date-mode-selector">
+										<label className="cln-date-mode-label">
+											<input
+												type="checkbox"
+												checked={dateAddMode === "available"}
+												onChange={() => setDateAddMode("available")}
+												className="cln-date-mode-checkbox"
+											/>
+											Mark Available (Green)
+										</label>
+										<label className="cln-date-mode-label">
+											<input
+												type="checkbox"
+												checked={dateAddMode === "unavailable"}
+												onChange={() => setDateAddMode("unavailable")}
+												className="cln-date-mode-checkbox"
+											/>
+											Mark Unavailable (Red)
+										</label>
+									</div>
 									<div className="cln-date-range-inputs">
 										<input
 											type="date"
 											value={dateRangeStart}
+											min={hasScheduleRange ? scheduleStartDate : undefined}
+											max={hasScheduleRange ? scheduleEndDate : undefined}
 											onChange={(e) => setDateRangeStart(e.target.value)}
 											className="cln-date-input"
 										/>
@@ -200,7 +299,8 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 										<input
 											type="date"
 											value={dateRangeEnd}
-											min={dateRangeStart}
+											min={dateRangeStart || (hasScheduleRange ? scheduleStartDate : undefined)}
+											max={hasScheduleRange ? scheduleEndDate : undefined}
 											onChange={(e) => setDateRangeEnd(e.target.value)}
 											className="cln-date-input"
 										/>
@@ -214,25 +314,22 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 										</button>
 									</div>
 									<div className="cln-calendar-wrapper">
-										<Calendar selectRange={false} onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
+										<Calendar
+											selectRange={false}
+											onClickDay={handleCalendarDateClick}
+											tileClassName={tileClassName}
+											tileDisabled={tileDisabled}
+										/>
 									</div>
-									{selectedDates.length > 0 && (
+									{(availableDates.length > 0 || unavailableDates.length > 0) && (
 										<div className="cln-selected-dates">
 											<div className="cln-selected-dates-header">
-												<span>Selected Dates ({selectedDates.length}):</span>
+												<span>
+													Available: {availableDates.length} | Unavailable: {unavailableDates.length}
+												</span>
 												<button type="button" onClick={clearAllDates} className="cln-clear-dates-btn">
 													Clear All
 												</button>
-											</div>
-											<div className="cln-dates-list">
-												{selectedDates.map((date) => (
-													<span key={date} className="cln-date-tag">
-														{formatDisplayDate(date)}
-														<button type="button" onClick={() => removeDate(date)} className="cln-remove-date-btn">
-															×
-														</button>
-													</span>
-												))}
 											</div>
 										</div>
 									)}
@@ -294,7 +391,7 @@ const CastListNew = () => {
 	const [expandedScenes, setExpandedScenes] = useState(new Set());
 	const [showAddOptionModal, setShowAddOptionModal] = useState(false);
 	const [selectedCharacterIndex, setSelectedCharacterIndex] = useState(null);
-	const [optionForm, setOptionForm] = useState({ actorName: "", media: "", contact: "", availableDates: [], details: "", notes: "" });
+	const [optionForm, setOptionForm] = useState({ actorName: "", media: "", contact: "", availableDates: [], unavailableDates: [], details: "", notes: "" });
 	const [selectedOptions, setSelectedOptions] = useState(new Set());
 	const [sceneChars, setSceneChars] = useState({});
 	const [scenes, setScenes] = useState([]);
@@ -318,7 +415,10 @@ const CastListNew = () => {
 	const [scenesForChar1, setScenesForChar1] = useState(new Set());
 	const [scenesForChar2, setScenesForChar2] = useState(new Set());
 	const [splitCharacterScenes, setSplitCharacterScenes] = useState([]);
-    const [mapping, setMapping] = useState({});
+	const [mapping, setMapping] = useState({});
+	// Schedule date range state (fetched from schedule API)
+	const [scheduleStartDate, setScheduleStartDate] = useState("");
+	const [scheduleEndDate, setScheduleEndDate] = useState("");
 	// Compute castIdToSceneIds: map from cast_id -> array of scene IDs (scene.id)
 	// Derived from the scenes (breakdown) data using characters_ids
 	const castIdToSceneIds = useMemo(() => {
@@ -366,12 +466,12 @@ const CastListNew = () => {
 				if (!res.ok) throw new Error("Failed to fetch cast list");
 				const data = await res.json();
 				setCastData(data);
-                const mapping = Object.fromEntries(
-                  [...data.cast_list]
-                    .map((m, i) => ({ ...m, i }))
-                    .sort((a, b) => Number(a.cast_id) - Number(b.cast_id))
-                    .map((m, sortedIdx) => [sortedIdx, m.i])
-                );
+				const mapping = Object.fromEntries(
+					[...data.cast_list]
+						.map((m, i) => ({ ...m, i }))
+						.sort((a, b) => Number(a.cast_id) - Number(b.cast_id))
+						.map((m, sortedIdx) => [sortedIdx, m.i]),
+				);
 				setMapping(mapping);
 				console.log("cast-list ------------ ", data);
 				if (Array.isArray(data?.cast_list)) setExpandedOptions(new Set(data.cast_list.map((_, i) => i)));
@@ -450,6 +550,38 @@ const CastListNew = () => {
 		fetchLocations();
 	}, [id]);
 
+	// Fetch schedule data to get start/end dates
+	useEffect(() => {
+		const fetchScheduleDates = async () => {
+			try {
+				const response = await fetch(getApiUrl(`/api/${id}/schedules`));
+				if (!response.ok) return;
+				const data = await response.json();
+				if (data?.schedules && data.schedules.length > 0) {
+					// Use the first schedule's dates
+					const schedule = data.schedules[0];
+					const scheduleId = schedule.id;
+					// Fetch detailed schedule data to get accurate dates
+					const detailResponse = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`));
+					if (detailResponse.ok) {
+						const detailData = await detailResponse.json();
+						if (detailData.first_date) {
+							setScheduleStartDate(detailData.first_date);
+						}
+						if (detailData.last_date) {
+							setScheduleEndDate(detailData.last_date);
+						}
+						console.log("Schedule dates fetched:", detailData.first_date, detailData.last_date);
+					}
+				}
+			} catch (error) {
+				console.error("Error fetching schedule dates:", error);
+			}
+		};
+
+		fetchScheduleDates();
+	}, [id]);
+
 	function analyzeScenes(CharSceneIds) {
 		const result = { total: 0, intCount: 0, extCount: 0, intExtCount: 0, locationGroupIds: new Set() };
 		if (!Array.isArray(CharSceneIds)) return result;
@@ -494,6 +626,7 @@ const CastListNew = () => {
 					media: form.media,
 					contact: form.contact,
 					availableDates: form.availableDates || [],
+					unavailableDates: form.unavailableDates || [],
 					details: form.details,
 					notes: form.notes,
 				}),
@@ -506,7 +639,7 @@ const CastListNew = () => {
 			console.log("new castlist ", refreshed);
 			setCastData(refreshed);
 			setShowAddOptionModal(false);
-			setOptionForm({ actorName: "", media: "", contact: "", availableDates: [], details: "", notes: "" });
+			setOptionForm({ actorName: "", media: "", contact: "", availableDates: [], unavailableDates: [], details: "", notes: "" });
 		} catch (e) {
 			setError(e.message);
 		} finally {
@@ -532,11 +665,14 @@ const CastListNew = () => {
 		async (idx, optId, castId) => {
 			try {
 				setIsLoading(true);
-				const member = castData.cast_list[idx];
+				const member = castData.cast_list.find((c) => c.cast_id == castId);
 				const currentLocked = member.locked;
-
+				console.log("CHarcater is :::", member);
+				console.log("currently locked is ::::::::", currentLocked);
+				console.log("optionId  is :::::::::::", optId);
 				// If already locked with this option, unlock it (-1), otherwise lock this option
 				const newLockValue = String(currentLocked) === String(optId) ? -1 : optId;
+				console.log("option value :::::::::::::::::::", newLockValue);
 
 				const res = await fetch(getApiUrl(`/api/${id}/cast/${castId}/lock`), {
 					method: "POST",
@@ -1016,9 +1152,6 @@ const CastListNew = () => {
 		setCharacterSelectionMode(null);
 	};
 
-
-
-
 	return (
 		<div className="cln-page-container">
 			<div className="cln-main-content">
@@ -1143,12 +1276,10 @@ const CastListNew = () => {
 
 							{/* Character Cards */}
 							<div className="cln-cards-container">
-								{
-								
-								[...castData.cast_list]
+								{[...castData.cast_list]
 									.sort((a, b) => Number(a.cast_id) - Number(b.cast_id))
 									.map((member, id) => {
-										const idx=mapping[id];
+										const idx = mapping[id];
 										// Get scene IDs for this character from the scenes breakdown using cast_id
 										const memberSceneIds = castIdToSceneIds[String(member.cast_id)] || [];
 										const memberSceneIdsStr = memberSceneIds.map(String);
@@ -1265,6 +1396,7 @@ const CastListNew = () => {
 																		media: "",
 																		contact: "",
 																		availableDates: [],
+																		unavailableDates: [],
 																		details: "",
 																		notes: "",
 																	});
@@ -1500,6 +1632,10 @@ const CastListNew = () => {
 																							opt.available_dates ||
 																							opt.availableDates ||
 																							[];
+																						const unavailDates =
+																							opt.unavailable_dates ||
+																							opt.unavailableDates ||
+																							[];
 																						const formatDate = (dateStr) => {
 																							const d = new Date(dateStr);
 																							return d.toLocaleDateString("en-US", {
@@ -1518,6 +1654,11 @@ const CastListNew = () => {
 																											dates.length - 2
 																										} more`
 																								: "-";
+																						const unavailDisplay =
+																							Array.isArray(unavailDates) &&
+																							unavailDates.length > 0
+																								? ` (${unavailDates.length} unavail)`
+																								: "";
 
 																						return (
 																							<tr
@@ -1576,15 +1717,19 @@ const CastListNew = () => {
 																								<td
 																									style={{ width: 90 }}
 																									title={
-																										Array.isArray(dates) &&
+																										(Array.isArray(dates) &&
 																										dates.length > 0
-																											? `Available dates:\n${dates.join(
-																													"\n",
-																												)}`
-																											: "No dates set"
+																											? `Available dates:\n${dates.join("\n")}`
+																											: "No available dates set") +
+																										(Array.isArray(
+																											unavailDates,
+																										) && unavailDates.length > 0
+																											? `\n\nUnavailable dates:\n${unavailDates.join("\n")}`
+																											: "")
 																									}
 																								>
 																									{datesDisplay}
+																									{unavailDisplay}
 																								</td>
 																								<td>
 																									<button
@@ -1724,6 +1869,8 @@ const CastListNew = () => {
 					onSubmit={(form) => addActorOption(selectedCharacterIndex, form)}
 					optionForm={optionForm}
 					setOptionForm={setOptionForm}
+					scheduleStartDate={scheduleStartDate}
+					scheduleEndDate={scheduleEndDate}
 				/>
 			)}
 

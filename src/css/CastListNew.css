@@ -984,6 +984,35 @@
 	gap: 12px;
 }
 
+/* Date Mode Selector (Available/Unavailable toggle) */
+.cln-date-mode-selector {
+	display: flex;
+	gap: 16px;
+	align-items: center;
+	padding: 8px 12px;
+	background: #f8f9fc;
+	border-radius: 8px;
+	border: 1px solid #e6ecf8;
+}
+
+.cln-date-mode-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	color: #323232;
+	cursor: pointer;
+	user-select: none;
+}
+
+.cln-date-mode-checkbox {
+	width: 16px;
+	height: 16px;
+	cursor: pointer;
+	accent-color: #ff6758;
+}
+
 .cln-date-range-inputs {
 	display: flex;
 	gap: 8px;
