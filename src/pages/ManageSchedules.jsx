@@ -22,13 +22,19 @@ import { FaFileExcel } from "react-icons/fa";
 
 function formatPageEights(pageEights) {
 	if (!pageEights) return "N/A";
-	var whole = pageEights.split("/")[0];
-	whole = parseInt(whole);
-	if (whole > 8) {
-		whole = Math.floor(whole / 8);
-		var eighths = whole % 8;
-		return `${whole}  ${eighths}/8`;
+
+	let eighths = parseInt(pageEights.split("/")[0]);
+
+	if (eighths > 8) {
+		console.log("got ", pageEights);
+
+		let pages = Math.floor(eighths / 8);
+		let remainder = eighths % 8;
+
+		console.log("converted :: ", `${pages} ${remainder}/8`);
+		return `${pages} ${remainder}/8`;
 	}
+
 	return pageEights;
 }
 
@@ -235,7 +241,6 @@ const CalendarSceneBlock = ({ scene, isEditing }) => {
 					{scene.time_of_day && <span>{scene.time_of_day}</span>}
 				</div>
 			</b>
-			
 		</div>
 	);
 };
@@ -881,17 +886,28 @@ const ManageSchedules = () => {
 			const endDate = new Date(modalDateRangeEnd);
 
 			while (currentDate <= endDate) {
-				rangeDates.push(currentDate.toISOString().split("T")[0]);
+				const date = currentDate.toISOString().split("T")[0];
+
+				if (modalAddMode == "available") {
+					if (!modalAvailableDates.includes(date)) {
+						rangeDates.push(date);
+					}
+				} else {
+					if (!modalUnavailableDates.includes(date)) {
+						rangeDates.push(date);
+					}
+				}
+
 				currentDate.setDate(currentDate.getDate() + 1);
 			}
 
 			// Add range dates to the appropriate list based on mode
 			if (modalAddMode === "available") {
-				setModalAvailableDates(rangeDates);
+				const datesToSet = setModalAvailableDates([...rangeDates, ...modalAvailableDates]);
 				// Remove these dates from unavailable if present
 				setModalUnavailableDates((prev) => prev.filter((d) => !rangeDates.includes(d)));
 			} else {
-				setModalUnavailableDates(rangeDates);
+				setModalUnavailableDates([...rangeDates, ...modalUnavailableDates]);
 				// Remove these dates from available if present
 				setModalAvailableDates((prev) => prev.filter((d) => !rangeDates.includes(d)));
 			}
@@ -1290,7 +1306,8 @@ const ManageSchedules = () => {
 											<>
 												{modalAvailableDates.length === 0 && modalUnavailableDates.length === 0 && (
 													<p className="sched-flexible-info-text">
-														No dates are set for this {modalElementType}. It will be considered <strong>flexible</strong> and can be scheduled on any available day.
+														No dates are set for this {modalElementType}. It will be considered{" "}
+														<strong>flexible</strong> and can be scheduled on any available day.
 													</p>
 												)}
 												<button
@@ -1461,28 +1478,41 @@ const ManageSchedules = () => {
 
 		// Get scheduled dates for each element based on scheduleDays state
 		const getScheduledDatesForElement = (elementName) => {
-			if (!scheduleDays || scheduleDays.length === 0) return [];
+			const scheduleByDay = scheduleData.schedule.schedule_by_day;
+
+			if (!scheduleByDay || scheduleByDay.length === 0) return [];
 			const scheduledDates = [];
-			scheduleDays.forEach((day) => {
-				if (day.scenes && day.scenes.length > 0) {
-					day.scenes.forEach((scene) => {
-						if (doodElementType === "character") {
-							// Check if character is in this scene
-							const characterNames = scene.character_names || [];
-							if (characterNames.some((name) => name.toUpperCase() === elementName.toUpperCase())) {
-								if (!scheduledDates.includes(day.date)) {
-									scheduledDates.push(day.date);
-								}
-							}
-						} else {
-							// Check if location matches
-							if (scene.location_name && scene.location_name.toUpperCase() === elementName.toUpperCase()) {
-								if (!scheduledDates.includes(day.date)) {
-									scheduledDates.push(day.date);
-								}
+			//console.log("Schedule bby day in doods ::::::::::;;;", scheduleByDay);
+			Object.values(scheduleByDay).forEach((dayData) => {
+				const dayDate = dayData.date;
+				const scenes = dayData.scenes || [];
+
+				for (const scheduledScene of scenes) {
+					// Find breakdown scene by matching the 'id' field
+					const breakdownScene = breakdownScenes.find((bs) => bs.id === scheduledScene.scene_id || bs.id === parseInt(scheduledScene.scene_id));
+
+					// Skip if scene doesn't exist in breakdown (may have been deleted)
+					if (!breakdownScene) {
+						console.warn(
+							`Scene ${scheduledScene.scene_number} (id: ${scheduledScene.scene_id}) not found for scheduled dates - may have been deleted`,
+						);
+						continue;
+					}
+
+					if (doodElementType === "character") {
+						// Check if the character is in this breakdown scene's characters array
+						const hasCharacter = breakdownScene.characters?.some((charName) => charName.toUpperCase() === elementName.toUpperCase());
+						if (hasCharacter && !scheduledDates.includes(dayDate)) {
+							scheduledDates.push(dayDate);
+						}
+					} else if (doodElementType === "location") {
+						// Check if the location matches this breakdown scene's location
+						if (breakdownScene.set?.toUpperCase() === elementName.toUpperCase()) {
+							if (!scheduledDates.includes(dayDate)) {
+								scheduledDates.push(dayDate);
 							}
 						}
-					});
+					}
 				}
 			});
 			return scheduledDates.sort();
@@ -1833,7 +1863,6 @@ const ManageSchedules = () => {
 					{doodModalTab === "dood" ? (
 						<div className="sched-dood-modal-content" ref={doodContentRef}>
 							<div className="sched-dood-controls">
-
 								<div className="sched-dood-type-selector">
 									<label>
 										Show:
@@ -2713,8 +2742,6 @@ const ManageSchedules = () => {
 		}
 	}, [scheduleData, modalElement, modalElementType]);
 
-
-
 	// Create character name to ID map from breakdown characters
 	const characterNameToIdMap = useMemo(() => {
 		const map = {};
@@ -3580,6 +3607,7 @@ const ManageSchedules = () => {
 		const [type, name] = selectedElement.split("::");
 		const scheduledDates = [];
 		const scheduleByDay = scheduleData.schedule.schedule_by_day;
+		console.log("schedule by day in calendar", scheduleByDay);
 
 		if (scheduleByDay) {
 			Object.values(scheduleByDay).forEach((dayData) => {
@@ -3606,7 +3634,7 @@ const ManageSchedules = () => {
 						}
 					} else if (type === "location") {
 						// Check if the location matches this breakdown scene's location
-						if (breakdownScene.location?.toUpperCase() === name.toUpperCase()) {
+						if (breakdownScene.set?.toUpperCase() === name.toUpperCase()) {
 							if (!scheduledDates.includes(dayDate)) {
 								scheduledDates.push(dayDate);
 							}
@@ -3692,7 +3720,7 @@ const ManageSchedules = () => {
 			}
 			const scripts = await scriptsResponse.json();
 			const sortedScripts = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
-            console.log("Scene Hours ::::: ",sceneHours)
+			console.log("Scene Hours ::::: ", sceneHours);
 			if (sortedScripts.length > 0) {
 				// Use master script (oldest/first uploaded) for scheduling
 				const masterScript = sortedScripts[sortedScripts.length - 1];
@@ -3728,7 +3756,11 @@ const ManageSchedules = () => {
 	const projectName = useSelector((state) => state.project.projectName);
 
 	const handleClearSchedule = async () => {
-		if (!window.confirm("Are you sure you want to clear the schedule? This will remove the generated schedule and all availability dates for every location and character.")) {
+		if (
+			!window.confirm(
+				"Are you sure you want to clear the schedule? This will remove the generated schedule and all availability dates for every location and character.",
+			)
+		) {
 			return;
 		}
 		try {
@@ -3901,7 +3933,6 @@ const ManageSchedules = () => {
 					</div>
 				</div>
 			)}
-
 
 			<div className="sched-content">
 				<div className="sched-left-panel">
@@ -4175,8 +4206,12 @@ const ManageSchedules = () => {
 						</div>
 
 						<div className="sched-controls-group">
-							<button className="sched-action-btn sched-action-btn-primary sched-generate-button" onClick={() => setShowGenerateModal(true)} disabled={isGenerating}>
-								{isGenerating ? "Generating..." :(scheduleData?.schedule ? "REGENERATE" : "Generate")}
+							<button
+								className="sched-action-btn sched-action-btn-primary sched-generate-button"
+								onClick={() => setShowGenerateModal(true)}
+								disabled={isGenerating}
+							>
+								{isGenerating ? "Generating..." : scheduleData?.schedule ? "REGENERATE" : "Generate"}
 							</button>
 
 							{scheduleData?.schedule && (
@@ -4205,7 +4240,11 @@ const ManageSchedules = () => {
 											onChange={(e) => setNewScheduleDayInput(e.target.value)}
 											className="sched-edit-date-input"
 										/>
-										<button onClick={handleAddScheduleDay} className="sched-action-btn sched-action-btn-primary" disabled={!newScheduleDayInput}>
+										<button
+											onClick={handleAddScheduleDay}
+											className="sched-action-btn sched-action-btn-primary"
+											disabled={!newScheduleDayInput}
+										>
 											Add Day
 										</button>
 										<button
@@ -4236,11 +4275,11 @@ const ManageSchedules = () => {
 								</button>
 							)}
 
-						{scheduleData?.schedule && (
-							<button className="sched-action-btn sched-action-btn-clear" onClick={handleClearSchedule}>
-								Clear Schedule
-							</button>
-						)}
+							{scheduleData?.schedule && (
+								<button className="sched-action-btn sched-action-btn-clear" onClick={handleClearSchedule}>
+									Clear Schedule
+								</button>
+							)}
 						</div>
 					</div>
 

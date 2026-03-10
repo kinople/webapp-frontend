@@ -17,6 +17,25 @@ import * as XLSX from "xlsx";
 */
 
 /* ---------- parse TSV ---------- */
+
+function formatPageEights(pageEights) {
+	if (!pageEights) return "N/A";
+
+	let eighths = parseInt(pageEights.split("/")[0]);
+
+	if (eighths > 8) {
+		console.log("got ", pageEights);
+
+		let pages = Math.floor(eighths / 8);
+		let remainder = eighths % 8;
+
+		console.log("converted :: ", `${pages} ${remainder}/8`);
+		return `${pages} ${remainder}/8`;
+	}
+
+	return pageEights;
+}
+
 const parseTSV = (tsvText) => {
 	try {
 		const lines = tsvText.split("\n");
@@ -613,7 +632,7 @@ const ScriptBreakdownNew = () => {
 			Location: sceneData.location || "",
 			Set: sceneData.set || sceneData.location || "",
 			Time: sceneData.time || "",
-			"Page Eighths": sceneData.page_eighths || "",
+			"Page Eighths": formatPageEights(sceneData.page_eighths) || "",
 			Synopsis: sceneData.synopsis || "",
 			Characters: arrayToString(sceneData.characters),
 			"Action Props": arrayToString(sceneData.action_props),
@@ -1654,14 +1673,7 @@ const ScriptBreakdownNew = () => {
 		setIsAddingScene(true);
 		try {
 			// Convert page_eighths number to string format (e.g., 1 -> "1/8", 8 -> "1", 9 -> "1 1/8")
-			const formatPageEighths = (num) => {
-				if (num <= 0) return "1/8";
-				const wholePages = Math.floor(num / 8);
-				const eighths = num % 8;
-				if (wholePages === 0) return `${eighths}/8`;
-				if (eighths === 0) return `${wholePages}`;
-				return `${wholePages} ${eighths}/8`;
-			};
+			
 
 			// Parse comma-separated strings into arrays
 			const parseToArray = (str) =>
@@ -1768,7 +1780,7 @@ const ScriptBreakdownNew = () => {
 				"Int./Ext.": scene.int_ext || "",
 				Location: scene.location || "",
 				Time: scene.time || "",
-				"Page Eighths": scene.page_eighths || "",
+				"Page Eighths": formatPageEights(scene.page_eighths) || "",
 				Synopsis: scene.synopsis || "",
 				Characters: (scene.characters || []).join(", "),
 				"Action Props": (scene.action_props || []).join(", "),
@@ -2201,7 +2213,7 @@ const ScriptBreakdownNew = () => {
 																		int_ext: row["Int./Ext."],
 																		location: row["Location"],
 																		time: row["Time"],
-																		page_eighths: row["Page Eighths"],
+																		page_eighths:( row["Page Eighths"]),
 																		synopsis: row["Synopsis"],
 																		characters_ids: [],
 																	});
@@ -2231,6 +2243,10 @@ const ScriptBreakdownNew = () => {
 												} else {
 													cellValue = "N/A";
 												}
+											}
+
+											if (header === "Page Eighths") {
+												cellValue = formatPageEights(cellValue);
 											}
 
 											const isSceneNumber = header.toLowerCase().includes("scene") && header.toLowerCase().includes("number");

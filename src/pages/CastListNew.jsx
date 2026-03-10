@@ -83,7 +83,19 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 		const endDate = new Date(dateRangeEnd);
 
 		while (currentDate <= endDate) {
-			rangeDates.push(currentDate.toISOString().split("T")[0]);
+			const date = currentDate.toISOString().split("T")[0];
+			if(dateAddMode === "available"){
+				if(!availableDates.includes(date)){
+					rangeDates.push(date)
+				}
+
+			}else{
+				if(!unavailableDates.includes(date)){
+					rangeDates.push(date)
+				}
+			}
+			
+
 			currentDate.setDate(currentDate.getDate() + 1);
 		}
 
