@@ -17,6 +17,7 @@ const Script = () => {
 	const [isGeneratingBreakdown, setIsGeneratingBreakdown] = useState(false);
 	const [uploadStatus, setUploadStatus] = useState("");
 	const [uploadedScripts, setUploadedScripts] = useState([]);
+	const [isDragging, setIsDragging] = useState(false);
 
 	const fileInputRef = useRef(null);
 
@@ -54,6 +55,9 @@ const Script = () => {
 			console.log("scripts list ", data);
 			data = data.filter((s) => s.status !== "archived");
 			setScriptList(data);
+	        if(data){
+				handleScriptClick(data[0].name);
+			}
 			return data;
 		} catch (error) {
 			console.error("Error fetching scripts:", error);
@@ -170,6 +174,7 @@ const Script = () => {
 		const file = event.target.files[0];
 		if (file && file.type === "application/pdf") {
 			setTempFile(file);
+			setNewFileName(file.name.replace(".pdf", ""));
 		} else if (file) {
 			setUploadStatus("Please select a valid PDF file.");
 			setTimeout(() => setUploadStatus(""), 3000);
@@ -179,10 +184,32 @@ const Script = () => {
 		}
 	};
 
-	const handleImportClick = () => {
-		if (fileInputRef.current) {
-			fileInputRef.current.click();
+	const handleDragOver = (e) => {
+		e.preventDefault();
+		setIsDragging(true);
+	};
+
+	const handleDragLeave = (e) => {
+		e.preventDefault();
+		setIsDragging(false);
+	};
+
+	const handleDrop = (e) => {
+		e.preventDefault();
+		setIsDragging(false);
+		if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+			const file = e.dataTransfer.files[0];
+			if (file.type === "application/pdf") {
+				setTempFile(file);
+				setNewFileName(file.name.replace(".pdf", ""));
+			} else {
+				setUploadStatus("Please drop a valid PDF file.");
+				setTimeout(() => setUploadStatus(""), 3000);
+			}
 		}
+	};
+
+	const handleImportClick = () => {
 		setShowFileNameModal(true);
 	};
 
@@ -262,6 +289,7 @@ const Script = () => {
 			const data = await response.json();
 			setPdfUrl(data.url);
 			setSelectedScript(script);
+			console.log("script clicked ", script);
 		} catch (error) {
 			console.error("Error fetching script:", error);
 			setUploadStatus("Failed to load the script");
@@ -425,59 +453,77 @@ const Script = () => {
 								)}
 							</div>
 						) : (
-							/* Enter Script Name View */
+							/* Enter Script Name View or Drag & Drop View */
 							<form onSubmit={handleFileNameSubmit}>
 								<div className="script-modal-content">
-									<h3 className="script-modal-title">Enter Script Name</h3>
-									<div>
-										<input
-											type="text"
-											value={newFileName}
-											onChange={(e) => setNewFileName(e.target.value)}
-											placeholder="Enter Script Name"
-											className="script-filename-input"
-											autoFocus
-											disabled={isProcessing}
-										/>
-										{tempFile && (
-											<div className="script-file-tag">
-												<span className="script-file-tag-name">{tempFile.name}</span>
-												<button type="button" className="script-file-tag-remove" onClick={() => setTempFile(null)}>
-													<XIcon />
-												</button>
+									{!tempFile ? (
+										<div 
+											className={`script-drag-drop-zone ${isDragging ? "dragging" : ""}`}
+											onDragOver={handleDragOver}
+											onDragLeave={handleDragLeave}
+											onDrop={handleDrop}
+											onClick={() => fileInputRef.current?.click()}
+										>
+											<div className="script-drag-icon">
+												📄
 											</div>
-										)}
-									</div>
-
-									{/* Model Selection (admin only) */}
-									{user === "2" && (
-										<div className="script-model-selection">
-											<label className="script-model-label">Select LLM Model:</label>
-											<select
-												value={selectedModel}
-												onChange={(e) => setSelectedModel(e.target.value)}
-												className="script-model-select"
-												disabled={isProcessing}
-											>
-												<option value="gpt-4.1-2025-04-14">GPT-4.1 (2025-04-14)</option>
-												<option value="gpt-5">GPT-5 (2025-08-07)</option>
-												<option value="gpt-5-nano-2025-08-07">GPT-5 Nano (2025-08-07)</option>
-												<option value="gpt-5-mini-2025-08-07">GPT-5 Mini (2025-08-07)</option>
-											</select>
+											<h3 className="script-drag-title">Drag & Drop your script here</h3>
+											<p className="script-drag-subtitle">or click to browse (.pdf only)</p>
 										</div>
+									) : (
+										<>
+											<h3 className="script-modal-title">Enter Script Name</h3>
+											<div>
+												<input
+													type="text"
+													value={newFileName}
+													onChange={(e) => setNewFileName(e.target.value)}
+													placeholder="Enter Script Name"
+													className="script-filename-input"
+													autoFocus
+													disabled={isProcessing}
+												/>
+												<div className="script-file-tag">
+													<span className="script-file-tag-name">{tempFile.name}</span>
+													<button type="button" className="script-file-tag-remove" onClick={() => setTempFile(null)}>
+														<XIcon />
+													</button>
+												</div>
+											</div>
+
+											{/* Model Selection (admin only) */}
+											{user === "2" && (
+												<div className="script-model-selection">
+													<label className="script-model-label">Select LLM Model:</label>
+													<select
+														value={selectedModel}
+														onChange={(e) => setSelectedModel(e.target.value)}
+														className="script-model-select"
+														disabled={isProcessing}
+													>
+														<option value="gpt-4.1-2025-04-14">GPT-4.1 (2025-04-14)</option>
+														<option value="gpt-5">GPT-5 (2025-08-07)</option>
+														<option value="gpt-5-nano-2025-08-07">GPT-5 Nano (2025-08-07)</option>
+														<option value="gpt-5-mini-2025-08-07">GPT-5 Mini (2025-08-07)</option>
+													</select>
+												</div>
+											)}
+										</>
 									)}
 
 									<div className="script-modal-buttons">
 										<button type="button" onClick={handleModalClose} className="script-cancel-button" disabled={isProcessing}>
 											Cancel
 										</button>
-										<button
-											type="submit"
-											disabled={!newFileName.trim() || !tempFile || isProcessing}
-											className={`script-submit-button ${!newFileName.trim() || !tempFile || isProcessing ? "disabled" : ""}`}
-										>
-											Upload
-										</button>
+										{tempFile && (
+											<button
+												type="submit"
+												disabled={!newFileName.trim() || !tempFile || isProcessing}
+												className={`script-submit-button ${!newFileName.trim() || !tempFile || isProcessing ? "disabled" : ""}`}
+											>
+												Upload
+											</button>
+										)}
 									</div>
 								</div>
 							</form>

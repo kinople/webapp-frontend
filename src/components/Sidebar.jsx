@@ -21,7 +21,7 @@ import { fetchWithAuth, getApiUrl } from "../utils/api";
 import { removeToken } from "../utils/auth";
 import { toggleNavbar } from "../redux/reducers/uiSlice";
 import { setCurrentOrganization } from "../redux/reducers/organizationSlice";
-import logoIcon from "../assets/logo-icon.svg";
+import logoIcon from "../assets/logo2.png";
 import "../css/Sidebar.css";
 
 const Sidebar = () => {

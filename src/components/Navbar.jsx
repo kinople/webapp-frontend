@@ -7,7 +7,7 @@ import { fetchWithAuth } from "../utils/api";
 import { toggleNavbar } from "../redux/reducers/uiSlice";
 import { setCurrentOrganization, setOrganizations as setOrganizationsAction } from "../redux/reducers/organizationSlice";
 import { PiGear, PiUsersThree, PiSignOut, PiCaretDown, PiSidebarSimple, PiPlus, PiUser, PiX } from "react-icons/pi";
-import logoIcon from "../assets/logo-icon.svg";
+import logoIcon from "../assets/logo2.png";
 import "../css/Navbar.css";
 
 const Navbar = () => {
@@ -36,7 +36,7 @@ const Navbar = () => {
 	const [showOrgDropdown, setShowOrgDropdown] = useState(false);
 	const [organizations, setOrganizations] = useState([]);
 	const [orgLoading, setOrgLoading] = useState(false);
-	
+
 	// Get current organization from Redux
 	const currentOrganization = useSelector((state) => state.organization.currentOrganization);
 	const currentOrg = currentOrganization.name;
@@ -44,7 +44,7 @@ const Navbar = () => {
 	// Get the current user's role in the current organization (1=Owner, 2=Member, 3=Viewer)
 	const getCurrentUserOrgRole = () => {
 		if (!currentOrganization.id || organizations.length === 0) return null;
-		const org = organizations.find(o => o.organization_id === currentOrganization.id);
+		const org = organizations.find((o) => o.organization_id === currentOrganization.id);
 		return org?.user_role_id || null;
 	};
 	const currentUserOrgRole = getCurrentUserOrgRole();
@@ -213,7 +213,7 @@ const Navbar = () => {
 	};
 
 	const handleAddOrgMember = () => {
-		setAddMemberContext('org');
+		setAddMemberContext("org");
 		setShowAddMemberPopup(true);
 		setMemberSearchQuery("");
 		setMemberSearchResults([]);
@@ -241,14 +241,8 @@ const Navbar = () => {
 				const data = await response.json();
 				if (data.status === "success") {
 					// Filter out users already in the member list and the current user
-					const existingIds = addMemberContext === 'project' 
-						? teamMembers.map(m => m.id)
-						: orgMembers.map(m => m.id);
-					const filteredUsers = data.users.filter(u => 
-						!existingIds.includes(u.user_id) && 
-						u.username !== user && 
-						u.email !== user
-					);
+					const existingIds = addMemberContext === "project" ? teamMembers.map((m) => m.id) : orgMembers.map((m) => m.id);
+					const filteredUsers = data.users.filter((u) => !existingIds.includes(u.user_id) && u.username !== user && u.email !== user);
 					setMemberSearchResults(filteredUsers);
 				}
 			}
@@ -276,10 +270,10 @@ const Navbar = () => {
 			id: selectedUser.user_id,
 			email: selectedUser.email || selectedUser.username,
 			role: selectedMemberRole === 1 ? "Owner" : selectedMemberRole === 2 ? "Member" : "Viewer",
-			role_id: selectedMemberRole
+			role_id: selectedMemberRole,
 		};
 
-		if (addMemberContext === 'project') {
+		if (addMemberContext === "project") {
 			setTeamMembers([...teamMembers, newMember]);
 		} else {
 			setOrgMembers([...orgMembers, newMember]);
@@ -348,7 +342,7 @@ const Navbar = () => {
 								},
 								body: JSON.stringify({
 									username: member.email,
-									role_id: member.role_id || 2
+									role_id: member.role_id || 2,
 								}),
 							});
 						} catch (memberErr) {
@@ -363,10 +357,12 @@ const Navbar = () => {
 				await fetchOrganizations();
 				// Set the newly created organization as current
 				if (data.organization) {
-					dispatch(setCurrentOrganization({ 
-						id: data.organization.organization_id, 
-						name: data.organization.organizationname 
-					}));
+					dispatch(
+						setCurrentOrganization({
+							id: data.organization.organization_id,
+							name: data.organization.organizationname,
+						}),
+					);
 				}
 				navigate(`/${user}`, {
 					state: {
@@ -388,7 +384,7 @@ const Navbar = () => {
 		// Show the new project modal
 		setShowNewProjectModal(true);
 		setTeamMembers([]); // Reset members
-		
+
 		// If in an organization context, fetch organization members
 		if (currentOrganization.id) {
 			try {
@@ -404,11 +400,11 @@ const Navbar = () => {
 					const data = await response.json();
 					if (data.status === "success" && data.organization.members) {
 						// Convert org members to team members format
-						const members = data.organization.members.map(m => ({
+						const members = data.organization.members.map((m) => ({
 							id: m.user_id,
 							email: m.username,
 							role: m.role_name || "Member",
-							role_id: m.role_id || 2
+							role_id: m.role_id || 2,
 						}));
 						setTeamMembers(members);
 						setAddAllMembers(true); // Auto-check "Add all members" since we loaded org members
@@ -440,7 +436,7 @@ const Navbar = () => {
 	};
 
 	const handleAddMember = () => {
-		setAddMemberContext('project');
+		setAddMemberContext("project");
 		setShowAddMemberPopup(true);
 		setMemberSearchQuery("");
 		setMemberSearchResults([]);
@@ -470,9 +466,9 @@ const Navbar = () => {
 				projectName: newProjectForm.projectName,
 				projectType: newProjectForm.projectType,
 				...(organizationId && { organizationId }),
-				members: teamMembers.map(m => ({
+				members: teamMembers.map((m) => ({
 					id: m.id,
-					role_id: m.role_id || 2
+					role_id: m.role_id || 2,
 				})),
 			};
 
@@ -641,7 +637,13 @@ const Navbar = () => {
 								<span className="navbar-org-badge-text">{getOrgBadgeLetter()}</span>
 							</div>
 							<div className="navbar-org-name-wrapper">
-								<span className="navbar-org-name">{currentOrg === "Personal" ? "Personal workspace" : ((currentOrg.length > 15) ? currentOrg.substring(0, 15) + "..." : currentOrg)}</span>
+								<span className="navbar-org-name">
+									{currentOrg === "Personal"
+										? "Personal workspace"
+										: currentOrg.length > 15
+											? currentOrg.substring(0, 15) + "..."
+											: currentOrg}
+								</span>
 								<PiCaretDown className="navbar-org-caret" />
 							</div>
 						</div>
@@ -777,11 +779,11 @@ const Navbar = () => {
 								<span className="navbar-menu-text">Settings</span>
 							</div>
 							{currentOrg === "Personal" && (
-							<Link to={`/${user}/settings`} className="navbar-menu-item" style={{ textDecoration: 'none' }}>
-								<PiUser className="navbar-menu-icon" />
-								<span className="navbar-menu-text">Profile</span>
-							</Link>
-						)}
+								<Link to={`/${user}/settings`} className="navbar-menu-item" style={{ textDecoration: "none" }}>
+									<PiUser className="navbar-menu-icon" />
+									<span className="navbar-menu-text">Profile</span>
+								</Link>
+							)}
 						</div>
 					))}
 
@@ -911,9 +913,7 @@ const Navbar = () => {
 
 									{/* Team Members List */}
 									{teamMembers.length === 0 ? (
-										<p className="new-project-no-members">
-											No members added yet. Click "Add Member" to invite users.
-										</p>
+										<p className="new-project-no-members">No members added yet. Click "Add Member" to invite users.</p>
 									) : (
 										teamMembers.map((member) => (
 											<div key={member.id} className="new-project-member-row">
@@ -1046,7 +1046,7 @@ const Navbar = () => {
 							<h3 className="add-member-popup-title">Add Member</h3>
 							<PiX className="add-member-popup-close" onClick={handleCloseAddMemberPopup} />
 						</div>
-						
+
 						<div className="add-member-popup-content">
 							{/* Search Input */}
 							<div className="add-member-search-field">
@@ -1081,8 +1081,8 @@ const Navbar = () => {
 									<div className="add-member-loading">Searching...</div>
 								) : memberSearchResults.length > 0 ? (
 									memberSearchResults.map((searchUser) => (
-										<div 
-											key={searchUser.user_id} 
+										<div
+											key={searchUser.user_id}
 											className="add-member-result-item"
 											onClick={() => handleSelectMember(searchUser)}
 										>

@@ -18,22 +18,29 @@ import * as XLSX from "xlsx";
 
 /* ---------- parse TSV ---------- */
 
-function formatPageEights(pageEights) {
-	if (!pageEights) return "N/A";
+function formatPageEighths(pageEighths) {
+	if (pageEighths == null) return "N/A";
 
-	let eighths = parseInt(pageEights.split("/")[0]);
+	let eighths;
+
+	// Handle string like "19/8"
+	if (typeof pageEighths === "string") {
+		eighths = parseInt(pageEighths.split("/")[0]);
+	}
+	// Handle number like 19
+	else {
+		eighths = parseInt(pageEighths);
+	}
 
 	if (eighths > 8) {
-		console.log("got ", pageEights);
-
 		let pages = Math.floor(eighths / 8);
 		let remainder = eighths % 8;
 
-		console.log("converted :: ", `${pages} ${remainder}/8`);
+		if (remainder === 0) return `${pages}`;
 		return `${pages} ${remainder}/8`;
 	}
 
-	return pageEights;
+	return `${eighths}/8`;
 }
 
 const parseTSV = (tsvText) => {
@@ -58,6 +65,29 @@ const parseTSV = (tsvText) => {
 };
 
 /* ---------- TagInput (CSV in/out) used only inside scene editor ---------- */
+export const parsePageEighthsToNum = (pageStr) => {
+	if (!pageStr) return 1;
+	const str = String(pageStr);
+	const match = str.match(/^(\d+)?\s*(\d+)\/8$/);
+	if (match) {
+		const whole = parseInt(match[1] || "0", 10);
+		const eighths = parseInt(match[2], 10);
+		return whole * 8 + eighths;
+	}
+	const wholeOnly = parseInt(str, 10);
+	if (!isNaN(wholeOnly)) return wholeOnly * 8;
+	return 1;
+};
+
+export const formatNumToPageEighths = (num) => {
+	if (num <= 0) return "1/8";
+	const wholePages = Math.floor(num / 8);
+	const eighths = num % 8;
+	if (wholePages === 0) return `${eighths}/8`;
+	if (eighths === 0) return `${wholePages}`;
+	return `${wholePages} ${eighths}/8`;
+};
+
 function TagInput({ value = "", onChange }) {
 	const [tags, setTags] = useState(() => {
 		if (!value) return [];
@@ -632,7 +662,7 @@ const ScriptBreakdownNew = () => {
 			Location: sceneData.location || "",
 			Set: sceneData.set || sceneData.location || "",
 			Time: sceneData.time || "",
-			"Page Eighths": formatPageEights(sceneData.page_eighths) || "",
+			"Page Eighths": formatPageEighths(sceneData.page_eighths) || "",
 			Synopsis: sceneData.synopsis || "",
 			Characters: arrayToString(sceneData.characters),
 			"Action Props": arrayToString(sceneData.action_props),
@@ -748,7 +778,7 @@ const ScriptBreakdownNew = () => {
 					location: editingScene["Location"] || updatedSceneBreakdowns[editingSceneIndex].location,
 					set: editingScene["Set"] || updatedSceneBreakdowns[editingSceneIndex].set || editingScene["Location"],
 					time: editingScene["Time"] || updatedSceneBreakdowns[editingSceneIndex].time,
-					page_eighths: editingScene["Page Eighths"] || updatedSceneBreakdowns[editingSceneIndex].page_eighths,
+					page_eighths: editingScene["Page Eighths"] ? `${parsePageEighthsToNum(editingScene["Page Eighths"])}/8` : updatedSceneBreakdowns[editingSceneIndex].page_eighths,
 					synopsis: editingScene["Synopsis"] || updatedSceneBreakdowns[editingSceneIndex].synopsis,
 					// Characters handled via character IDs
 					characters_ids: [...editingCharacterIds],
@@ -773,7 +803,7 @@ const ScriptBreakdownNew = () => {
 			}
 
 			console.log("Saving scene breakdowns", updatedSceneBreakdowns[editingSceneIndex]);
-
+            
 			const response = await fetch(getApiUrl(`/api/${id}/update-breakdown`), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -1162,12 +1192,8 @@ const ScriptBreakdownNew = () => {
 		try {
 			// Helper to format page eighths
 			const formatPageEighths = (num) => {
-				if (num <= 0) return "1/8";
-				const wholePages = Math.floor(num / 8);
-				const eighths = num % 8;
-				if (wholePages === 0) return `${eighths}/8`;
-				if (eighths === 0) return `${wholePages}`;
-				return `${wholePages} ${eighths}/8`;
+				if (!num || num <= 0) return "1/8";
+				return `${num}/8`;
 			};
 
 			// Helper to parse comma-separated strings into arrays
@@ -1463,12 +1489,8 @@ const ScriptBreakdownNew = () => {
 		try {
 			// Helper to format page eighths
 			const formatPageEighths = (num) => {
-				if (num <= 0) return "1/8";
-				const wholePages = Math.floor(num / 8);
-				const eighths = num % 8;
-				if (wholePages === 0) return `${eighths}/8`;
-				if (eighths === 0) return `${wholePages}`;
-				return `${wholePages} ${eighths}/8`;
+				if (!num || num <= 0) return "1/8";
+				return `${num}/8`;
 			};
 
 			// Helper to parse comma-separated strings into arrays
@@ -1644,6 +1666,10 @@ const ScriptBreakdownNew = () => {
 			alert("Location is required");
 			return;
 		}
+		if (!newSceneForm.set.trim()) {
+			alert("Set is required");
+			return;
+		}
 		if (!newSceneForm.time.trim()) {
 			alert("Time is required");
 			return;
@@ -1695,7 +1721,7 @@ const ScriptBreakdownNew = () => {
 
 			const sceneDataToSend = {
 				...newSceneForm,
-				page_eighths: formatPageEighths(newSceneForm.page_eighths),
+				page_eighths: newSceneForm.page_eighths > 0 ? `${newSceneForm.page_eighths}/8` : "1/8",
 				characters: selectedCharacterNames,
 				characters_ids: selectedIds,
 				action_props: parseToArray(newSceneForm.action_props),
@@ -1780,7 +1806,7 @@ const ScriptBreakdownNew = () => {
 				"Int./Ext.": scene.int_ext || "",
 				Location: scene.location || "",
 				Time: scene.time || "",
-				"Page Eighths": formatPageEights(scene.page_eighths) || "",
+				"Page Eighths": formatPageEighths(scene.page_eighths) || "",
 				Synopsis: scene.synopsis || "",
 				Characters: (scene.characters || []).join(", "),
 				"Action Props": (scene.action_props || []).join(", "),
@@ -1969,6 +1995,31 @@ const ScriptBreakdownNew = () => {
 											setEditingScene((prev) => ({ ...prev, [key]: csv }));
 										}}
 									/>
+								) : key === "Page Eighths" ? (
+									<div>
+										<div className="sbn-page-eighths-input">
+											<span className="sbn-page-eighths-prefix">(</span>
+											<input
+												type="number"
+												min="1"
+												className="sbn-form-input sbn-page-eighths-number"
+												value={parsePageEighthsToNum(value)}
+												onChange={(e) => {
+													let num = parseInt(e.target.value, 10);
+													if (isNaN(num)) num = 1;
+													setEditingScene({ ...editingScene, [key]: formatNumToPageEighths(num) });
+												}}
+											/>
+											<span className="sbn-page-eighths-suffix">/8)</span>
+										</div>
+										<span className="sbn-page-eighths-hint">
+											{parsePageEighthsToNum(value) <= 8
+												? `= ${parsePageEighthsToNum(value)}/8 page`
+												: `= ${Math.floor(parsePageEighthsToNum(value) / 8)} ${
+														parsePageEighthsToNum(value) % 8 > 0 ? `${parsePageEighthsToNum(value) % 8}/8` : ""
+													} pages`}
+										</span>
+									</div>
 								) : (
 									<textarea
 										className="sbn-field-input"
@@ -2246,7 +2297,7 @@ const ScriptBreakdownNew = () => {
 											}
 
 											if (header === "Page Eighths") {
-												cellValue = formatPageEights(cellValue);
+												cellValue = formatPageEighths(cellValue);
 											}
 
 											const isSceneNumber = header.toLowerCase().includes("scene") && header.toLowerCase().includes("number");
@@ -3339,39 +3390,39 @@ const ScriptBreakdownNew = () => {
 									</div>
 								</div>
 
-								<div className="sbn-form-row">
-									<div className="sbn-form-group">
-										<label className="sbn-form-label">
-											Location <span className="sbn-required">*</span>
-										</label>
-										<select
-											value={newSceneForm.location}
-											onChange={(e) => setNewSceneForm({ ...newSceneForm, location: e.target.value })}
-											className="sbn-form-select"
-										>
-											<option value="">Select Location...</option>
-											{locationList.map((loc) => (
-												<option key={loc.location_id || loc.location} value={loc.location}>
-													{loc.location}
-												</option>
-											))}
-										</select>
-									</div>
-									<div className="sbn-form-group">
-										<label className="sbn-form-label">Set</label>
-										<select
-											value={newSceneForm.set}
-											onChange={(e) => setNewSceneForm({ ...newSceneForm, set: e.target.value })}
-											className="sbn-form-select"
-										>
-											<option value="">Select Set...</option>
-											{locationList.map((loc) => (
-												<option key={loc.location_id || loc.location} value={loc.location}>
-													{loc.location}
-												</option>
-											))}
-										</select>
-									</div>
+								<div className="sbn-form-group sbn-form-group-full">
+									<label className="sbn-form-label">
+										Location <span className="sbn-required">*</span>
+									</label>
+									<select
+										value={newSceneForm.location}
+										onChange={(e) => setNewSceneForm({ ...newSceneForm, location: e.target.value })}
+										className="sbn-form-select"
+									>
+										<option value="">Select Location...</option>
+										{locationList.map((loc) => (
+											<option key={loc.location_id || loc.location} value={loc.location}>
+												{loc.location}
+											</option>
+										))}
+									</select>
+								</div>
+								<div className="sbn-form-group sbn-form-group-full">
+									<label className="sbn-form-label">
+										Set <span className="sbn-required">*</span>
+									</label>
+									<select
+										value={newSceneForm.set}
+										onChange={(e) => setNewSceneForm({ ...newSceneForm, set: e.target.value })}
+										className="sbn-form-select"
+									>
+										<option value="">Select Set...</option>
+										{locationList.map((loc) => (
+											<option key={loc.location_id || loc.location} value={loc.location}>
+												{loc.location}
+											</option>
+										))}
+									</select>
 								</div>
 
 								<div className="sbn-form-row">
@@ -3718,10 +3769,7 @@ const ScriptBreakdownNew = () => {
 										className="sbn-search-input"
 									/>
 								</div>
-								<button className="sbn-filter-btn">
-									<PiSlidersHorizontal className="sbn-filter-icon" />
-									<span>Filter</span>
-								</button>
+
 							</div>
 							<div className="sbn-toolbar-right">
 								<button className="sbn-sync-btn" onClick={exportToExcel}>
@@ -3730,10 +3778,7 @@ const ScriptBreakdownNew = () => {
 									</span>
 									<span>Export to Excel</span>
 								</button>
-								<button className="sbn-sync-btn">
-									<span className="sbn-sync-symbol">⟳</span>
-									<span>Sync Latest Scripts</span>
-								</button>
+								
 							</div>
 						</div>
 
