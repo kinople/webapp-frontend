@@ -1,11 +1,13 @@
 // src/pages/ScriptBreakdownNew.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { getApiUrl } from "../utils/api";
+import { useSelector } from "react-redux";
+import { getApiUrl, fetchWithAuth } from "../utils/api";
 import "../css/ScriptBreakdownNew.css";
 import { PiMagnifyingGlass, PiSlidersHorizontal } from "react-icons/pi";
 import { FaFileExcel, FaPlus, FaTrash, FaCamera } from "react-icons/fa";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 /*
   ScriptBreakdown page - final variant:
@@ -17,6 +19,34 @@ import * as XLSX from "xlsx";
 */
 
 /* ---------- parse TSV ---------- */
+const decodeTSVCell = (value) => {
+	const text = String(value ?? "");
+	let result = "";
+	for (let i = 0; i < text.length; i += 1) {
+		const ch = text[i];
+		const next = text[i + 1];
+		if (ch === "\\" && next) {
+			if (next === "n") {
+				result += "\n";
+				i += 1;
+				continue;
+			}
+			if (next === "t") {
+				result += "\t";
+				i += 1;
+				continue;
+			}
+			if (next === "\\") {
+				result += "\\";
+				i += 1;
+				continue;
+			}
+		}
+		result += ch;
+	}
+	return result;
+};
+
 const parseTSV = (tsvText) => {
 	try {
 		const lines = tsvText.split("\n");
@@ -26,7 +56,7 @@ const parseTSV = (tsvText) => {
 			.slice(1)
 			.filter((l) => l.trim() !== "")
 			.map((line, lineIdx) => {
-				const values = line.split("\t").map((v) => v.trim());
+				const values = line.split("\t").map((v) => decodeTSVCell(v.trim()));
 				return headers.reduce((obj, header, idx) => {
 					obj[header] = values[idx] || "";
 					return obj;
@@ -36,6 +66,34 @@ const parseTSV = (tsvText) => {
 		console.error("Error parsing TSV", e);
 		return [];
 	}
+};
+
+const formatPageEighthsLabel = (totalEighths) => {
+	const safeTotal = Math.max(1, parseInt(totalEighths, 10) || 1);
+	const wholePages = Math.floor(safeTotal / 8);
+	const eighths = safeTotal % 8;
+	if (wholePages === 0) return `${Math.max(1, eighths)}/8`;
+	if (eighths === 0) return `${wholePages}`;
+	return `${wholePages} ${eighths}/8`;
+};
+
+const getMixedFractionParts = (totalEighths) => {
+	const safeTotal = Math.max(1, parseInt(totalEighths, 10) || 1);
+	return {
+		whole: Math.floor(safeTotal / 8),
+		eighth: safeTotal % 8,
+	};
+};
+
+const getExcelColumnLabel = (columnNumber) => {
+	let label = "";
+	let current = Math.max(1, columnNumber);
+	while (current > 0) {
+		const remainder = (current - 1) % 26;
+		label = String.fromCharCode(65 + remainder) + label;
+		current = Math.floor((current - 1) / 26);
+	}
+	return label;
 };
 
 /* ---------- TagInput (CSV in/out) used only inside scene editor ---------- */
@@ -182,9 +240,81 @@ function CharacterTagInput({ selectedIds = [], allCharacters = [], onChange }) {
 	);
 }
 
+function MixedFractionPageEighthsInput({ value = 1, onChange, compact = false, showHint = true }) {
+	const parts = getMixedFractionParts(value);
+
+	const updateWhole = (nextWhole) => {
+		const whole = Math.max(0, parseInt(nextWhole, 10) || 0);
+		const total = whole === 0 && parts.eighth === 0 ? 1 : (whole * 8) + parts.eighth;
+		onChange(total);
+	};
+
+	const updateEighth = (nextEighth) => {
+		const eighth = Math.min(7, Math.max(0, parseInt(nextEighth, 10) || 0));
+		const total = parts.whole === 0 && eighth === 0 ? 1 : (parts.whole * 8) + eighth;
+		onChange(total);
+	};
+
+	return (
+		<div className="sbn-page-eighths-editor">
+			<div className={compact ? "sbn-page-eighths-compact" : "sbn-page-eighths-mixed"}>
+				<input
+					type="number"
+					min="0"
+					step="1"
+					value={parts.whole}
+					onChange={(e) => updateWhole(e.target.value)}
+					className={`sbn-form-input ${compact ? "sbn-page-eighths-compact-number" : "sbn-page-eighths-whole"}`}
+					aria-label="Whole pages"
+				/>
+				{compact ? (
+					<>
+						<input
+							type="number"
+							min="0"
+							max="7"
+							step="1"
+							value={parts.eighth}
+							onChange={(e) => updateEighth(e.target.value)}
+							className="sbn-form-input sbn-page-eighths-compact-number"
+							aria-label="Page eighth numerator"
+						/>
+						<span className="sbn-page-eighths-compact-suffix">/8</span>
+					</>
+				) : (
+					<>
+						<span className="sbn-page-eighths-plus">and</span>
+						<select
+							value={parts.eighth}
+							onChange={(e) => updateEighth(e.target.value)}
+							className="sbn-form-select sbn-page-eighths-select"
+							aria-label="Page eighths"
+						>
+							<option value="0">0/8</option>
+							<option value="1">1/8</option>
+							<option value="2">2/8</option>
+							<option value="3">3/8</option>
+							<option value="4">4/8</option>
+							<option value="5">5/8</option>
+							<option value="6">6/8</option>
+							<option value="7">7/8</option>
+						</select>
+					</>
+				)}
+			</div>
+			{showHint && (
+				<span className="sbn-page-eighths-editor-hint">
+					Saved as {formatPageEighthsLabel(value)}
+				</span>
+			)}
+		</div>
+	);
+}
+
 /* ---------- Main component ---------- */
 const ScriptBreakdownNew = () => {
 	const { user, id } = useParams();
+	const projectName = useSelector((state) => state.project.projectName);
 	const [scriptBreakdown, setScriptBreakdown] = useState([]);
 	const [allScripts, setAllScripts] = useState([]);
 	const [selectedScript, setSelectedScript] = useState(null);
@@ -194,10 +324,13 @@ const ScriptBreakdownNew = () => {
 	const [viewMode, setViewMode] = useState("table");
 	const [editingSceneIndex, setEditingSceneIndex] = useState(0);
 	const [editingScene, setEditingScene] = useState(null);
+	const [originalEditingScene, setOriginalEditingScene] = useState(null);
 	const [pdfUrl, setPdfUrl] = useState(null);
 	const [pdfZoom, setPdfZoom] = useState(100);
 	const [hasBreakdown, setHasBreakdown] = useState(false);
 	const [filterText, setFilterText] = useState("");
+	const [selectedSearchField, setSelectedSearchField] = useState("ALL_FIELDS");
+	const [showSearchFilterMenu, setShowSearchFilterMenu] = useState(false);
 	const [parsing, setParsing] = useState([]);
 	// Characters from breakdown API
 	const [breakdownCharacters, setBreakdownCharacters] = useState([]);
@@ -209,13 +342,18 @@ const ScriptBreakdownNew = () => {
 	const [editingSceneParsing, setEditingSceneParsing] = useState({});
 	// Character IDs for the currently editing scene
 	const [editingCharacterIds, setEditingCharacterIds] = useState([]);
+	const [originalEditingCharacterIds, setOriginalEditingCharacterIds] = useState([]);
 	const tableWrapRef = useRef(null);
+	const searchFilterRef = useRef(null);
 	const [showLeftShadow, setShowLeftShadow] = useState(false);
 	const [showRightShadow, setShowRightShadow] = useState(false);
 	const [editParsing, setEditParsing] = useState(false);
 	const [activeTab, setActiveTab] = useState("master");
 	// Selected script for generated breakdown dropdown
 	const [selectedGeneratedScript, setSelectedGeneratedScript] = useState(null);
+	const [selectedGeneratedEpisode, setSelectedGeneratedEpisode] = useState("");
+	const [projectEpisodeNumbers, setProjectEpisodeNumbers] = useState([]);
+	const [projectType, setProjectType] = useState("Film");
 	// Add/Remove Element state
 	const [showAddElementModal, setShowAddElementModal] = useState(false);
 	const [newElementName, setNewElementName] = useState("");
@@ -234,7 +372,7 @@ const ScriptBreakdownNew = () => {
 	const [isAddingScene, setIsAddingScene] = useState(false);
 	// Remove Scene state
 	const [removeSceneMode, setRemoveSceneMode] = useState(false);
-	const [selectedSceneToRemove, setSelectedSceneToRemove] = useState(null);
+	const [selectedScenesToRemove, setSelectedScenesToRemove] = useState([]);
 	const [showRemoveSceneModal, setShowRemoveSceneModal] = useState(false);
 	const [isRemovingScene, setIsRemovingScene] = useState(false);
 	// Location and Cast lists for dropdowns
@@ -251,7 +389,11 @@ const ScriptBreakdownNew = () => {
 	const [showMergeSceneModal, setShowMergeSceneModal] = useState(false);
 	const [isMergingScene, setIsMergingScene] = useState(false);
 	const [mergeSceneForm, setMergeSceneForm] = useState({
+		episode_number: "",
 		scene_number: "",
+		insert_relative: "before",
+		insert_episode_number: "",
+		insert_scene_number: "",
 		int_ext: "INT.",
 		location: "",
 		set: "",
@@ -268,7 +410,11 @@ const ScriptBreakdownNew = () => {
 		set_dressing: "",
 	});
 	const [splitSceneForm1, setSplitSceneForm1] = useState({
+		episode_number: "",
 		scene_number: "",
+		insert_relative: "before",
+		insert_episode_number: "",
+		insert_scene_number: "",
 		int_ext: "INT.",
 		location: "",
 		set: "",
@@ -285,7 +431,11 @@ const ScriptBreakdownNew = () => {
 		set_dressing: "",
 	});
 	const [splitSceneForm2, setSplitSceneForm2] = useState({
+		episode_number: "",
 		scene_number: "",
+		insert_relative: "after",
+		insert_episode_number: "",
+		insert_scene_number: "",
 		int_ext: "INT.",
 		location: "",
 		set: "",
@@ -302,6 +452,7 @@ const ScriptBreakdownNew = () => {
 		set_dressing: "",
 	});
 	const [newSceneForm, setNewSceneForm] = useState({
+		episode_number: "",
 		scene_number: "",
 		int_ext: "INT.",
 		location: "",
@@ -339,6 +490,302 @@ const ScriptBreakdownNew = () => {
 		return allScripts;
 	}, [allScripts]);
 
+	const generatedScriptsByEpisode = useMemo(() => {
+		const groups = {};
+		generatedScripts.forEach((script) => {
+			const episodeNumber = String(script?.episodeNumber ?? "").trim();
+			const key = episodeNumber || "__NO_EPISODE__";
+			if (!groups[key]) groups[key] = [];
+			groups[key].push(script);
+		});
+
+		Object.values(groups).forEach((scripts) => {
+			scripts.sort((a, b) => (b.version || 0) - (a.version || 0));
+		});
+
+		return groups;
+	}, [generatedScripts]);
+
+	const generatedEpisodeOptions = useMemo(() => {
+		const keys = Object.keys(generatedScriptsByEpisode);
+		const ordered = keys.sort((a, b) => {
+			if (a === "__NO_EPISODE__") return 1;
+			if (b === "__NO_EPISODE__") return -1;
+
+			const aNum = Number(a);
+			const bNum = Number(b);
+			const aIsNum = !Number.isNaN(aNum);
+			const bIsNum = !Number.isNaN(bNum);
+			if (aIsNum && bIsNum) return aNum - bNum;
+			return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+		});
+
+		return ordered.map((key) => ({
+			key,
+			label: key === "__NO_EPISODE__" ? "No Episode" : `Ep${key}`,
+		}));
+	}, [generatedScriptsByEpisode]);
+
+	const addSceneEpisodeOptions = useMemo(() => {
+		const episodeSet = new Set();
+
+		projectEpisodeNumbers.forEach((ep) => {
+			const normalized = String(ep ?? "").trim();
+			if (normalized) episodeSet.add(normalized);
+		});
+
+		generatedEpisodeOptions.forEach((option) => {
+			if (option.key && option.key !== "__NO_EPISODE__") {
+				episodeSet.add(String(option.key).trim());
+			}
+		});
+
+		sceneBreakdowns.forEach((scene) => {
+			const episodeValue = String(scene?.episode_number ?? scene?.["Episode Number"] ?? "").trim();
+			if (episodeValue) episodeSet.add(episodeValue);
+		});
+
+		return Array.from(episodeSet)
+			.sort((a, b) => {
+				const aNum = Number(a);
+				const bNum = Number(b);
+				const aIsNum = !Number.isNaN(aNum);
+				const bIsNum = !Number.isNaN(bNum);
+				if (aIsNum && bIsNum) return aNum - bNum;
+				return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+			})
+			.map((ep) => ({ key: ep, label: `Ep${ep}` }));
+	}, [projectEpisodeNumbers, generatedEpisodeOptions, sceneBreakdowns]);
+
+
+	const generatedScriptsForSelectedEpisode = useMemo(() => {
+		if (!selectedGeneratedEpisode) return generatedScripts;
+		return generatedScriptsByEpisode[selectedGeneratedEpisode] || [];
+	}, [generatedScripts, generatedScriptsByEpisode, selectedGeneratedEpisode]);
+
+	const hasEpisodeGrouping = useMemo(() => {
+		if ((projectType || "").toLowerCase() !== "episodic") return false;
+		return generatedScripts.some((script) => String(script?.episodeNumber ?? "").trim() !== "");
+	}, [generatedScripts, projectType]);
+
+	const filteredBreakdown = useMemo(() => {
+		if (!scriptBreakdown.length) return [];
+		if (!filterText) return scriptBreakdown;
+		const q = filterText.toLowerCase();
+		return scriptBreakdown.filter((row) => {
+			if (selectedSearchField === "ALL_FIELDS") {
+				return Object.values(row).some((v) =>
+					String(v || "")
+						.toLowerCase()
+						.includes(q),
+				);
+			}
+
+			return String(row[selectedSearchField] || "")
+				.toLowerCase()
+				.includes(q);
+		});
+	}, [scriptBreakdown, filterText, selectedSearchField]);
+
+	const isEpisodicProject = useMemo(() => {
+		return (projectType || "").trim().toLowerCase() === "episodic";
+	}, [projectType]);
+
+	const searchFieldOptions = useMemo(() => {
+		const seen = new Set();
+		const options = [{ key: "ALL_FIELDS", label: "All Fields" }];
+		const addOption = (label) => {
+			const cleanLabel = String(label || "").trim();
+			if (!cleanLabel || seen.has(cleanLabel)) return;
+			seen.add(cleanLabel);
+			options.push({ key: cleanLabel, label: cleanLabel });
+		};
+
+		if (isEpisodicProject) addOption("Episode Number");
+		[
+			"Scene Number",
+			"Int./Ext.",
+			"Location",
+			"Set",
+			"Time",
+			"Page Eighths",
+			"Synopsis",
+			"Characters",
+			"Action Props",
+			"Other Props",
+			"Picture Vehicles",
+			"Animals",
+			"Extras",
+			"Wardrobe",
+			"Set Dressing",
+		].forEach(addOption);
+
+		customFields.forEach((fieldKey) =>
+			addOption(
+				String(fieldKey || "")
+					.split("_")
+					.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+					.join(" "),
+			),
+		);
+
+		return options;
+	}, [customFields, isEpisodicProject]);
+
+	const getGeneratedScriptLabel = useCallback((script) => {
+		const episodeNumber = String(script?.episodeNumber ?? "").trim();
+		if (episodeNumber) {
+			return `${script.name} (Ep${episodeNumber})`;
+		}
+		return `${script.name} (v${script.version})`;
+	}, []);
+
+	const getGeneratedDraftLabel = useCallback((script) => {
+		const draftName = String(script?.name ?? "").trim();
+		if (draftName) return draftName;
+		if (script?.version) return `v${script.version}`;
+		return "Draft";
+	}, []);
+
+	const latestScript = useMemo(() => {
+		if (!allScripts || allScripts.length === 0) return null;
+		return allScripts.reduce((a, b) => ((b?.version || 0) > (a?.version || 0) ? b : a), allScripts[0]);
+	}, [allScripts]);
+
+	const latestDraftLabel = useMemo(() => {
+		if (!latestScript) return "";
+		const baseLabel = getGeneratedDraftLabel(latestScript);
+		const episodeNumber = String(latestScript?.episodeNumber ?? "").trim();
+		return episodeNumber ? `${baseLabel} · Ep${episodeNumber}` : baseLabel;
+	}, [getGeneratedDraftLabel, latestScript]);
+
+	const getSceneIdentity = useCallback((sceneLike) => {
+		if (!sceneLike) return { sceneNumber: "", episodeNumber: "" };
+
+		const sceneNumber = String(sceneLike.scene_number ?? sceneLike["Scene Number"] ?? "").trim();
+		const fallbackEpisodeNumber = activeTab === "generated" ? String(selectedGeneratedScript?.episodeNumber ?? "").trim() : "";
+		const episodeNumber = String(sceneLike.episode_number ?? sceneLike["Episode Number"] ?? fallbackEpisodeNumber).trim();
+
+		return { sceneNumber, episodeNumber };
+	}, [activeTab, selectedGeneratedScript]);
+
+	const findSceneIndexByIdentity = useCallback((sceneLike) => {
+		const { sceneNumber, episodeNumber } = getSceneIdentity(sceneLike);
+		if (!sceneNumber) return -1;
+
+		const exactMatchIndex = sceneBreakdowns.findIndex((scene) => {
+			const identity = getSceneIdentity(scene);
+			return identity.sceneNumber === sceneNumber && identity.episodeNumber === episodeNumber;
+		});
+		if (exactMatchIndex !== -1) return exactMatchIndex;
+
+		return sceneBreakdowns.findIndex((scene) => getSceneIdentity(scene).sceneNumber === sceneNumber);
+	}, [getSceneIdentity, sceneBreakdowns]);
+
+	const getSceneDataByIdentity = useCallback((sceneLike) => {
+		const sceneIndex = findSceneIndexByIdentity(sceneLike);
+		return sceneIndex === -1 ? null : sceneBreakdowns[sceneIndex];
+	}, [findSceneIndexByIdentity, sceneBreakdowns]);
+
+	const getSceneOptionsForEpisode = useCallback((episodeNumber) => {
+		const targetEpisode = String(episodeNumber ?? "").trim();
+		const seen = new Set();
+		const options = [];
+
+		sceneBreakdowns.forEach((scene) => {
+			const identity = getSceneIdentity(scene);
+			if (!identity.sceneNumber) return;
+			if (isEpisodicProject && identity.episodeNumber !== targetEpisode) return;
+			if (seen.has(identity.sceneNumber)) return;
+			seen.add(identity.sceneNumber);
+			options.push({ value: identity.sceneNumber, label: identity.sceneNumber });
+		});
+
+		return options;
+	}, [getSceneIdentity, isEpisodicProject, sceneBreakdowns]);
+
+	const mergeInsertSceneOptions = useMemo(() => {
+		return getSceneOptionsForEpisode(mergeSceneForm.insert_episode_number);
+	}, [getSceneOptionsForEpisode, mergeSceneForm.insert_episode_number]);
+
+	const getAbsoluteInsertPosition = useCallback((position) => {
+		if (position <= 0) return 0;
+
+		const targetRow = filteredBreakdown[position - 1];
+		if (!targetRow) return Math.max(0, Math.min(position, sceneBreakdowns.length));
+
+		const absoluteIndex = findSceneIndexByIdentity(targetRow);
+		if (absoluteIndex === -1) return Math.max(0, Math.min(position, sceneBreakdowns.length));
+
+		return absoluteIndex + 1;
+	}, [filteredBreakdown, findSceneIndexByIdentity, sceneBreakdowns.length]);
+
+	const addSceneEpisodeOptionsForPosition = useMemo(() => {
+		if (!isEpisodicProject) return addSceneEpisodeOptions;
+
+		const prevScene = addScenePosition > 0 ? sceneBreakdowns[addScenePosition - 1] : null;
+		const nextScene = sceneBreakdowns[addScenePosition] || null;
+
+		const prevEp =
+			String(prevScene?.episode_number ?? prevScene?.["Episode Number"] ?? "").trim();
+		const nextEp =
+			String(nextScene?.episode_number ?? nextScene?.["Episode Number"] ?? "").trim();
+
+		// If both neighbors exist and are different, show just those two (prev first).
+		if (prevEp && nextEp && prevEp !== nextEp) {
+			return [
+				{ key: prevEp, label: `Ep${prevEp}` },
+				{ key: nextEp, label: `Ep${nextEp}` },
+			];
+		}
+
+		// If same episode on both sides, lock to that episode.
+		if (prevEp && nextEp && prevEp === nextEp) {
+			return [{ key: prevEp, label: `Ep${prevEp}` }];
+		}
+
+		// If only one neighbor exists, lock to that episode.
+		if (prevEp || nextEp) {
+			const onlyEp = prevEp || nextEp;
+			return [{ key: onlyEp, label: `Ep${onlyEp}` }];
+		}
+
+		// Fallback to all episodes when position has no neighbors.
+		return addSceneEpisodeOptions;
+	}, [
+		addScenePosition,
+		addSceneEpisodeOptions,
+		isEpisodicProject,
+		sceneBreakdowns,
+	]);
+
+	const isEpisodeLockedForPosition = useMemo(() => {
+		if (!isEpisodicProject) return false;
+
+		const prevScene = addScenePosition > 0 ? sceneBreakdowns[addScenePosition - 1] : null;
+		const nextScene = sceneBreakdowns[addScenePosition] || null;
+
+		const prevEp =
+			String(prevScene?.episode_number ?? prevScene?.["Episode Number"] ?? "").trim();
+		const nextEp =
+			String(nextScene?.episode_number ?? nextScene?.["Episode Number"] ?? "").trim();
+
+		if (prevEp && nextEp) return prevEp === nextEp;
+		if (prevEp || nextEp) return true;
+		return false;
+	}, [addScenePosition, isEpisodicProject, sceneBreakdowns]);
+
+
+	const getReferenceSceneQuery = useCallback((sceneIndex) => {
+		const sceneData = sceneBreakdowns[sceneIndex];
+		const { sceneNumber, episodeNumber } = getSceneIdentity(sceneData);
+		const params = new URLSearchParams();
+		if (sceneNumber) params.set("scene_number", sceneNumber);
+		if (episodeNumber) params.set("episode_number", episodeNumber);
+		const query = params.toString();
+		return query ? `?${query}` : "";
+	}, [getSceneIdentity, sceneBreakdowns]);
+
 	// View-only mode when on generated tab
 	const isViewOnly = activeTab === "generated";
 
@@ -361,6 +808,17 @@ const ScriptBreakdownNew = () => {
 			window.removeEventListener("resize", updateShadows);
 		};
 	}, [tableWrapRef.current]);
+
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			if (searchFilterRef.current && !searchFilterRef.current.contains(event.target)) {
+				setShowSearchFilterMenu(false);
+			}
+		};
+
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
 
 	/* ---------- fetchers ---------- */
 	const fetchBreakdown = async (scriptId) => {
@@ -402,7 +860,28 @@ const ScriptBreakdownNew = () => {
 			}
 			if (data.tsv_content) {
 				const parsed = parseTSV(data.tsv_content);
-				setScriptBreakdown(parsed);
+				const parsedWithIndex = parsed.map((row, idx) => ({ row, idx }));
+				parsedWithIndex.sort((a, b) => {
+					const aEp = String(a.row?.episode_number ?? a.row?.["Episode Number"] ?? "").trim();
+					const bEp = String(b.row?.episode_number ?? b.row?.["Episode Number"] ?? "").trim();
+					if (!aEp && !bEp) return a.idx - b.idx;
+					if (!aEp) return 1;
+					if (!bEp) return -1;
+
+					const aNum = Number(aEp);
+					const bNum = Number(bEp);
+					const aIsNum = !Number.isNaN(aNum);
+					const bIsNum = !Number.isNaN(bNum);
+					if (aIsNum && bIsNum) {
+						if (aNum !== bNum) return aNum - bNum;
+					} else {
+						const cmp = aEp.localeCompare(bEp, undefined, { numeric: true, sensitivity: "base" });
+						if (cmp !== 0) return cmp;
+					}
+
+					return a.idx - b.idx; // stable within same episode
+				});
+				setScriptBreakdown(parsedWithIndex.map((entry) => entry.row));
 				setHasBreakdown(true);
 			} else {
 				setError("No breakdown data found");
@@ -471,22 +950,37 @@ const ScriptBreakdownNew = () => {
 		}
 	};
 
+	const fetchProjectType = useCallback(async () => {
+		try {
+			const response = await fetchWithAuth(getApiUrl(`/api/project-name/${id}`), {
+				method: "GET",
+				credentials: "include",
+				mode: "cors",
+			});
+			if (!response.ok) return;
+			const data = await response.json();
+			setProjectType(data.projectType || "Film");
+		} catch (error) {
+			console.error("Error fetching project type:", error);
+		}
+	}, [id]);
+
 	const fetchAllScripts = async () => {
 		try {
 			const res = await fetch(getApiUrl(`/api/${id}/script-list`), { method: "GET" });
 			if (res.ok) {
 				const scripts = await res.json();
 				const sorted = (scripts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
-				const activeScripts = scripts.filter((s) => s.status !== "archived");
+				const activeScripts = sorted.filter((s) => s.status !== "archived");
 				setAllScripts(activeScripts);
 				console.log("all scripts ------------ ", sorted);
-				if (sorted.length > 0) {
+				if (activeScripts.length > 0) {
 					// Always load master script (oldest one, last in sorted array) by default
 					fetchMasterBreakdown();
 
 					// Set default generated script to the newest (first in sorted array) if there are multiple scripts
-					if (sorted.length > 0) {
-						setSelectedGeneratedScript(sorted[0]);
+					if (activeScripts.length > 0) {
+						setSelectedGeneratedScript(activeScripts[0]);
 					}
 				}
 			} else {
@@ -528,7 +1022,7 @@ const ScriptBreakdownNew = () => {
 	// ========== Reference Images Handlers ==========
 	const loadReferenceImages = useCallback(async (sceneIndex) => {
 		try {
-			const response = await fetch(getApiUrl(`/api/${id}/scene/${sceneIndex}/reference-images`));
+			const response = await fetch(getApiUrl(`/api/${id}/scene/${sceneIndex}/reference-images${getReferenceSceneQuery(sceneIndex)}`));
 			if (response.ok) {
 				const data = await response.json();
 				setReferenceImages(data.reference_images || []);
@@ -549,7 +1043,7 @@ const ScriptBreakdownNew = () => {
 			console.error("Error loading reference images:", e);
 			setReferenceImages([]);
 		}
-	}, [id]);
+	}, [getReferenceSceneQuery, id]);
 
 	const handleUploadReferenceImage = useCallback(async (file, sceneIndex) => {
 		if (!file) return;
@@ -559,7 +1053,7 @@ const ScriptBreakdownNew = () => {
 			const formData = new FormData();
 			formData.append('file', file);
 
-			const response = await fetch(getApiUrl(`/api/${id}/scene/${sceneIndex}/upload-reference-image`), {
+			const response = await fetch(getApiUrl(`/api/${id}/scene/${sceneIndex}/upload-reference-image${getReferenceSceneQuery(sceneIndex)}`), {
 				method: 'POST',
 				body: formData,
 			});
@@ -576,14 +1070,14 @@ const ScriptBreakdownNew = () => {
 		} finally {
 			setIsUploadingImage(false);
 		}
-	}, [id, loadReferenceImages]);
+	}, [getReferenceSceneQuery, id, loadReferenceImages]);
 
 	const handleDeleteReferenceImage = useCallback(
 		async (imageId, sceneIndex) => {
 			if (!window.confirm('Are you sure you want to delete this image?')) return;
 
 			try {
-				const response = await fetch(getApiUrl(`/api/${id}/scene/${sceneIndex}/reference-image/${imageId}`), {
+				const response = await fetch(getApiUrl(`/api/${id}/scene/${sceneIndex}/reference-image/${imageId}${getReferenceSceneQuery(sceneIndex)}`), {
 					method: 'DELETE',
 				});
 
@@ -598,14 +1092,44 @@ const ScriptBreakdownNew = () => {
 				alert('Failed to delete image');
 			}
 		},
-		[id, loadReferenceImages]
+		[getReferenceSceneQuery, id, loadReferenceImages]
 	);
 
 	useEffect(() => {
+		fetchProjectType();
 		fetchAllScripts();
 		// Initial breakdown will be fetched after scripts are loaded and first script is selected
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [id]);
+	}, [fetchProjectType, id]);
+
+	useEffect(() => {
+		const fetchProjectEpisodes = async () => {
+			if ((projectType || "").toLowerCase() !== "episodic") {
+				setProjectEpisodeNumbers([]);
+				return;
+			}
+			try {
+				const response = await fetch(getApiUrl(`/api/projects/${id}/episodes`));
+				if (!response.ok) {
+					setProjectEpisodeNumbers([]);
+					return;
+				}
+				const data = await response.json();
+				const episodes = Array.isArray(data?.episodes) ? data.episodes : [];
+				const episodeNumbers = [...new Set(
+					episodes
+						.map((episode) => String(episode?.ep_number ?? "").trim())
+						.filter(Boolean),
+				)];
+				setProjectEpisodeNumbers(episodeNumbers);
+			} catch (error) {
+				console.error("Error fetching project episodes:", error);
+				setProjectEpisodeNumbers([]);
+			}
+		};
+
+		fetchProjectEpisodes();
+	}, [id, projectType]);
 
 	// Fetch location list for Add Scene dropdown
 	useEffect(() => {
@@ -659,6 +1183,37 @@ const ScriptBreakdownNew = () => {
 
 	// Load correct breakdown when tab changes
 	useEffect(() => {
+		if (!hasEpisodeGrouping) {
+			setSelectedGeneratedEpisode("");
+			return;
+		}
+
+		if (generatedEpisodeOptions.length === 0) {
+			setSelectedGeneratedEpisode("");
+			return;
+		}
+
+		const episodeExists = generatedEpisodeOptions.some((option) => option.key === selectedGeneratedEpisode);
+		if (!episodeExists) {
+			setSelectedGeneratedEpisode(generatedEpisodeOptions[0].key);
+		}
+	}, [generatedEpisodeOptions, hasEpisodeGrouping, selectedGeneratedEpisode]);
+
+	useEffect(() => {
+		if (!hasEpisodeGrouping) return;
+
+		if (generatedScriptsForSelectedEpisode.length === 0) {
+			setSelectedGeneratedScript(null);
+			return;
+		}
+
+		const selectedExists = generatedScriptsForSelectedEpisode.some((script) => script.id === selectedGeneratedScript?.id);
+		if (!selectedExists) {
+			setSelectedGeneratedScript(generatedScriptsForSelectedEpisode[0]);
+		}
+	}, [generatedScriptsForSelectedEpisode, hasEpisodeGrouping, selectedGeneratedScript]);
+
+	useEffect(() => {
 		if (activeTab === "master" && masterScript) {
 			setSelectedScript(masterScript);
 			fetchMasterBreakdown();
@@ -680,6 +1235,11 @@ const ScriptBreakdownNew = () => {
 			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
 			.join(" ");
 	};
+
+	const areIdListsEqual = useCallback((a = [], b = []) => {
+		if (a.length !== b.length) return false;
+		return a.every((value, index) => String(value) === String(b[index]));
+	}, []);
 
 	// Helper function to convert JSON scene breakdown to display format
 	const sceneBreakdownToDisplayFormat = (sceneData) => {
@@ -706,6 +1266,9 @@ const ScriptBreakdownNew = () => {
 			Wardrobe: arrayToString(sceneData.wardrobe),
 			"Set Dressing": arrayToString(sceneData.set_dressing),
 		};
+		if (isEpisodicProject) {
+			result["Episode Number"] = sceneData.episode_number || "";
+		}
 		// Add custom fields
 		customFields.forEach((fieldKey) => {
 			const displayName = snakeCaseToTitleCase(fieldKey);
@@ -736,6 +1299,7 @@ const ScriptBreakdownNew = () => {
 		// Use JSON scene breakdown data (which is correct) instead of TSV parsed data
 		const displayData = sceneBreakdownToDisplayFormat(sceneData);
 		setEditingScene(displayData);
+		setOriginalEditingScene(displayData);
 		setEditingSceneParsing(parsing[idx] || { heading: "", content: "" });
 
 
@@ -750,8 +1314,10 @@ const ScriptBreakdownNew = () => {
 				})
 				.filter(Boolean);
 			setEditingCharacterIds(matchedIds);
+			setOriginalEditingCharacterIds(matchedIds);
 		} else {
 			setEditingCharacterIds([]);
+			setOriginalEditingCharacterIds([]);
 		}
 		console.log(parsing[idx]);
 		setViewMode("scene");
@@ -793,6 +1359,53 @@ const ScriptBreakdownNew = () => {
 			.filter(Boolean);
 	};
 
+	const parsePageEighthsValue = useCallback((pageStr) => {
+		if (!pageStr) return 1;
+		const str = String(pageStr).trim();
+		const fractionMatch = str.match(/^(\d+)?\s*(\d+)\/8$/);
+		if (fractionMatch) {
+			const whole = parseInt(fractionMatch[1] || "0", 10);
+			const eighths = parseInt(fractionMatch[2] || "0", 10);
+			if (Number.isNaN(whole) || Number.isNaN(eighths)) return 1;
+			return Math.max(1, (whole * 8) + eighths);
+		}
+
+		const wholeOnly = parseInt(str, 10);
+		if (!Number.isNaN(wholeOnly)) return Math.max(1, wholeOnly * 8);
+		return 1;
+	}, []);
+
+	const formatPageEighthsValue = useCallback((totalEighths) => {
+		const safeTotal = Math.max(1, parseInt(totalEighths, 10) || 1);
+		const wholePages = Math.floor(safeTotal / 8);
+		const eighths = safeTotal % 8;
+		if (wholePages === 0) return `${Math.max(1, eighths)}/8`;
+		if (eighths === 0) return `${wholePages}`;
+		return `${wholePages} ${eighths}/8`;
+	}, []);
+
+	const getPageEighthParts = useCallback((pageStr) => {
+		const total = parsePageEighthsValue(pageStr);
+		return {
+			whole: Math.floor(total / 8),
+			eighth: total % 8,
+		};
+	}, [parsePageEighthsValue]);
+
+	const updateEditingScenePageEighths = useCallback((nextParts) => {
+		const nextWhole = Math.max(0, parseInt(nextParts.whole, 10) || 0);
+		const nextEighth = Math.min(7, Math.max(0, parseInt(nextParts.eighth, 10) || 0));
+		const normalizedTotal = nextWhole === 0 && nextEighth === 0 ? 1 : (nextWhole * 8) + nextEighth;
+		setEditingScene((prev) => ({ ...prev, "Page Eighths": formatPageEighthsValue(normalizedTotal) }));
+	}, [formatPageEighthsValue]);
+
+	const hasSceneChanges = useMemo(() => {
+		if (!editingScene || !originalEditingScene) return false;
+		const sceneChanged = JSON.stringify(editingScene) !== JSON.stringify(originalEditingScene);
+		const charactersChanged = !areIdListsEqual(editingCharacterIds, originalEditingCharacterIds);
+		return sceneChanged || charactersChanged;
+	}, [editingScene, originalEditingScene, editingCharacterIds, originalEditingCharacterIds, areIdListsEqual]);
+
 	const handleSaveSceneChanges = useCallback(async () => {
 		if (!editingScene) return;
 		try {
@@ -815,8 +1428,10 @@ const ScriptBreakdownNew = () => {
 					location: editingScene["Location"] || updatedSceneBreakdowns[editingSceneIndex].location,
 					set: editingScene["Set"] || updatedSceneBreakdowns[editingSceneIndex].set || editingScene["Location"],
 					time: editingScene["Time"] || updatedSceneBreakdowns[editingSceneIndex].time,
-					page_eighths: editingScene["Page Eighths"] || updatedSceneBreakdowns[editingSceneIndex].page_eighths,
-					synopsis: editingScene["Synopsis"] || updatedSceneBreakdowns[editingSceneIndex].synopsis,
+					page_eighths: formatPageEighthsValue(parsePageEighthsValue(
+						editingScene["Page Eighths"] || updatedSceneBreakdowns[editingSceneIndex].page_eighths
+					)),
+					synopsis: editingScene["Synopsis"] ?? updatedSceneBreakdowns[editingSceneIndex].synopsis,
 					// Characters handled via character IDs
 					characters_ids: [...editingCharacterIds],
 					characters: charNames,
@@ -855,12 +1470,14 @@ const ScriptBreakdownNew = () => {
 			if (!response.ok) throw new Error("Failed to save changes");
 			setScriptBreakdown(updatedBreakdown);
 			setSceneBreakdowns(updatedSceneBreakdowns);
+			setOriginalEditingScene(editingScene);
+			setOriginalEditingCharacterIds([...editingCharacterIds]);
 			alert("Changes saved successfully!");
 		} catch (e) {
 			console.error(e);
 			alert("Failed to save changes. Try again.");
 		}
-	}, [parsing, editingScene, scriptBreakdown, sceneBreakdowns, editingCharacterIds, allCharacters, editingSceneIndex, id, masterScript]);
+	}, [parsing, editingScene, scriptBreakdown, sceneBreakdowns, editingCharacterIds, allCharacters, editingSceneIndex, id, masterScript, formatPageEighthsValue, parsePageEighthsValue]);
 
 	/* ---------- Add Element ---------- */
 	const handleAddElement = useCallback(async () => {
@@ -984,13 +1601,20 @@ const ScriptBreakdownNew = () => {
 	/* ---------- Remove Scene ---------- */
 	const handleRemoveSceneClick = () => {
 		if (removeSceneMode) {
-			// Cancel remove mode
+			if (selectedScenesToRemove.length > 0) {
+				// In remove mode with selections, open confirmation instead of cancelling.
+				setShowRemoveSceneModal(true);
+				return;
+			}
+
+			// Cancel remove mode only when nothing is selected.
 			setRemoveSceneMode(false);
-			setSelectedSceneToRemove(null);
+			setSelectedScenesToRemove([]);
+			setShowRemoveSceneModal(false);
 		} else {
 			// Enter remove mode
 			setRemoveSceneMode(true);
-			setSelectedSceneToRemove(null);
+			setSelectedScenesToRemove([]);
 			// Cancel other modes
 			setShowPositionSelector(false);
 			setRemoveElementMode(false);
@@ -1000,13 +1624,28 @@ const ScriptBreakdownNew = () => {
 	};
 
 	const handleSelectSceneToRemove = (scene) => {
-		setSelectedSceneToRemove(scene);
-		setShowRemoveSceneModal(true);
+		setSelectedScenesToRemove((prev) => {
+			const isSelected = prev.some((selected) =>
+				(selected.id && scene.id && selected.id === scene.id) ||
+				(selected.scene_number === scene.scene_number &&
+					String(selected.episode_number || "") === String(scene.episode_number || ""))
+			);
+
+			if (isSelected) {
+				return prev.filter((selected) =>
+					!((selected.id && scene.id && selected.id === scene.id) ||
+					(selected.scene_number === scene.scene_number &&
+						String(selected.episode_number || "") === String(scene.episode_number || "")))
+				);
+			}
+
+			return [...prev, scene];
+		});
 	};
 
 	const handleRemoveScene = useCallback(async () => {
-		if (!selectedSceneToRemove) {
-			alert("No scene selected");
+		if (selectedScenesToRemove.length === 0) {
+			alert("No scenes selected");
 			return;
 		}
 		if (!masterScript?.id) {
@@ -1016,41 +1655,43 @@ const ScriptBreakdownNew = () => {
 
 		setIsRemovingScene(true);
 		try {
-			const response = await fetch(getApiUrl(`/api/${id}/remove-scene`), {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					script_id: masterScript.id,
-					scene_id: selectedSceneToRemove.id,
-					scene_number: selectedSceneToRemove.scene_number,
-				}),
-			});
+			for (const scene of selectedScenesToRemove) {
+				const response = await fetch(getApiUrl(`/api/${id}/remove-scene`), {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						script_id: masterScript.id,
+						scene_id: scene.id ?? null,
+						scene_number: scene.scene_number,
+						episode_number: scene.episode_number || "",
+					}),
+				});
 
-			const data = await response.json();
+				const data = await response.json();
 
-			if (!response.ok) {
-				throw new Error(data.message || "Failed to remove scene");
-			}
+				if (!response.ok) {
+					throw new Error(data.message || `Failed to remove scene ${scene.scene_number}`);
+				}
 
-			// Update scene breakdowns locally
-			if (data.scene_breakdowns) {
-				setSceneBreakdowns(data.scene_breakdowns);
+				if (data.scene_breakdowns) {
+					setSceneBreakdowns(data.scene_breakdowns);
+				}
 			}
 
 			// Re-fetch breakdown to get updated data
 			fetchMasterBreakdown();
 
-			setSelectedSceneToRemove(null);
+			setSelectedScenesToRemove([]);
 			setShowRemoveSceneModal(false);
 			setRemoveSceneMode(false);
-			alert("Scene removed successfully!");
+			alert(selectedScenesToRemove.length === 1 ? "Scene removed successfully!" : "Scenes removed successfully!");
 		} catch (e) {
 			console.error(e);
 			alert(e.message || "Failed to remove scene");
 		} finally {
 			setIsRemovingScene(false);
 		}
-	}, [selectedSceneToRemove, masterScript, id]);
+	}, [selectedScenesToRemove, masterScript, id]);
 
 	/* ---------- Split Scene ---------- */
 	const handleSplitSceneClick = () => {
@@ -1074,6 +1715,8 @@ const ScriptBreakdownNew = () => {
 		setSelectedSceneToSplit(scene);
 		// Pre-fill both forms with the original scene data
 		const originalSceneNumber = scene.scene_number || "";
+		const fallbackEpisode = activeTab === "generated" ? String(selectedGeneratedScript?.episodeNumber ?? "").trim() : "";
+		const sceneEpisodeNumber = String(scene?.episode_number ?? scene?.["Episode Number"] ?? fallbackEpisode).trim();
 
 		// Parse array fields to comma-separated strings for the form
 		const arrayToString = (arr) => {
@@ -1111,7 +1754,11 @@ const ScriptBreakdownNew = () => {
 		};
 
 		const baseForm = {
+			episode_number: sceneEpisodeNumber || "",
 			scene_number: "",
+			insert_relative: "before",
+			insert_episode_number: isEpisodicProject ? (sceneEpisodeNumber || "") : "",
+			insert_scene_number: originalSceneNumber || "",
 			int_ext: scene.int_ext || "INT.",
 			location: scene.location || "",
 			set: scene.set || scene.location || "",
@@ -1137,7 +1784,13 @@ const ScriptBreakdownNew = () => {
 		setSplitSceneForm1({ ...baseForm, scene_number: originalSceneNumber });
 		// Set second form with suggested scene number (e.g., 1A -> 1B)
 		const suggestedNumber = suggestNextSceneNumber(originalSceneNumber);
-		setSplitSceneForm2({ ...baseForm, scene_number: suggestedNumber });
+		setSplitSceneForm2({
+			...baseForm,
+			scene_number: suggestedNumber,
+			insert_relative: "after",
+			insert_episode_number: isEpisodicProject ? (sceneEpisodeNumber || "") : "",
+			insert_scene_number: originalSceneNumber || "",
+		});
 
 		setSplitSceneMode(false);
 		setShowSplitSceneModal(true);
@@ -1162,6 +1815,18 @@ const ScriptBreakdownNew = () => {
 	const handleSplitScene = useCallback(async () => {
 		// Validate required fields for both forms
 		const validateForm = (form, formName) => {
+			if (isEpisodicProject && !String(form.episode_number ?? "").trim()) {
+				alert(`${formName}: Episode Number is required`);
+				return false;
+			}
+			if (isEpisodicProject && !String(form.insert_episode_number ?? "").trim()) {
+				alert(`${formName}: Insert Episode is required`);
+				return false;
+			}
+			if (!String(form.insert_scene_number ?? "").trim()) {
+				alert(`${formName}: Insert Scene is required`);
+				return false;
+			}
 			if (!form.scene_number.trim()) {
 				alert(`${formName}: Scene Number is required`);
 				return false;
@@ -1201,22 +1866,46 @@ const ScriptBreakdownNew = () => {
 			return;
 		}
 
-		// Check that at least one scene number doesn't conflict with existing scenes
-		// (excluding the original scene being split)
-		const originalSceneNumber = selectedSceneToSplit?.scene_number?.trim();
-		const existingSceneNumbers = sceneBreakdowns
-			.filter((scene) => scene.scene_number?.trim() !== originalSceneNumber)
-			.map((scene) => scene.scene_number?.trim());
+		const getSceneEpisode = (sceneLike) => {
+			const fallbackEpisode = activeTab === "generated" ? String(selectedGeneratedScript?.episodeNumber ?? "").trim() : "";
+			return String(sceneLike?.episode_number ?? sceneLike?.["Episode Number"] ?? fallbackEpisode).trim();
+		};
 
-		const scene1Exists = existingSceneNumbers.includes(sceneNum1);
-		const scene2Exists = existingSceneNumbers.includes(sceneNum2);
+		const originalSceneNumber = String(selectedSceneToSplit?.scene_number ?? "").trim();
+		const originalEpisodeNumber = getSceneEpisode(selectedSceneToSplit);
+		const scene1EpisodeNumber = String(splitSceneForm1.episode_number ?? "").trim();
+		const scene2EpisodeNumber = String(splitSceneForm2.episode_number ?? "").trim();
 
-		if (scene1Exists && sceneNum1 !== originalSceneNumber) {
-			alert(`Scene number "${sceneNum1}" already exists in another scene`);
+		const isDuplicateScene = (sceneNumber, episodeNumber) =>
+			sceneBreakdowns.some((scene) => {
+				const existingSceneNumber = String(scene.scene_number ?? "").trim();
+				if (existingSceneNumber !== sceneNumber) return false;
+
+				const existingEpisodeNumber = getSceneEpisode(scene);
+				const isOriginalScene =
+					(scene.id && selectedSceneToSplit?.id && scene.id === selectedSceneToSplit.id) ||
+					(existingSceneNumber === originalSceneNumber &&
+						(!isEpisodicProject || existingEpisodeNumber === originalEpisodeNumber));
+
+				if (isOriginalScene) return false;
+				if (!isEpisodicProject) return true;
+				return existingEpisodeNumber === episodeNumber;
+			});
+
+		if (isDuplicateScene(sceneNum1, scene1EpisodeNumber)) {
+			if (isEpisodicProject) {
+				alert(`Scene number "${sceneNum1}" already exists in Episode ${scene1EpisodeNumber || "-"}.`);
+			} else {
+				alert(`Scene number "${sceneNum1}" already exists in another scene`);
+			}
 			return;
 		}
-		if (scene2Exists && sceneNum2 !== originalSceneNumber) {
-			alert(`Scene number "${sceneNum2}" already exists in another scene`);
+		if (isDuplicateScene(sceneNum2, scene2EpisodeNumber)) {
+			if (isEpisodicProject) {
+				alert(`Scene number "${sceneNum2}" already exists in Episode ${scene2EpisodeNumber || "-"}.`);
+			} else {
+				alert(`Scene number "${sceneNum2}" already exists in another scene`);
+			}
 			return;
 		}
 
@@ -1247,7 +1936,7 @@ const ScriptBreakdownNew = () => {
 					: [];
 
 			// Prepare scene data for both scenes
-			const prepareSceneData = (form) => {
+			const prepareSceneData = (form, referenceImagesOverride) => {
 				const selectedIds = form.selectedCharacterIds || [];
 				const selectedCharacterNames = selectedIds
 					.map((charId) => {
@@ -1268,6 +1957,7 @@ const ScriptBreakdownNew = () => {
 					extras: parseToArray(form.extras),
 					wardrobe: parseToArray(form.wardrobe),
 					set_dressing: parseToArray(form.set_dressing),
+					reference_images: referenceImagesOverride || [],
 				};
 				delete sceneData.selectedCharacterIds;
 
@@ -1280,9 +1970,40 @@ const ScriptBreakdownNew = () => {
 			};
 
 			// Find the position of the original scene
-			const originalPosition = sceneBreakdowns.findIndex(
-				(s) => s.id === selectedSceneToSplit.id || s.scene_number === selectedSceneToSplit.scene_number,
-			);
+			const originalScene = getSceneDataByIdentity(selectedSceneToSplit);
+			const originalPosition = findSceneIndexByIdentity(selectedSceneToSplit);
+			const originalReferenceImages =
+				(originalScene && Array.isArray(originalScene.reference_images) ? originalScene.reference_images : null) ||
+				(Array.isArray(selectedSceneToSplit.reference_images) ? selectedSceneToSplit.reference_images : []) ||
+				[];
+
+			const scene1Target = {
+				scene_number: splitSceneForm1.insert_scene_number,
+				episode_number: isEpisodicProject ? splitSceneForm1.insert_episode_number : "",
+			};
+			const scene2Target = {
+				scene_number: splitSceneForm2.insert_scene_number,
+				episode_number: isEpisodicProject ? splitSceneForm2.insert_episode_number : "",
+			};
+
+			const targetIndex1 = findSceneIndexByIdentity(scene1Target);
+			const targetIndex2 = findSceneIndexByIdentity(scene2Target);
+
+			if (targetIndex1 === -1 || targetIndex2 === -1) {
+				alert("Selected insert scene not found");
+				return;
+			}
+
+			let insertPosition1 = splitSceneForm1.insert_relative === "after" ? targetIndex1 + 1 : targetIndex1;
+			let insertPosition2 = splitSceneForm2.insert_relative === "after" ? targetIndex2 + 1 : targetIndex2;
+
+			const deleteIndex = originalPosition;
+			if (deleteIndex !== -1) {
+				if (deleteIndex < insertPosition1) insertPosition1 -= 1;
+				if (deleteIndex < insertPosition2) insertPosition2 -= 1;
+			}
+
+			const insertPosition2Final = insertPosition1 <= insertPosition2 ? insertPosition2 + 1 : insertPosition2;
 
 			// Step 1: Delete the original scene
 			const deleteResponse = await fetch(getApiUrl(`/api/${id}/remove-scene`), {
@@ -1292,6 +2013,7 @@ const ScriptBreakdownNew = () => {
 					script_id: masterScript.id,
 					scene_id: selectedSceneToSplit.id,
 					scene_number: selectedSceneToSplit.scene_number,
+					episode_number: selectedSceneToSplit.episode_number || "",
 				}),
 			});
 
@@ -1301,13 +2023,13 @@ const ScriptBreakdownNew = () => {
 			}
 
 			// Step 2: Add the first new scene at the original position
-			const scene1Data = prepareSceneData(splitSceneForm1);
+			const scene1Data = prepareSceneData(splitSceneForm1, originalReferenceImages);
 			const add1Response = await fetch(getApiUrl(`/api/${id}/add-scene`), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					script_id: masterScript.id,
-					position: originalPosition >= 0 ? originalPosition : 0,
+					position: Math.max(0, insertPosition1),
 					scene_data: scene1Data,
 				}),
 			});
@@ -1318,13 +2040,13 @@ const ScriptBreakdownNew = () => {
 			}
 
 			// Step 3: Add the second new scene right after the first
-			const scene2Data = prepareSceneData(splitSceneForm2);
+			const scene2Data = prepareSceneData(splitSceneForm2, originalReferenceImages);
 			const add2Response = await fetch(getApiUrl(`/api/${id}/add-scene`), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					script_id: masterScript.id,
-					position: originalPosition >= 0 ? originalPosition + 1 : 1,
+					position: Math.max(0, insertPosition2Final),
 					scene_data: scene2Data,
 				}),
 			});
@@ -1347,7 +2069,11 @@ const ScriptBreakdownNew = () => {
 			setSelectedSceneToSplit(null);
 			// Reset forms
 			const emptyForm = {
+				episode_number: isEpisodicProject ? (addSceneEpisodeOptions[0]?.key || "") : "",
 				scene_number: "",
+				insert_relative: "before",
+				insert_episode_number: isEpisodicProject ? (addSceneEpisodeOptions[0]?.key || "") : "",
+				insert_scene_number: "",
 				int_ext: "INT.",
 				location: "",
 				set: "",
@@ -1373,7 +2099,22 @@ const ScriptBreakdownNew = () => {
 			setIsSplittingScene(false);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [splitSceneForm1, splitSceneForm2, selectedSceneToSplit, masterScript, id, sceneBreakdowns, allCharacters, customFields]);
+	}, [
+		splitSceneForm1,
+		splitSceneForm2,
+		selectedSceneToSplit,
+		masterScript,
+		id,
+		sceneBreakdowns,
+		allCharacters,
+		customFields,
+		isEpisodicProject,
+		addSceneEpisodeOptions,
+		activeTab,
+		selectedGeneratedScript,
+		findSceneIndexByIdentity,
+		getSceneDataByIdentity,
+	]);
 
 	/* ---------- Merge Scene ---------- */
 	const handleMergeSceneClick = () => {
@@ -1448,8 +2189,15 @@ const ScriptBreakdownNew = () => {
 				const combinedCharacterIds = [...new Set([...matchCharactersByName(scene1.characters), ...matchCharactersByName(scene2.characters)])];
 
 				// Use the first scene's basic info as default, combine the rest
+				const fallbackEpisode = activeTab === "generated" ? String(selectedGeneratedScript?.episodeNumber ?? "").trim() : "";
+				const scene1Episode = String(scene1?.episode_number ?? scene1?.["Episode Number"] ?? fallbackEpisode).trim();
+
 				const mergedForm = {
+					episode_number: scene1Episode || "",
 					scene_number: scene1.scene_number || "", // Default to first scene's number
+					insert_relative: "before",
+					insert_episode_number: isEpisodicProject ? (scene1Episode || "") : "",
+					insert_scene_number: scene1.scene_number || "",
 					int_ext: scene1.int_ext || scene2.int_ext || "INT.",
 					location: scene1.location || scene2.location || "",
 					set: scene1.set || scene1.location || scene2.set || scene2.location || "",
@@ -1480,6 +2228,10 @@ const ScriptBreakdownNew = () => {
 
 	const handleMergeScene = useCallback(async () => {
 		// Validate required fields
+		if (isEpisodicProject && !String(mergeSceneForm.episode_number ?? "").trim()) {
+			alert("Episode Number is required");
+			return;
+		}
 		if (!mergeSceneForm.scene_number.trim()) {
 			alert("Scene Number is required");
 			return;
@@ -1504,15 +2256,34 @@ const ScriptBreakdownNew = () => {
 			alert("Synopsis is required");
 			return;
 		}
+		if (!mergeSceneForm.insert_scene_number?.trim()) {
+			alert("Insert Scene is required");
+			return;
+		}
+		if (isEpisodicProject && !String(mergeSceneForm.insert_episode_number ?? "").trim()) {
+			alert("Insert Episode is required");
+			return;
+		}
 
 		// Check for duplicate scene number (excluding the scenes being merged)
+		const newEpisodeNumber = String(mergeSceneForm.episode_number ?? "").trim();
 		const newSceneNumber = mergeSceneForm.scene_number.trim();
 		const mergedSceneNumbers = selectedScenesToMerge.map((s) => s.scene_number?.trim());
-		const duplicateScene = sceneBreakdowns.find(
-			(scene) => scene.scene_number?.trim() === newSceneNumber && !mergedSceneNumbers.includes(scene.scene_number?.trim()),
-		);
+		const duplicateScene = sceneBreakdowns.find((scene) => {
+			const existingSceneNumber = String(scene.scene_number ?? "").trim();
+			if (existingSceneNumber !== newSceneNumber) return false;
+			if (mergedSceneNumbers.includes(existingSceneNumber)) return false;
+			if (!isEpisodicProject) return true;
+
+			const existingEpisodeNumber = String(scene.episode_number ?? scene["Episode Number"] ?? "").trim();
+			return existingEpisodeNumber === newEpisodeNumber;
+		});
 		if (duplicateScene) {
-			alert(`Scene number "${newSceneNumber}" already exists. Please use a unique scene number.`);
+			if (isEpisodicProject) {
+				alert(`Scene number "${newSceneNumber}" already exists in Episode ${newEpisodeNumber || "-"}. Please use a unique scene number for this episode.`);
+			} else {
+				alert(`Scene number "${newSceneNumber}" already exists. Please use a unique scene number.`);
+			}
 			return;
 		}
 
@@ -1571,16 +2342,46 @@ const ScriptBreakdownNew = () => {
 			};
 			delete sceneData.selectedCharacterIds;
 
+			const collectReferenceImages = (scene) =>
+				Array.isArray(scene?.reference_images) ? scene.reference_images : [];
+			const mergeReferenceImages = (...lists) => {
+				const merged = [];
+				const seen = new Set();
+				lists.flat().forEach((img) => {
+					const id = img?.id;
+					if (!id || seen.has(id)) return;
+					seen.add(id);
+					merged.push(img);
+				});
+				return merged;
+			};
+			sceneData.reference_images = mergeReferenceImages(
+				collectReferenceImages(selectedScenesToMerge[0]),
+				collectReferenceImages(selectedScenesToMerge[1]),
+			);
+
 			// Parse custom fields
 			customFields.forEach((fieldKey) => {
 				sceneData[fieldKey] = parseToArray(mergeSceneForm[fieldKey] || "");
 			});
 
-			// Find the position of the first selected scene (to insert merged scene there)
-			const positions = selectedScenesToMerge.map((s) =>
-				sceneBreakdowns.findIndex((scene) => scene.id === s.id || scene.scene_number === s.scene_number),
-			);
-			const insertPosition = Math.min(...positions.filter((p) => p >= 0));
+			// Find the target insert scene and compute position relative to it
+			const insertTarget = {
+				scene_number: mergeSceneForm.insert_scene_number,
+				episode_number: isEpisodicProject ? mergeSceneForm.insert_episode_number : "",
+			};
+			const targetIndex = findSceneIndexByIdentity(insertTarget);
+			if (targetIndex === -1) {
+				alert("Selected insert scene not found");
+				return;
+			}
+
+			let insertPosition = mergeSceneForm.insert_relative === "after" ? targetIndex + 1 : targetIndex;
+			const deletePositions = selectedScenesToMerge
+				.map((scene) => findSceneIndexByIdentity(scene))
+				.filter((pos) => pos >= 0);
+			const deletionsBefore = deletePositions.filter((pos) => pos < insertPosition).length;
+			const adjustedPosition = Math.max(0, insertPosition - deletionsBefore);
 
 			// Step 1: Delete the first scene
 			const delete1Response = await fetch(getApiUrl(`/api/${id}/remove-scene`), {
@@ -1590,6 +2391,7 @@ const ScriptBreakdownNew = () => {
 					script_id: masterScript.id,
 					scene_id: selectedScenesToMerge[0].id,
 					scene_number: selectedScenesToMerge[0].scene_number,
+					episode_number: selectedScenesToMerge[0].episode_number || "",
 				}),
 			});
 
@@ -1606,6 +2408,7 @@ const ScriptBreakdownNew = () => {
 					script_id: masterScript.id,
 					scene_id: selectedScenesToMerge[1].id,
 					scene_number: selectedScenesToMerge[1].scene_number,
+					episode_number: selectedScenesToMerge[1].episode_number || "",
 				}),
 			});
 
@@ -1614,9 +2417,7 @@ const ScriptBreakdownNew = () => {
 				throw new Error(deleteData.message || "Failed to delete second scene");
 			}
 
-			// Step 3: Add the merged scene at the position of the first deleted scene
-			// Adjust position since we deleted scenes before it
-			const adjustedPosition = Math.max(0, insertPosition);
+			// Step 3: Add the merged scene at the user-selected position
 			const addResponse = await fetch(getApiUrl(`/api/${id}/add-scene`), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -1645,6 +2446,7 @@ const ScriptBreakdownNew = () => {
 			setSelectedScenesToMerge([]);
 			// Reset form
 			setMergeSceneForm({
+				episode_number: isEpisodicProject ? (addSceneEpisodeOptions[0]?.key || "") : "",
 				scene_number: "",
 				int_ext: "INT.",
 				location: "",
@@ -1652,6 +2454,9 @@ const ScriptBreakdownNew = () => {
 				time: "DAY",
 				page_eighths: 1,
 				synopsis: "",
+				insert_relative: "before",
+				insert_episode_number: isEpisodicProject ? (addSceneEpisodeOptions[0]?.key || "") : "",
+				insert_scene_number: "",
 				selectedCharacterIds: [],
 				action_props: "",
 				other_props: "",
@@ -1669,7 +2474,18 @@ const ScriptBreakdownNew = () => {
 			setIsMergingScene(false);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [mergeSceneForm, selectedScenesToMerge, masterScript, id, sceneBreakdowns, allCharacters, customFields]);
+	}, [
+		mergeSceneForm,
+		selectedScenesToMerge,
+		masterScript,
+		id,
+		sceneBreakdowns,
+		allCharacters,
+		customFields,
+		isEpisodicProject,
+		addSceneEpisodeOptions,
+		findSceneIndexByIdentity,
+	]);
 
 	/* ---------- Add Scene ---------- */
 	const handleAddSceneClick = () => {
@@ -1682,16 +2498,28 @@ const ScriptBreakdownNew = () => {
 	};
 
 	const handleSelectPosition = (position) => {
-		setAddScenePosition(position);
+		const absolutePosition = getAbsoluteInsertPosition(position);
+		setAddScenePosition(absolutePosition);
 		setShowPositionSelector(false);
+		const episodeOptionsForPosition = isEpisodicProject ? addSceneEpisodeOptionsForPosition : [];
+		const prevScene = absolutePosition > 0 ? sceneBreakdowns[absolutePosition - 1] : null;
+		const nextScene = sceneBreakdowns[absolutePosition] || null;
+		const prevEp =
+			String(prevScene?.episode_number ?? prevScene?.["Episode Number"] ?? "").trim();
+		const nextEp =
+			String(nextScene?.episode_number ?? nextScene?.["Episode Number"] ?? "").trim();
+		const defaultEpisode = isEpisodicProject
+			? (prevEp || nextEp || episodeOptionsForPosition[0]?.key || "")
+			: "";
 		// Reset the form
 		setNewSceneForm({
+			episode_number: defaultEpisode,
 			scene_number: "",
 			int_ext: "INT.",
 			location: "",
 			set: "",
 			time: "DAY",
-			page_eighths: "1/8",
+			page_eighths: 1,
 			synopsis: "",
 		});
 		setShowAddSceneModal(true);
@@ -1699,6 +2527,10 @@ const ScriptBreakdownNew = () => {
 
 	const handleAddScene = useCallback(async () => {
 		// Validate required fields
+		if (isEpisodicProject && !String(newSceneForm.episode_number ?? "").trim()) {
+			alert("Episode Number is required");
+			return;
+		}
 		if (!newSceneForm.scene_number.trim()) {
 			alert("Scene Number is required");
 			return;
@@ -1709,6 +2541,10 @@ const ScriptBreakdownNew = () => {
 		}
 		if (!newSceneForm.location.trim()) {
 			alert("Location is required");
+			return;
+		}
+		if (!newSceneForm.set.trim()) {
+			alert("Set is required");
 			return;
 		}
 		if (!newSceneForm.time.trim()) {
@@ -1725,10 +2561,23 @@ const ScriptBreakdownNew = () => {
 		}
 
 		// Check for duplicate scene number
+		const newEpisodeNumber = String(newSceneForm.episode_number ?? "").trim();
 		const newSceneNumber = newSceneForm.scene_number.trim();
-		const duplicateScene = sceneBreakdowns.find((scene) => scene.scene_number?.trim() === newSceneNumber);
+		const duplicateScene = sceneBreakdowns.find((scene) => {
+			const existingSceneNumber = String(scene.scene_number ?? "").trim();
+			if (existingSceneNumber !== newSceneNumber) return false;
+
+			if (!isEpisodicProject) return true;
+
+			const existingEpisodeNumber = String(scene.episode_number ?? scene["Episode Number"] ?? "").trim();
+			return existingEpisodeNumber === newEpisodeNumber;
+		});
 		if (duplicateScene) {
-			alert(`Scene number "${newSceneNumber}" already exists. Please use a unique scene number.`);
+			if (isEpisodicProject) {
+				alert(`Scene number "${newSceneNumber}" already exists in Episode ${newEpisodeNumber || "-"}. Please use a unique scene number for this episode.`);
+			} else {
+				alert(`Scene number "${newSceneNumber}" already exists. Please use a unique scene number.`);
+			}
 			return;
 		}
 
@@ -1769,6 +2618,7 @@ const ScriptBreakdownNew = () => {
 
 			const sceneDataToSend = {
 				...newSceneForm,
+				synopsis: newSceneForm.synopsis,
 				page_eighths: formatPageEighths(newSceneForm.page_eighths),
 				characters: selectedCharacterNames,
 				characters_ids: selectedIds,
@@ -1814,6 +2664,7 @@ const ScriptBreakdownNew = () => {
 
 			setShowAddSceneModal(false);
 			setNewSceneForm({
+				episode_number: "",
 				scene_number: "",
 				int_ext: "INT.",
 				location: "",
@@ -1838,58 +2689,156 @@ const ScriptBreakdownNew = () => {
 			setIsAddingScene(false);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [newSceneForm, masterScript, id, addScenePosition]);
+	}, [newSceneForm, masterScript, id, addScenePosition, isEpisodicProject, sceneBreakdowns]);
 
 	/* ---------- Export to Excel ---------- */
-	const exportToExcel = useCallback(() => {
+	const exportToExcel = useCallback(async () => {
 		if (!sceneBreakdowns || sceneBreakdowns.length === 0) {
 			alert("No breakdown data to export");
 			return;
 		}
 
-		// Convert scene breakdowns to flat rows for Excel
-		const excelData = sceneBreakdowns.map((scene) => {
-			const row = {
-				"Scene Number": scene.scene_number || "",
-				"Int./Ext.": scene.int_ext || "",
-				Location: scene.location || "",
-				Time: scene.time || "",
-				"Page Eighths": scene.page_eighths || "",
-				Synopsis: scene.synopsis || "",
-				Characters: (scene.characters || []).join(", "),
-				"Action Props": (scene.action_props || []).join(", "),
-				"Other Props": (scene.other_props || []).join(", "),
-				"Picture Vehicles": (scene.picture_vehicles || []).join(", "),
-				Animals: (scene.animals || []).join(", "),
-				Extras: (scene.extras || []).join(", "),
-				Wardrobe: (scene.wardrobe || []).join(", "),
-				"Set Dressing": (scene.set_dressing || []).join(", "),
+		const includeEpisodeNumber = sceneBreakdowns.some((scene) => String(scene?.episode_number || "").trim() !== "");
+		const customFieldHeaders = customFields.map((fieldKey) => snakeCaseToTitleCase(fieldKey));
+		const headers = [
+			...(includeEpisodeNumber ? ["Episode Number"] : []),
+			"Scene Number",
+			"Int./Ext.",
+			"Set",
+			"Location",
+			"Time",
+			"Page Eighths",
+			"Synopsis",
+			"Characters",
+			"Set Dressing",
+			"Action Props",
+			"Other Props",
+			"Animals",
+			"Extras",
+			"Picture Vehicles",
+			"Wardrobe",
+			...customFieldHeaders,
+			"ID",
+		];
+
+		const workbook = new ExcelJS.Workbook();
+		const worksheet = workbook.addWorksheet("Breakdown");
+
+		const lastColumnLetter = getExcelColumnLabel(headers.length);
+		const titleText = activeTab === "generated" ? "Generated Breakdown Export" : "Master Breakdown Export";
+		const scriptLabel = selectedScript?.name || selectedGeneratedScript?.name || masterScript?.name || "Not set";
+
+		const titleRow = worksheet.addRow([titleText]);
+		worksheet.mergeCells(`A${titleRow.number}:${lastColumnLetter}${titleRow.number}`);
+		titleRow.getCell(1).font = { bold: true, size: 15, color: { argb: "FF1F2937" } };
+		titleRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+		titleRow.getCell(1).fill = {
+			type: "pattern",
+			pattern: "solid",
+			fgColor: { argb: "FFFFE082" },
+		};
+
+		const projectRow = worksheet.addRow([`Project: ${projectName || "Not set"}`]);
+		worksheet.mergeCells(`A${projectRow.number}:${lastColumnLetter}${projectRow.number}`);
+		projectRow.getCell(1).font = { bold: true, size: 12 };
+
+		const scriptRow = worksheet.addRow([`Script: ${scriptLabel}`]);
+		worksheet.mergeCells(`A${scriptRow.number}:${lastColumnLetter}${scriptRow.number}`);
+
+		const sceneCountRow = worksheet.addRow([`Scenes: ${sceneBreakdowns.length}`]);
+		worksheet.mergeCells(`A${sceneCountRow.number}:${lastColumnLetter}${sceneCountRow.number}`);
+
+		worksheet.addRow([]);
+
+		const headerRow = worksheet.addRow(headers);
+		headerRow.eachCell((cell) => {
+			cell.fill = {
+				type: "pattern",
+				pattern: "solid",
+				fgColor: { argb: "FFD3D3D3" },
 			};
-			// Add custom fields
-			customFields.forEach((fieldKey) => {
-				const displayName = snakeCaseToTitleCase(fieldKey);
-				row[displayName] = (scene[fieldKey] || []).join(", ");
-			});
-			return row;
+			cell.font = { bold: true, color: { argb: "FF111827" } };
+			cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+			cell.border = {
+				top: { style: "thin", color: { argb: "FFCBD5E1" } },
+				left: { style: "thin", color: { argb: "FFCBD5E1" } },
+				bottom: { style: "thin", color: { argb: "FF94A3B8" } },
+				right: { style: "thin", color: { argb: "FFCBD5E1" } },
+			};
 		});
 
-		// Create workbook and worksheet
-		const worksheet = XLSX.utils.json_to_sheet(excelData);
-		const workbook = XLSX.utils.book_new();
-		XLSX.utils.book_append_sheet(workbook, worksheet, "Breakdown");
+		sceneBreakdowns.forEach((scene) => {
+			const rowData = [
+				...(includeEpisodeNumber ? [scene.episode_number || ""] : []),
+				scene.scene_number || "",
+				scene.int_ext || "",
+				scene.set || "",
+				scene.location || "",
+				scene.time || "",
+				scene.page_eighths || "",
+				scene.synopsis || "",
+				(scene.characters || []).join(", "),
+				(scene.set_dressing || []).join(", "),
+				(scene.action_props || []).join(", "),
+				(scene.other_props || []).join(", "),
+				(scene.animals || []).join(", "),
+				(scene.extras || []).join(", "),
+				(scene.picture_vehicles || []).join(", "),
+				(scene.wardrobe || []).join(", "),
+				...customFields.map((fieldKey) => (scene[fieldKey] || []).join(", ")),
+				scene.id ?? "",
+			];
 
-		// Auto-size columns
-		const colWidths = Object.keys(excelData[0] || {}).map((key) => ({
-			wch: Math.max(key.length, 15),
-		}));
-		worksheet["!cols"] = colWidths;
+			const row = worksheet.addRow(rowData);
+			row.eachCell((cell, colNumber) => {
+				cell.alignment = {
+					vertical: "top",
+					horizontal: [1, 2, 3, 6, 7].includes(colNumber) ? "center" : "left",
+					wrapText: true,
+				};
+				cell.border = {
+					top: { style: "thin", color: { argb: "FFE5E7EB" } },
+					left: { style: "thin", color: { argb: "FFE5E7EB" } },
+					bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
+					right: { style: "thin", color: { argb: "FFE5E7EB" } },
+				};
+			});
+		});
 
-		// Generate filename with script name if available
-		const filename = selectedScript?.name ? `${selectedScript.name.replace(/\.[^/.]+$/, "")}_breakdown.xlsx` : "script_breakdown.xlsx";
+		worksheet.columns = headers.map((header) => {
+			switch (header) {
+				case "Episode Number":
+					return { width: 14 };
+				case "Scene Number":
+					return { width: 12 };
+				case "Int./Ext.":
+				case "Time":
+				case "Page Eighths":
+				case "ID":
+					return { width: 12 };
+				case "Set":
+					return { width: 24 };
+				case "Location":
+					return { width: 28 };
+				case "Synopsis":
+					return { width: 48 };
+				case "Characters":
+					return { width: 26 };
+				default:
+					return { width: 20 };
+			}
+		});
 
-		// Download the file
-		XLSX.writeFile(workbook, filename);
-	}, [sceneBreakdowns, customFields]);
+		worksheet.views = [{ state: "frozen", ySplit: headerRow.number }];
+
+		const buffer = await workbook.xlsx.writeBuffer();
+		const blob = new Blob([buffer], {
+			type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		});
+		const baseName = selectedScript?.name || selectedGeneratedScript?.name || masterScript?.name || "script_breakdown";
+		const filename = `${baseName.replace(/\.[^/.]+$/, "").replace(/\s+/g, "_")}_breakdown.xlsx`;
+		saveAs(blob, filename);
+	}, [sceneBreakdowns, customFields, activeTab, selectedScript, selectedGeneratedScript, masterScript, projectName]);
 
 	/* ---------- props columns: explicit list ---------- */
 	const propsHeaderNames = useMemo(() => {
@@ -1989,6 +2938,8 @@ const ScriptBreakdownNew = () => {
 						const isProps = propsKeys.includes(key);
 						const isCharacters = key.toLowerCase() === "characters";
 						const isSet = key.toLowerCase() === "set";
+						const isPageEighths = key === "Page Eighths";
+						const pageEighthParts = isPageEighths ? getPageEighthParts(value) : null;
 						return (
 							<div key={key} className="sbn-field-group">
 								<label className="sbn-field-label">{key}:</label>
@@ -2036,6 +2987,15 @@ const ScriptBreakdownNew = () => {
 											</option>
 										))}
 									</select>
+								) : isPageEighths ? (
+									<MixedFractionPageEighthsInput
+										value={parsePageEighthsValue(value)}
+										onChange={(nextValue) => {
+											setEditingScene((prev) => ({ ...prev, [key]: formatPageEighthsValue(nextValue) }));
+										}}
+										compact
+										showHint={false}
+									/>
 								) : isProps ? (
 									<TagInput
 										value={value || ""}
@@ -2058,39 +3018,41 @@ const ScriptBreakdownNew = () => {
 					})}
 
 					{/* Reference Images Section */}
-					{!isViewOnly && (
+					{(referenceImages.length > 0 || !isViewOnly) && (
 						<div className="sbn-reference-images-section">
 							<h4 className="sbn-reference-title">Reference Images ({referenceImages.length})</h4>
 
 							{/* Upload Area */}
-							<div className="sbn-image-upload-area">
-								<label className="sbn-image-upload-label">
-									<input
-										type="file"
-										accept="image/*"
-										onChange={(e) => {
-											if (e.target.files && e.target.files[0]) {
-												handleUploadReferenceImage(e.target.files[0], editingSceneIndex);
-												e.target.value = ""; // Reset input
-											}
-										}}
-										disabled={isUploadingImage}
-										className="sbn-image-upload-input"
-										multiple={false}
-									/>
-									<span className="sbn-image-upload-btn">
-										{isUploadingImage ? "Uploading..." : "📸 Upload Image"}
-									</span>
-								</label>
-							</div>
+							{!isViewOnly && (
+								<div className="sbn-image-upload-area">
+									<label className="sbn-image-upload-label">
+										<input
+											type="file"
+											accept="image/*"
+											onChange={(e) => {
+												if (e.target.files && e.target.files[0]) {
+													handleUploadReferenceImage(e.target.files[0], editingSceneIndex);
+													e.target.value = ""; // Reset input
+												}
+											}}
+											disabled={isUploadingImage}
+											className="sbn-image-upload-input"
+											multiple={false}
+										/>
+										<span className="sbn-image-upload-btn">
+											{isUploadingImage ? "Uploading..." : "📸 Upload Image"}
+										</span>
+									</label>
+								</div>
+							)}
 
 							{/* Images Gallery */}
 							{referenceImages.length > 0 && (
 								<div className="sbn-images-gallery">
 									{referenceImages.map((image, idx) => (
 										<div key={image.id} className="sbn-image-item">
-											<img
-												src={getApiUrl(`/api/${id}/reference-image/serve/${editingSceneIndex}/${image.id}`)}
+																<img
+																	src={getApiUrl(`/api/${id}/reference-image/serve/${editingSceneIndex}/${image.id}${getReferenceSceneQuery(editingSceneIndex)}`)}
 												alt={image.filename}
 												className="sbn-image-thumbnail"
 												onClick={() => {
@@ -2100,13 +3062,15 @@ const ScriptBreakdownNew = () => {
 											/>
 											<div className="sbn-image-info">
 												<span className="sbn-image-name">{image.filename}</span>
-												<button
-													className="sbn-image-delete-btn"
-													onClick={() => handleDeleteReferenceImage(image.id, editingSceneIndex)}
-													title="Delete image"
-												>
-													🗑️
-												</button>
+												{!isViewOnly && (
+													<button
+														className="sbn-image-delete-btn"
+														onClick={() => handleDeleteReferenceImage(image.id, editingSceneIndex)}
+														title="Delete image"
+													>
+														🗑️
+													</button>
+												)}
 											</div>
 										</div>
 									))}
@@ -2114,23 +3078,23 @@ const ScriptBreakdownNew = () => {
 							)}
 						</div>
 					)}
+				</div>
 
-					<div className="sbn-scene-actions">
-						{!isViewOnly && (
-							<button className="sbn-scene-save-btn" onClick={handleSaveSceneChanges}>
-								Save Changes
-							</button>
-						)}
-						<button
-							className="sbn-cancel-btn"
-							onClick={() => {
-								setEditingScene(null);
-								setViewMode("table");
-							}}
-						>
-							{isViewOnly ? "Close" : "Cancel"}
+				<div className="sbn-scene-actions">
+					{!isViewOnly && (
+						<button className="sbn-scene-save-btn" onClick={handleSaveSceneChanges} disabled={!hasSceneChanges}>
+							Save Changes
 						</button>
-					</div>
+					)}
+					<button
+						className="sbn-cancel-btn"
+						onClick={() => {
+							setEditingScene(null);
+							setViewMode("table");
+						}}
+					>
+						{isViewOnly ? "Close" : "Cancel"}
+					</button>
 				</div>
 			</div>
 		);
@@ -2146,7 +3110,7 @@ const ScriptBreakdownNew = () => {
 		const allHeaders = Object.keys(scriptBreakdown[0] || {});
 
 		// Define the default columns to show
-		const defaultVisibleColumns = [
+		let defaultVisibleColumns = [
 			"Scene Number",
 			"Int./Ext.",
 			"Location",
@@ -2164,6 +3128,11 @@ const ScriptBreakdownNew = () => {
 			"Reference",
 		];
 
+		// If Episode Number exists in data, insert it as the first column
+		if (isEpisodicProject && allHeaders.some((h) => h.toLowerCase() === "episode number")) {
+			defaultVisibleColumns = ["Episode Number", ...defaultVisibleColumns];
+		}
+
 		// Add custom fields to visible columns
 		const customFieldDisplayNames = customFields.map((fieldKey) => snakeCaseToTitleCase(fieldKey));
 		const visibleColumns = [...defaultVisibleColumns, ...customFieldDisplayNames];
@@ -2176,15 +3145,7 @@ const ScriptBreakdownNew = () => {
 			.filter((col) => allHeaders.some((h) => h.toLowerCase() === col.toLowerCase()) || customFieldDisplayNames.includes(col) || specialColumns.includes(col))
 			.map((col) => allHeaders.find((h) => h.toLowerCase() === col.toLowerCase()) || col);
 
-		const filtered = scriptBreakdown.filter((row) => {
-			if (!filterText) return true;
-			const q = filterText.toLowerCase();
-			return Object.values(row).some((v) =>
-				String(v || "")
-					.toLowerCase()
-					.includes(q),
-			);
-		});
+		const filtered = filteredBreakdown;
 
 		// Check if value is N/A or empty for badge display
 		const isNAValue = (val) => {
@@ -2261,8 +3222,7 @@ const ScriptBreakdownNew = () => {
 											if (splitSceneMode) return; // Disable row click in split mode
 											if (mergeSceneMode) return; // Disable row click in merge mode
 											// Find the matching scene in sceneBreakdowns by scene number
-											const sceneNum = row["Scene Number"];
-											const jsonIdx = sceneBreakdowns.findIndex((s) => s.scene_number === sceneNum);
+											const jsonIdx = findSceneIndexByIdentity(row);
 											openSceneEditorAt(jsonIdx === -1 ? rIdx : jsonIdx);
 										}}
 									>
@@ -2271,31 +3231,36 @@ const ScriptBreakdownNew = () => {
 												<span className="sbn-row-number">{rIdx + 1}</span>
 											</td>
 										)}
-										{removeSceneMode && (
-											<td className="sbn-data-cell sbn-remove-cell">
-												<button
-													className="sbn-remove-scene-btn"
-													onClick={(e) => {
-														e.stopPropagation();
-														const sceneNum = row["Scene Number"];
-														const sceneData = sceneBreakdowns.find((s) => s.scene_number === sceneNum);
-														if (sceneData) {
-															handleSelectSceneToRemove(sceneData);
-														} else {
-															// Fallback if not found in sceneBreakdowns
-															handleSelectSceneToRemove({
-																id: rIdx,
-																scene_number: sceneNum,
-																location: row["Location"],
-																synopsis: row["Synopsis"],
-															});
-														}
-													}}
-												>
-													<FaTrash />
-												</button>
-											</td>
-										)}
+								{removeSceneMode && (
+									<td className="sbn-data-cell sbn-remove-cell">
+										<input
+											type="checkbox"
+											className="sbn-remove-checkbox"
+											checked={selectedScenesToRemove.some((scene) => {
+												const sceneData = getSceneDataByIdentity(row);
+												if (sceneData?.id && scene.id) return sceneData.id === scene.id;
+												return scene.scene_number === row["Scene Number"];
+											})}
+										onChange={(e) => {
+											e.stopPropagation();
+											const sceneNum = row["Scene Number"];
+											const sceneData = getSceneDataByIdentity(row);
+											if (sceneData) {
+												handleSelectSceneToRemove(sceneData);
+											} else {
+												handleSelectSceneToRemove({
+													scene_number: sceneNum,
+													location: row["Location"],
+													synopsis: row["Synopsis"],
+													episode_number: row["Episode Number"] || "",
+												});
+												}
+											}}
+											onClick={(e) => e.stopPropagation()}
+											aria-label={`Select scene ${row["Scene Number"]} for removal`}
+										/>
+									</td>
+								)}
 										{splitSceneMode && (
 											<td className="sbn-data-cell sbn-split-cell">
 												<button
@@ -2303,7 +3268,7 @@ const ScriptBreakdownNew = () => {
 													onClick={(e) => {
 														e.stopPropagation();
 														const sceneNum = row["Scene Number"];
-														const sceneData = sceneBreakdowns.find((s) => s.scene_number === sceneNum);
+														const sceneData = getSceneDataByIdentity(row);
 														if (sceneData) {
 															handleSelectSceneToSplit(sceneData);
 														} else {
@@ -2329,7 +3294,7 @@ const ScriptBreakdownNew = () => {
 											<td className="sbn-data-cell sbn-merge-cell">
 												{(() => {
 													const sceneNum = row["Scene Number"];
-													const sceneData = sceneBreakdowns.find((s) => s.scene_number === sceneNum);
+													const sceneData = getSceneDataByIdentity(row);
 													const isSelected = selectedScenesToMerge.some(
 														(s) => s.scene_number === sceneNum || s.id === sceneData?.id,
 													);
@@ -2370,8 +3335,7 @@ const ScriptBreakdownNew = () => {
 
 											// Handle Reference column
 											if (header === "Reference") {
-												const sceneNum = row["Scene Number"];
-												const sceneData = sceneBreakdowns.find((s) => s.scene_number === sceneNum);
+												const sceneData = getSceneDataByIdentity(row);
 												const referenceImageCount = sceneData?.reference_images?.length || 0;
 												return (
 													<td key={cIdx} className="sbn-data-cell">
@@ -2400,9 +3364,10 @@ const ScriptBreakdownNew = () => {
 											const isSceneNumber = header.toLowerCase().includes("scene") && header.toLowerCase().includes("number");
 											const isPropColumn = propsKeys.includes(header) || isCustomField;
 											const isSelected = selectedElementToRemove === fieldKey;
+											const isSynopsisColumn = header === "Synopsis";
 
 											return (
-												<td key={cIdx} className={`sbn-data-cell ${isSelected ? "sbn-cell-selected" : ""}`}>
+												<td key={cIdx} className={`sbn-data-cell ${isSelected ? "sbn-cell-selected" : ""} ${isSynopsisColumn ? "sbn-synopsis-cell" : ""}`}>
 													{isSceneNumber ? (
 														<span className="sbn-cell-scene-number">{cellValue}</span>
 													) : isPropColumn && isNAValue(cellValue) ? (
@@ -2561,6 +3526,11 @@ const ScriptBreakdownNew = () => {
 
 	return (
 		<div className="sbn-page-container">
+			<datalist id="sbn-location-options">
+				{locationList.map((loc) => (
+					<option key={loc.location_id || loc.location} value={loc.location} />
+				))}
+			</datalist>
 			{editParsing && EditParsingModal()}
 			{/* Add Element Modal - inlined to prevent re-render on typing */}
 			{showAddElementModal && (
@@ -2611,10 +3581,10 @@ const ScriptBreakdownNew = () => {
 							×
 						</button>
 						<div className="sbn-image-preview-container">
-							<img
-								src={getApiUrl(
-									`/api/${id}/reference-image/serve/${editingSceneIndex}/${referenceImages[previewImageIndex].id}`
-								)}
+								<img
+									src={getApiUrl(
+										`/api/${id}/reference-image/serve/${editingSceneIndex}/${referenceImages[previewImageIndex].id}${getReferenceSceneQuery(editingSceneIndex)}`
+									)}
 								alt={referenceImages[previewImageIndex].filename}
 								className="sbn-image-preview"
 							/>
@@ -2680,47 +3650,44 @@ const ScriptBreakdownNew = () => {
 			)}
 
 			{/* Remove Scene Confirm Modal */}
-			{showRemoveSceneModal && selectedSceneToRemove && (
+			{showRemoveSceneModal && selectedScenesToRemove.length > 0 && (
 				<div className="sbn-overlay" onClick={() => setShowRemoveSceneModal(false)}>
 					<div className="sbn-element-modal sbn-confirm-modal" onClick={(e) => e.stopPropagation()}>
 						<div className="sbn-element-modal-header">
-							<h3>Remove Scene</h3>
+							<h3>Remove Scenes</h3>
 							<button className="sbn-modal-close-btn" onClick={() => setShowRemoveSceneModal(false)}>
 								×
 							</button>
 						</div>
 						<div className="sbn-element-modal-body">
 							<p className="sbn-confirm-text">
-								Are you sure you want to remove <strong>Scene {selectedSceneToRemove.scene_number}</strong>?
+								Are you sure you want to remove <strong>{selectedScenesToRemove.length}</strong> selected scene{selectedScenesToRemove.length > 1 ? "s" : ""}?
 							</p>
 							<p className="sbn-confirm-warning">
-								This will permanently delete the scene and all its breakdown data. This action cannot be undone.
+								This will permanently delete the selected scene breakdown data. This action cannot be undone.
 							</p>
-							{selectedSceneToRemove.location && (
-								<p className="sbn-confirm-detail">
-									<strong>Location:</strong> {selectedSceneToRemove.location}
-								</p>
-							)}
-							{selectedSceneToRemove.synopsis && (
-								<p className="sbn-confirm-detail">
-									<strong>Synopsis:</strong> {selectedSceneToRemove.synopsis.substring(0, 100)}
-									{selectedSceneToRemove.synopsis.length > 100 ? "..." : ""}
-								</p>
-							)}
+							<div className="sbn-confirm-scene-list">
+								{selectedScenesToRemove.map((scene) => (
+									<p key={`${scene.id || scene.scene_number}-${scene.episode_number || ""}`} className="sbn-confirm-detail">
+										<strong>Scene {scene.scene_number}</strong>
+										{scene.location ? ` - ${scene.location}` : ""}
+									</p>
+								))}
+							</div>
 						</div>
 						<div className="sbn-element-modal-footer">
 							<button
 								className="sbn-element-cancel-btn"
 								onClick={() => {
 									setShowRemoveSceneModal(false);
-									setSelectedSceneToRemove(null);
+									setSelectedScenesToRemove([]);
 								}}
 								disabled={isRemovingScene}
 							>
 								Cancel
 							</button>
 							<button className="sbn-element-remove-btn" onClick={handleRemoveScene} disabled={isRemovingScene}>
-								{isRemovingScene ? "Removing..." : "Remove Scene"}
+								{isRemovingScene ? "Removing..." : `Remove ${selectedScenesToRemove.length} Scene${selectedScenesToRemove.length > 1 ? "s" : ""}`}
 							</button>
 						</div>
 					</div>
@@ -2743,6 +3710,88 @@ const ScriptBreakdownNew = () => {
 								<div className="sbn-split-scene-form-container">
 									<h4 className="sbn-split-form-title">Scene 1</h4>
 									<div className="sbn-add-scene-form">
+										<div className="sbn-form-divider">
+											<span>Insert Position</span>
+										</div>
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Insert <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm1.insert_relative}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, insert_relative: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="before">Before scene</option>
+													<option value="after">After scene</option>
+												</select>
+											</div>
+											{isEpisodicProject && (
+												<div className="sbn-form-group">
+													<label className="sbn-form-label">
+														Insert Episode <span className="sbn-required">*</span>
+													</label>
+													<select
+														value={splitSceneForm1.insert_episode_number || ""}
+														onChange={(e) => {
+															const nextEpisode = e.target.value;
+															const nextOptions = getSceneOptionsForEpisode(nextEpisode);
+															const nextScene =
+																nextOptions.find((opt) => opt.value === splitSceneForm1.insert_scene_number)?.value ||
+																nextOptions[0]?.value ||
+																"";
+															setSplitSceneForm1({
+																...splitSceneForm1,
+																insert_episode_number: nextEpisode,
+																insert_scene_number: nextScene,
+															});
+														}}
+														className="sbn-form-select"
+													>
+														<option value="">Select Episode...</option>
+														{addSceneEpisodeOptions.map((opt) => (
+															<option key={opt.key} value={opt.key}>{opt.label}</option>
+														))}
+													</select>
+												</div>
+											)}
+										</div>
+										<div className="sbn-form-group sbn-form-group-full">
+											<label className="sbn-form-label">
+												Insert Scene <span className="sbn-required">*</span>
+											</label>
+											<select
+												value={splitSceneForm1.insert_scene_number || ""}
+												onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, insert_scene_number: e.target.value })}
+												className="sbn-form-select"
+											>
+												<option value="">Select Scene...</option>
+												{getSceneOptionsForEpisode(splitSceneForm1.insert_episode_number).map((opt) => (
+													<option key={opt.value} value={opt.value}>{opt.label}</option>
+												))}
+											</select>
+										</div>
+										<div className="sbn-form-divider">
+											<span>Scene Details</span>
+										</div>
+										{isEpisodicProject && (
+											<div className="sbn-form-group sbn-form-group-full">
+												<label className="sbn-form-label">
+													Episode Number <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm1.episode_number || ""}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, episode_number: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="">Select Episode...</option>
+													{addSceneEpisodeOptions.map((opt) => (
+														<option key={opt.key} value={opt.key}>{opt.label}</option>
+													))}
+												</select>
+											</div>
+										)}
 										<div className="sbn-form-row">
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">
@@ -2776,18 +3825,14 @@ const ScriptBreakdownNew = () => {
 												<label className="sbn-form-label">
 													Location <span className="sbn-required">*</span>
 												</label>
-												<select
+												<input
+													type="text"
+													list="sbn-location-options"
 													value={splitSceneForm1.location}
 													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, location: e.target.value })}
-													className="sbn-form-select"
-												>
-													<option value="">Select Location...</option>
-													{locationList.map((loc) => (
-														<option key={loc.location_id || loc.location} value={loc.location}>
-															{loc.location}
-														</option>
-													))}
-												</select>
+													placeholder="Select or type a location..."
+													className="sbn-form-input"
+												/>
 											</div>
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Set</label>
@@ -2831,23 +3876,17 @@ const ScriptBreakdownNew = () => {
 												<label className="sbn-form-label">
 													Page Eighths <span className="sbn-required">*</span>
 												</label>
-												<div className="sbn-page-eighths-input">
-													<span className="sbn-page-eighths-prefix">(</span>
-													<input
-														type="number"
-														min="1"
-														max="1000"
-														value={splitSceneForm1.page_eighths}
-														onChange={(e) =>
-															setSplitSceneForm1({
-																...splitSceneForm1,
-																page_eighths: parseInt(e.target.value) || 1,
-															})
-														}
-														className="sbn-form-input sbn-page-eighths-number"
-													/>
-													<span className="sbn-page-eighths-suffix">/8)</span>
-												</div>
+												<MixedFractionPageEighthsInput
+													value={splitSceneForm1.page_eighths}
+													onChange={(nextValue) =>
+														setSplitSceneForm1({
+															...splitSceneForm1,
+															page_eighths: nextValue,
+														})
+													}
+													compact
+													showHint={false}
+												/>
 											</div>
 										</div>
 										<div className="sbn-form-group sbn-form-group-full">
@@ -2978,6 +4017,88 @@ const ScriptBreakdownNew = () => {
 								<div className="sbn-split-scene-form-container">
 									<h4 className="sbn-split-form-title">Scene 2</h4>
 									<div className="sbn-add-scene-form">
+										<div className="sbn-form-divider">
+											<span>Insert Position</span>
+										</div>
+										<div className="sbn-form-row">
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Insert <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm2.insert_relative}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, insert_relative: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="before">Before scene</option>
+													<option value="after">After scene</option>
+												</select>
+											</div>
+											{isEpisodicProject && (
+												<div className="sbn-form-group">
+													<label className="sbn-form-label">
+														Insert Episode <span className="sbn-required">*</span>
+													</label>
+													<select
+														value={splitSceneForm2.insert_episode_number || ""}
+														onChange={(e) => {
+															const nextEpisode = e.target.value;
+															const nextOptions = getSceneOptionsForEpisode(nextEpisode);
+															const nextScene =
+																nextOptions.find((opt) => opt.value === splitSceneForm2.insert_scene_number)?.value ||
+																nextOptions[0]?.value ||
+																"";
+															setSplitSceneForm2({
+																...splitSceneForm2,
+																insert_episode_number: nextEpisode,
+																insert_scene_number: nextScene,
+															});
+														}}
+														className="sbn-form-select"
+													>
+														<option value="">Select Episode...</option>
+														{addSceneEpisodeOptions.map((opt) => (
+															<option key={opt.key} value={opt.key}>{opt.label}</option>
+														))}
+													</select>
+												</div>
+											)}
+										</div>
+										<div className="sbn-form-group sbn-form-group-full">
+											<label className="sbn-form-label">
+												Insert Scene <span className="sbn-required">*</span>
+											</label>
+											<select
+												value={splitSceneForm2.insert_scene_number || ""}
+												onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, insert_scene_number: e.target.value })}
+												className="sbn-form-select"
+											>
+												<option value="">Select Scene...</option>
+												{getSceneOptionsForEpisode(splitSceneForm2.insert_episode_number).map((opt) => (
+													<option key={opt.value} value={opt.value}>{opt.label}</option>
+												))}
+											</select>
+										</div>
+										<div className="sbn-form-divider">
+											<span>Scene Details</span>
+										</div>
+										{isEpisodicProject && (
+											<div className="sbn-form-group sbn-form-group-full">
+												<label className="sbn-form-label">
+													Episode Number <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm2.episode_number || ""}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, episode_number: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="">Select Episode...</option>
+													{addSceneEpisodeOptions.map((opt) => (
+														<option key={opt.key} value={opt.key}>{opt.label}</option>
+													))}
+												</select>
+											</div>
+										)}
 										<div className="sbn-form-row">
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">
@@ -3011,18 +4132,14 @@ const ScriptBreakdownNew = () => {
 												<label className="sbn-form-label">
 													Location <span className="sbn-required">*</span>
 												</label>
-												<select
+												<input
+													type="text"
+													list="sbn-location-options"
 													value={splitSceneForm2.location}
 													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, location: e.target.value })}
-													className="sbn-form-select"
-												>
-													<option value="">Select Location...</option>
-													{locationList.map((loc) => (
-														<option key={loc.location_id || loc.location} value={loc.location}>
-															{loc.location}
-														</option>
-													))}
-												</select>
+													placeholder="Select or type a location..."
+													className="sbn-form-input"
+												/>
 											</div>
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Set</label>
@@ -3066,23 +4183,17 @@ const ScriptBreakdownNew = () => {
 												<label className="sbn-form-label">
 													Page Eighths <span className="sbn-required">*</span>
 												</label>
-												<div className="sbn-page-eighths-input">
-													<span className="sbn-page-eighths-prefix">(</span>
-													<input
-														type="number"
-														min="1"
-														max="1000"
-														value={splitSceneForm2.page_eighths}
-														onChange={(e) =>
-															setSplitSceneForm2({
-																...splitSceneForm2,
-																page_eighths: parseInt(e.target.value) || 1,
-															})
-														}
-														className="sbn-form-input sbn-page-eighths-number"
-													/>
-													<span className="sbn-page-eighths-suffix">/8)</span>
-												</div>
+												<MixedFractionPageEighthsInput
+													value={splitSceneForm2.page_eighths}
+													onChange={(nextValue) =>
+														setSplitSceneForm2({
+															...splitSceneForm2,
+															page_eighths: nextValue,
+														})
+													}
+													compact
+													showHint={false}
+												/>
 											</div>
 										</div>
 										<div className="sbn-form-group sbn-form-group-full">
@@ -3237,6 +4348,88 @@ const ScriptBreakdownNew = () => {
 								<span>Merging scenes will combine their data. Review and edit the merged scene details below.</span>
 							</div>
 							<div className="sbn-add-scene-form">
+								<div className="sbn-form-divider">
+									<span>Insert Position</span>
+								</div>
+								<div className="sbn-form-row">
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Insert <span className="sbn-required">*</span>
+										</label>
+										<select
+											value={mergeSceneForm.insert_relative}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, insert_relative: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="before">Before scene</option>
+											<option value="after">After scene</option>
+										</select>
+									</div>
+									{isEpisodicProject && (
+										<div className="sbn-form-group">
+											<label className="sbn-form-label">
+												Insert Episode <span className="sbn-required">*</span>
+											</label>
+											<select
+												value={mergeSceneForm.insert_episode_number || ""}
+												onChange={(e) => {
+													const nextEpisode = e.target.value;
+													const nextOptions = getSceneOptionsForEpisode(nextEpisode);
+													const nextScene =
+														nextOptions.find((opt) => opt.value === mergeSceneForm.insert_scene_number)?.value ||
+														nextOptions[0]?.value ||
+														"";
+													setMergeSceneForm({
+														...mergeSceneForm,
+														insert_episode_number: nextEpisode,
+														insert_scene_number: nextScene,
+													});
+												}}
+												className="sbn-form-select"
+											>
+												<option value="">Select Episode...</option>
+												{addSceneEpisodeOptions.map((opt) => (
+													<option key={opt.key} value={opt.key}>{opt.label}</option>
+												))}
+											</select>
+										</div>
+									)}
+								</div>
+								<div className="sbn-form-group sbn-form-group-full">
+									<label className="sbn-form-label">
+										Insert Scene <span className="sbn-required">*</span>
+									</label>
+									<select
+										value={mergeSceneForm.insert_scene_number || ""}
+										onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, insert_scene_number: e.target.value })}
+										className="sbn-form-select"
+									>
+										<option value="">Select Scene...</option>
+										{mergeInsertSceneOptions.map((opt) => (
+											<option key={opt.value} value={opt.value}>{opt.label}</option>
+										))}
+									</select>
+								</div>
+								<div className="sbn-form-divider">
+									<span>Scene Details</span>
+								</div>
+								{isEpisodicProject && !isEpisodeLockedForPosition && (
+									<div className="sbn-form-group sbn-form-group-full">
+										<label className="sbn-form-label">
+											Episode Number <span className="sbn-required">*</span>
+										</label>
+										<select
+											value={mergeSceneForm.episode_number || ""}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, episode_number: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="">Select Episode...</option>
+											{addSceneEpisodeOptionsForPosition.map((opt) => (
+												<option key={opt.key} value={opt.key}>{opt.label}</option>
+											))}
+										</select>
+									</div>
+								)}
 								<div className="sbn-form-row">
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">
@@ -3272,18 +4465,14 @@ const ScriptBreakdownNew = () => {
 										<label className="sbn-form-label">
 											Location <span className="sbn-required">*</span>
 										</label>
-										<select
+										<input
+											type="text"
+											list="sbn-location-options"
 											value={mergeSceneForm.location}
 											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, location: e.target.value })}
-											className="sbn-form-select"
-										>
-											<option value="">Select Location...</option>
-											{locationList.map((loc) => (
-												<option key={loc.location_id || loc.location} value={loc.location}>
-													{loc.location}
-												</option>
-											))}
-										</select>
+											placeholder="Select or type a location..."
+											className="sbn-form-input"
+										/>
 									</div>
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Set</label>
@@ -3328,26 +4517,14 @@ const ScriptBreakdownNew = () => {
 										<label className="sbn-form-label">
 											Page Eighths <span className="sbn-required">*</span>
 										</label>
-										<div className="sbn-page-eighths-input">
-											<span className="sbn-page-eighths-prefix">(</span>
-											<input
-												type="number"
-												min="1"
-												max="1000"
-												value={mergeSceneForm.page_eighths}
-												onChange={(e) =>
-													setMergeSceneForm({ ...mergeSceneForm, page_eighths: parseInt(e.target.value) || 1 })
-												}
-												className="sbn-form-input sbn-page-eighths-number"
-											/>
-											<span className="sbn-page-eighths-suffix">/8)</span>
-										</div>
-										<span className="sbn-page-eighths-hint">
-											{mergeSceneForm.page_eighths <= 8
-												? `= ${mergeSceneForm.page_eighths}/8 page`
-												: `= ${Math.floor(mergeSceneForm.page_eighths / 8)} ${mergeSceneForm.page_eighths % 8 > 0 ? `${mergeSceneForm.page_eighths % 8}/8` : ""
-												} pages`}
-										</span>
+										<MixedFractionPageEighthsInput
+											value={mergeSceneForm.page_eighths}
+											onChange={(nextValue) =>
+												setMergeSceneForm({ ...mergeSceneForm, page_eighths: nextValue })
+											}
+											compact
+											showHint={false}
+										/>
 									</div>
 								</div>
 
@@ -3504,6 +4681,34 @@ const ScriptBreakdownNew = () => {
 						</div>
 						<div className="sbn-add-scene-modal-body">
 							<div className="sbn-add-scene-form">
+								{isEpisodicProject && (
+									<div className="sbn-form-group sbn-form-group-full">
+										<label className="sbn-form-label">
+											Episode Number <span className="sbn-required">*</span>
+										</label>
+										{isEpisodeLockedForPosition ? (
+											<div className="sbn-form-value">
+												{newSceneForm.episode_number
+													? `Ep${newSceneForm.episode_number}`
+													: "Episode not set"}
+											</div>
+										) : (
+											<select
+												value={newSceneForm.episode_number || ""}
+												onChange={(e) => setNewSceneForm({ ...newSceneForm, episode_number: e.target.value })}
+												className="sbn-form-select"
+											>
+												<option value="">Select Episode...</option>
+												{(addSceneEpisodeOptionsForPosition.length > 0
+													? addSceneEpisodeOptionsForPosition
+													: addSceneEpisodeOptions
+												).map((opt) => (
+													<option key={opt.key} value={opt.key}>{opt.label}</option>
+												))}
+											</select>
+										)}
+									</div>
+								)}
 								<div className="sbn-form-row">
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">
@@ -3539,21 +4744,19 @@ const ScriptBreakdownNew = () => {
 										<label className="sbn-form-label">
 											Location <span className="sbn-required">*</span>
 										</label>
-										<select
+										<input
+											type="text"
+											list="sbn-location-options"
 											value={newSceneForm.location}
 											onChange={(e) => setNewSceneForm({ ...newSceneForm, location: e.target.value })}
-											className="sbn-form-select"
-										>
-											<option value="">Select Location...</option>
-											{locationList.map((loc) => (
-												<option key={loc.location_id || loc.location} value={loc.location}>
-													{loc.location}
-												</option>
-											))}
-										</select>
+											placeholder="Select or type a location..."
+											className="sbn-form-input"
+										/>
 									</div>
 									<div className="sbn-form-group">
-										<label className="sbn-form-label">Set</label>
+										<label className="sbn-form-label">
+											Set <span className="sbn-required">*</span>
+										</label>
 										<select
 											value={newSceneForm.set}
 											onChange={(e) => setNewSceneForm({ ...newSceneForm, set: e.target.value })}
@@ -3595,24 +4798,12 @@ const ScriptBreakdownNew = () => {
 										<label className="sbn-form-label">
 											Page Eighths <span className="sbn-required">*</span>
 										</label>
-										<div className="sbn-page-eighths-input">
-											<span className="sbn-page-eighths-prefix">(</span>
-											<input
-												type="number"
-												min="1"
-												max="1000"
-												value={newSceneForm.page_eighths}
-												onChange={(e) => setNewSceneForm({ ...newSceneForm, page_eighths: parseInt(e.target.value) || 1 })}
-												className="sbn-form-input sbn-page-eighths-number"
-											/>
-											<span className="sbn-page-eighths-suffix">/8)</span>
-										</div>
-										<span className="sbn-page-eighths-hint">
-											{newSceneForm.page_eighths <= 8
-												? `= ${newSceneForm.page_eighths}/8 page`
-												: `= ${Math.floor(newSceneForm.page_eighths / 8)} ${newSceneForm.page_eighths % 8 > 0 ? `${newSceneForm.page_eighths % 8}/8` : ""
-												} pages`}
-										</span>
+										<MixedFractionPageEighthsInput
+											value={newSceneForm.page_eighths}
+											onChange={(nextValue) => setNewSceneForm({ ...newSceneForm, page_eighths: nextValue })}
+											compact
+											showHint={false}
+										/>
 									</div>
 								</div>
 
@@ -3877,24 +5068,61 @@ const ScriptBreakdownNew = () => {
 							{activeTab === "generated" && (
 								<div className="sbn-script-selector">
 									{generatedScripts.length > 0 ? (
-										<select
-											className="sbn-script-dropdown"
-											value={selectedGeneratedScript?.id || ""}
-											onChange={(e) => {
-												const scriptId = parseInt(e.target.value, 10);
-												const script = generatedScripts.find((s) => s.id === scriptId);
-												if (script) setSelectedGeneratedScript(script);
-											}}
-										>
-											{generatedScripts.map((script) => (
-												<option key={script.id} value={script.id}>
-													{script.name} (v{script.version})
-												</option>
-											))}
-										</select>
+										hasEpisodeGrouping ? (
+											<div style={{ display: "flex", gap: "8px" }}>
+												<select
+													className="sbn-script-dropdown"
+													value={selectedGeneratedEpisode}
+													onChange={(e) => setSelectedGeneratedEpisode(e.target.value)}
+												>
+													{generatedEpisodeOptions.map((episode) => (
+														<option key={episode.key} value={episode.key}>
+															{episode.label}
+														</option>
+													))}
+												</select>
+												<select
+													className="sbn-script-dropdown"
+													value={selectedGeneratedScript?.id || ""}
+													onChange={(e) => {
+														const scriptId = parseInt(e.target.value, 10);
+														const script = generatedScriptsForSelectedEpisode.find((s) => s.id === scriptId);
+														if (script) setSelectedGeneratedScript(script);
+													}}
+												>
+													{generatedScriptsForSelectedEpisode.map((script) => (
+														<option key={script.id} value={script.id}>
+															{getGeneratedDraftLabel(script)}
+														</option>
+													))}
+												</select>
+											</div>
+										) : (
+											<select
+												className="sbn-script-dropdown"
+												value={selectedGeneratedScript?.id || ""}
+												onChange={(e) => {
+													const scriptId = parseInt(e.target.value, 10);
+													const script = generatedScripts.find((s) => s.id === scriptId);
+													if (script) setSelectedGeneratedScript(script);
+												}}
+											>
+												{generatedScripts.map((script) => (
+													<option key={script.id} value={script.id}>
+														{getGeneratedScriptLabel(script)}
+													</option>
+												))}
+											</select>
+										)
 									) : (
 										<span className="sbn-no-scripts-msg">No other scripts available</span>
 									)}
+								</div>
+							)}
+							{latestScript && (
+								<div className="sbn-latest-draft" title="Latest draft">
+									<span className="sbn-latest-draft-label">Latest draft</span>
+									<span className="sbn-latest-draft-value">{latestDraftLabel}</span>
 								</div>
 							)}
 						</div>
@@ -3906,16 +5134,39 @@ const ScriptBreakdownNew = () => {
 									<PiMagnifyingGlass className="sbn-search-icon" />
 									<input
 										type="text"
-										placeholder="Search Scenes (Scene No., Location, Synopsis...)"
+										placeholder={`Search ${selectedSearchField === "ALL_FIELDS" ? "Scenes" : selectedSearchField}...`}
 										value={filterText}
 										onChange={(e) => setFilterText(e.target.value)}
 										className="sbn-search-input"
 									/>
 								</div>
-								<button className="sbn-filter-btn">
-									<PiSlidersHorizontal className="sbn-filter-icon" />
-									<span>Filter</span>
-								</button>
+								<div className="sbn-filter-wrap" ref={searchFilterRef}>
+									<button
+										className={`sbn-filter-btn ${showSearchFilterMenu ? "sbn-filter-btn-active" : ""}`}
+										onClick={() => setShowSearchFilterMenu((prev) => !prev)}
+										type="button"
+									>
+										<PiSlidersHorizontal className="sbn-filter-icon" />
+										<span>{selectedSearchField === "ALL_FIELDS" ? "Filter" : selectedSearchField}</span>
+									</button>
+									{showSearchFilterMenu && (
+										<div className="sbn-filter-menu">
+											{searchFieldOptions.map((option) => (
+												<button
+													key={option.key}
+													type="button"
+													className={`sbn-filter-option ${selectedSearchField === option.key ? "sbn-filter-option-active" : ""}`}
+													onClick={() => {
+														setSelectedSearchField(option.key);
+														setShowSearchFilterMenu(false);
+													}}
+												>
+													{option.label}
+												</button>
+											))}
+										</div>
+									)}
+								</div>
 							</div>
 							<div className="sbn-toolbar-right">
 								<button className="sbn-sync-btn" onClick={exportToExcel}>
@@ -3944,7 +5195,11 @@ const ScriptBreakdownNew = () => {
 									className={`sbn-action-btn ${removeSceneMode ? "sbn-action-btn-active sbn-action-btn-remove" : ""}`}
 									onClick={handleRemoveSceneClick}
 								>
-									{removeSceneMode ? "Cancel Remove" : "Remove Scene"}
+									{removeSceneMode
+										? selectedScenesToRemove.length > 0
+											? `Confirm Remove (${selectedScenesToRemove.length})`
+											: "Cancel Remove"
+										: "Remove Scene"}
 								</button>
 								<button
 									className="sbn-action-btn sbn-action-btn-add"

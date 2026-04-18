@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import html2pdf from 'html2pdf.js';
 import { useNavigate, useParams } from 'react-router-dom';
 import ProjectHeader from '../components/ProjectHeader';
 import {
     PiCalendar, PiClock, PiMapPin, PiFirstAid, PiUser, PiNote,
-    PiList, PiPlus, PiTrash, PiFloppyDisk, PiCaretRight, PiEye, PiEyeSlash, PiArrowLeft, PiUsersThree, PiDotsSixVertical
+    PiList, PiPlus, PiTrash, PiFloppyDisk, PiCaretRight, PiEye, PiEyeSlash, PiArrowLeft, PiUsersThree, PiDotsSixVertical, PiMegaphoneBold
 } from 'react-icons/pi';
 import {
     DndContext,
@@ -25,14 +25,21 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import CallSheetPreview from '../components/CallSheetPreview';
+import LogoEditorModal from '../components/LogoEditorModal';
 import TimePicker from '../components/TimePicker';
 import InlineLocationMap from '../components/InlineLocationMap';
 import '../css/ManageShootDays.css';
-import { getApiUrl } from '../utils/api';
+import { fetchWithAuth, getApiUrl } from '../utils/api';
 import { getToken } from '../utils/auth';
 import useGoogleMapsLoader from '../hooks/useGoogleMapsLoader';
 
 const libraries = ['places'];
+
+const sanitizePhoneInput = (value) => {
+    if (!value) return '';
+    const cleaned = value.replace(/[^0-9+\-() ]+/g, '');
+    return cleaned.replace(/\s+/g, ' ').trim();
+};
 
 const SortableRow = ({ children, ...props }) => {
     const {
@@ -69,7 +76,7 @@ const SortableRow = ({ children, ...props }) => {
 
 const ManageShootDays = () => {
     const navigate = useNavigate();
-    const { user, id } = useParams();
+    const { user, id, dayId } = useParams();
 
     // Data State
     const [shootDays, setShootDays] = useState([]);
@@ -79,9 +86,14 @@ const ManageShootDays = () => {
     const [project, setProject] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isAutoSaving, setIsAutoSaving] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [lastSavedAt, setLastSavedAt] = useState(null);
+    const [saveError, setSaveError] = useState('');
     const [projectLogoTs, setProjectLogoTs] = useState(Date.now());
     const [projectLogo2Ts, setProjectLogo2Ts] = useState(Date.now());
-    const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' | 'editor'
+    const [logoEditorState, setLogoEditorState] = useState({ isOpen: false, file: null, slot: 'logo' });
+    const [viewMode, setViewMode] = useState(dayId ? 'editor' : 'dashboard'); // 'dashboard' | 'editor'
     const [showPreview, setShowPreview] = useState(true);
     const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
@@ -99,6 +111,17 @@ const ManageShootDays = () => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [openCastDropdown, setOpenCastDropdown] = useState(null);
     const [error, setError] = useState(null);
+    const [deptBulkSettings, setDeptBulkSettings] = useState({});
+    const [previewFocus, setPreviewFocus] = useState({ target: null, pulseKey: 0, source: '' });
+    const previewIntentRef = useRef(null);
+    const previewFocusDebounceRef = useRef(null);
+    const previewFocusClearRef = useRef(null);
+    const suppressAddressAutocompleteRef = useRef(false);
+    const isAddressInputActiveRef = useRef(false);
+    const addressSuggestionSessionRef = useRef(0);
+    const latestAddressQueryRef = useRef('');
+    const autoSaveTimeoutRef = useRef(null);
+    const lastSavedSnapshotRef = useRef('');
 
 
     // Form State
@@ -117,7 +140,6 @@ const ManageShootDays = () => {
             contact_name: '', contact_phone: '',
             latitude: null, longitude: null,
             hospital: { name: '', loc: '' },
-            emergency: { name: '', phone: '' },
             safety_hotline: { name: '', phone: '' },
             instructions: ['']
         },
@@ -131,6 +153,7 @@ const ManageShootDays = () => {
         daily_requirements: [], // Added for card layout editor
         department_notes: {},
         crew_calls: {}, // { crew_id: time }
+        crew_call_bulk: {},
         advanced_schedule: []
     });
 
@@ -149,6 +172,135 @@ const ManageShootDays = () => {
         return { ...obj };
     };
 
+    const buildCharacterPreviewKey = (character, fallbackCastId = '') => {
+        const rawId = String(character?.character_id || fallbackCastId || '').trim();
+        if (rawId) return `id:${rawId}`;
+
+        const rawName = String(character?.character_name || '').trim().toLowerCase();
+        if (rawName) return `name:${rawName.replace(/\s+/g, '-')}`;
+
+        return 'row:unknown';
+    };
+
+    const buildScenePreviewKey = (scene, fallbackIndex = 0) => {
+        const rawScene = String(scene?.scene_number || '').trim();
+        if (rawScene) return `scene:${rawScene.replace(/\s+/g, '-')}`;
+        return `row:${fallbackIndex}`;
+    };
+
+    const formatSceneSetDescription = useCallback((scene) => {
+        const intExt = String(scene?.int_ext || '').trim();
+        const location = String(scene?.location || '').trim();
+        const description = String(scene?.description || '').trim();
+
+        const summaryParts = [intExt, location].filter(Boolean);
+
+        return {
+            summary: summaryParts.length > 1 ? `${summaryParts[0]} - ${summaryParts[1]}` : (summaryParts[0] || ''),
+            description
+        };
+    }, []);
+
+    const hasEpisodeColumn = useCallback((scenes = []) => {
+        return Array.isArray(scenes) && scenes.some((scene) => String(scene?.episode_number ?? '').trim() !== '');
+    }, []);
+
+    const isEpisodicProject = String(project?.projectType || '').trim().toLowerCase() === 'episodic';
+
+    const getEpisodeOptions = useCallback(() => {
+        const seen = new Set();
+        const options = [];
+
+        breakdownScenes.forEach((scene) => {
+            const episodeNumber = String(scene?.episode_number || '').trim();
+            if (!episodeNumber || seen.has(episodeNumber)) return;
+            seen.add(episodeNumber);
+            options.push(episodeNumber);
+        });
+
+        return options.sort((a, b) => {
+            const aNum = Number(a);
+            const bNum = Number(b);
+            const aIsNum = !Number.isNaN(aNum);
+            const bIsNum = !Number.isNaN(bNum);
+            if (aIsNum && bIsNum) return aNum - bNum;
+            return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+        });
+    }, [breakdownScenes]);
+
+    const getSceneOptionsForEpisode = useCallback((episodeNumber = '') => {
+        const targetEpisode = String(episodeNumber || '').trim();
+        const seen = new Set();
+        const options = [];
+
+        breakdownScenes.forEach((scene) => {
+            const sceneNumber = String(scene?.scene_number || '').trim();
+            if (!sceneNumber) return;
+            const sceneEpisodeNumber = String(scene?.episode_number || '').trim();
+
+            if (isEpisodicProject && !targetEpisode) return;
+            if (isEpisodicProject && sceneEpisodeNumber !== targetEpisode) return;
+            if (seen.has(sceneNumber)) return;
+
+            seen.add(sceneNumber);
+            options.push(sceneNumber);
+        });
+
+        return options.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    }, [breakdownScenes, isEpisodicProject]);
+
+    const buildRequirementPreviewKey = (requirement, fallbackIndex = 0) => {
+        const rawCategory = String(requirement?.category || '').trim().toLowerCase();
+        if (rawCategory) return rawCategory.replace(/\s+/g, '-');
+        return `req-${fallbackIndex}`;
+    };
+
+    const buildContactPreviewKey = (contact, fallbackIndex = 0) => {
+        if (contact?.id) return String(contact.id);
+        const rawRole = String(contact?.role || '').trim().toLowerCase();
+        if (rawRole) return rawRole.replace(/\s+/g, '-');
+        return `contact-${fallbackIndex}`;
+    };
+
+    const serializeSaveSnapshot = useCallback((data) => JSON.stringify(data ?? {}), []);
+
+    const buildCrewStateKey = useCallback((crew, deptId = '', fallbackIndex = 0) => {
+        const rawCrewId = crew?.id;
+        if (rawCrewId !== undefined && rawCrewId !== null && String(rawCrewId).trim() !== '') {
+            return `id:${String(rawCrewId).trim()}`;
+        }
+
+        const namePart = String(crew?.name || '').trim().toLowerCase().replace(/\s+/g, '-');
+        const rolePart = String(crew?.role || '').trim().toLowerCase().replace(/\s+/g, '-');
+        return `temp:${String(deptId || 'dept').trim() || 'dept'}:${fallbackIndex}:${namePart || 'crew'}:${rolePart || 'role'}`;
+    }, []);
+
+    const formatDateDMY = useCallback((isoDate) => {
+        if (!isoDate || typeof isoDate !== 'string') return '';
+        const parts = isoDate.split('-');
+        if (parts.length !== 3) return '';
+        const [year, month, day] = parts;
+        if (!year || !month || !day) return '';
+        return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+    }, []);
+
+    const parseDateDMY = useCallback((value) => {
+        if (!value || typeof value !== 'string') return null;
+        const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (!match) return null;
+        const day = match[1].padStart(2, '0');
+        const month = match[2].padStart(2, '0');
+        const year = match[3];
+        const iso = `${year}-${month}-${day}`;
+        const test = new Date(`${iso}T00:00:00Z`);
+        if (Number.isNaN(test.getTime())) return null;
+        const testDay = String(test.getUTCDate()).padStart(2, '0');
+        const testMonth = String(test.getUTCMonth() + 1).padStart(2, '0');
+        const testYear = String(test.getUTCFullYear());
+        if (testDay !== day || testMonth !== month || testYear !== year) return null;
+        return iso;
+    }, []);
+
     // State for Schedules
     const [schedules, setSchedules] = useState([]);
     const [isImporting, setIsImporting] = useState(false);
@@ -158,6 +310,82 @@ const ManageShootDays = () => {
     const [createData, setCreateData] = useState({ date: '', day_number: '', importFromSchedule: false });
     const [scheduleHasDate, setScheduleHasDate] = useState(false);
     const [createWarning, setCreateWarning] = useState('');
+    const [shootDateDisplay, setShootDateDisplay] = useState('');
+    const isEditingShootDate = useRef(false);
+
+    const emitPreviewFocus = useCallback((intent, delay = 0) => {
+        if (!showPreview || !intent?.target) return;
+
+        clearTimeout(previewFocusDebounceRef.current);
+        clearTimeout(previewFocusClearRef.current);
+
+        const applyFocus = () => {
+            setPreviewFocus((prev) => {
+                const nextPulseKey = prev.pulseKey + 1;
+
+                previewFocusClearRef.current = setTimeout(() => {
+                    setPreviewFocus((current) => (
+                        current.target === intent.target
+                            ? { ...current, target: null, source: '' }
+                            : current
+                    ));
+                }, 1800);
+
+                return {
+                    target: intent.target,
+                    pulseKey: nextPulseKey,
+                    source: intent.source,
+                };
+            });
+        };
+
+        if (delay > 0) {
+            previewFocusDebounceRef.current = setTimeout(applyFocus, delay);
+        } else {
+            applyFocus();
+        }
+    }, [showPreview]);
+
+    const setPreviewIntentFromElement = useCallback((element) => {
+        if (!element?.closest) return;
+        const targetNode = element.closest('[data-preview-target]');
+        if (!targetNode) return;
+
+        previewIntentRef.current = {
+            target: targetNode.dataset.previewTarget,
+            mode: targetNode.dataset.previewFocusMode || 'instant',
+            source: targetNode.dataset.previewSource || targetNode.dataset.previewTarget,
+        };
+    }, []);
+
+    const capturePreviewIntent = useCallback((event) => {
+        setPreviewIntentFromElement(event.target);
+        const intent = previewIntentRef.current;
+        if (!intent?.target) return;
+        emitPreviewFocus(intent, intent.mode === 'debounced' ? 180 : 0);
+    }, [emitPreviewFocus, setPreviewIntentFromElement]);
+
+    useEffect(() => {
+        if (!showPreview) return undefined;
+        const intent = previewIntentRef.current;
+        if (!intent?.target) return undefined;
+
+        emitPreviewFocus(intent, intent.mode === 'debounced' ? 250 : 0);
+
+        return () => {
+            clearTimeout(previewFocusDebounceRef.current);
+        };
+    }, [emitPreviewFocus, formData, showPreview]);
+
+    useEffect(() => () => {
+        clearTimeout(previewFocusDebounceRef.current);
+        clearTimeout(previewFocusClearRef.current);
+        clearTimeout(autoSaveTimeoutRef.current);
+    }, []);
+
+    useEffect(() => {
+        latestAddressQueryRef.current = formData.location_details?.address || '';
+    }, [formData.location_details?.address]);
 
     // Weather Fetching Logic
     const getWeatherDesc = (code) => {
@@ -177,6 +405,21 @@ const ManageShootDays = () => {
         if (typeof val === 'string') return val;
         if (typeof val === 'object') return val.utcTime || val.localTime || val.time || val.dateTime || '';
         return '';
+    };
+
+    const findBreakdownScene = (sceneNumber, episodeNumber = '') => {
+        const sceneNum = String(sceneNumber || '').trim();
+        const epNum = String(episodeNumber || '').trim();
+        if (!sceneNum) return null;
+
+        const exact = breakdownScenes.find((scene) => {
+            const currentSceneNumber = String(scene.scene_number || '').trim();
+            const currentEpisodeNumber = String(scene.episode_number || '').trim();
+            return currentSceneNumber === sceneNum && epNum && currentEpisodeNumber === epNum;
+        });
+        if (exact) return exact;
+
+        return breakdownScenes.find((scene) => String(scene.scene_number || '').trim() === sceneNum) || null;
     };
 
     const getNumberValue = (val) => {
@@ -233,8 +476,8 @@ const ManageShootDays = () => {
                         w.currentConditions?.sunset
                     );
                     const tempVal = getNumberValue(w.currentConditions.temperature?.degrees) ?? 0;
-                    const highVal = getNumberValue(daily.maxTemperature?.degrees ?? prev.weather.high);
-                    const lowVal = getNumberValue(daily.minTemperature?.degrees ?? prev.weather.low);
+                    const highVal = getNumberValue(daily.maxTemperature?.degrees);
+                    const lowVal = getNumberValue(daily.minTemperature?.degrees);
                     const feelsLikeVal = getNumberValue(w.currentConditions.feelsLikeTemperature?.degrees);
                     const precipVal = getNumberValue(w.currentConditions.precipitation?.probability);
                     const windVal = getNumberValue(w.currentConditions.wind?.speed);
@@ -325,10 +568,31 @@ const ManageShootDays = () => {
 
     // Autocomplete Logic
 
+    const resetAddressAutocomplete = useCallback(() => {
+        addressSuggestionSessionRef.current += 1;
+        isAddressInputActiveRef.current = false;
+        suppressAddressAutocompleteRef.current = false;
+        setSuggestions([]);
+        setShowSuggestions(false);
+    }, []);
+
+    const clearPendingAutoSave = useCallback(() => {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+    }, []);
+
     useEffect(() => {
         const fetchSuggestions = async () => {
             const query = formData.location_details?.address;
-            if (!query || query.length < 3 || !isLoaded || !window.google) {
+            const sessionId = addressSuggestionSessionRef.current;
+            if (suppressAddressAutocompleteRef.current) {
+                suppressAddressAutocompleteRef.current = false;
+                setSuggestions([]);
+                setShowSuggestions(false);
+                return;
+            }
+
+            if (!isAddressInputActiveRef.current || !query || query.length < 3 || !isLoaded || !window.google) {
                 setSuggestions([]);
                 return;
             }
@@ -336,6 +600,14 @@ const ManageShootDays = () => {
             try {
                 const service = new window.google.maps.places.AutocompleteService();
                 service.getPlacePredictions({ input: query }, (predictions, status) => {
+                    if (
+                        addressSuggestionSessionRef.current !== sessionId ||
+                        !isAddressInputActiveRef.current ||
+                        latestAddressQueryRef.current !== query
+                    ) {
+                        return;
+                    }
+
                     if (status === 'OK' && predictions) {
                         setSuggestions(predictions);
                         setShowSuggestions(true);
@@ -351,6 +623,20 @@ const ManageShootDays = () => {
         const timeoutId = setTimeout(fetchSuggestions, 300);
         return () => clearTimeout(timeoutId);
     }, [formData.location_details?.address, isLoaded]);
+
+    useEffect(() => {
+        if (!selectedDayId || viewMode !== 'editor') {
+            setHasUnsavedChanges(false);
+            return;
+        }
+
+        const currentSnapshot = serializeSaveSnapshot(formData);
+        const isDirty = lastSavedSnapshotRef.current !== currentSnapshot;
+        setHasUnsavedChanges(isDirty);
+        if (isDirty) {
+            setSaveError('');
+        }
+    }, [formData, selectedDayId, serializeSaveSnapshot, viewMode]);
 
     const handleSuggestionClick = useCallback((prediction) => {
         if (!isLoaded || !window.google) return;
@@ -377,6 +663,7 @@ const ManageShootDays = () => {
                         longitude: lng
                     }
                 }));
+                suppressAddressAutocompleteRef.current = true;
                 fetchWeatherForCoords(lat, lng, formData.date);
                 setSuggestions([]);
                 setShowSuggestions(false);
@@ -400,6 +687,7 @@ const ManageShootDays = () => {
                                 longitude: lng
                             }
                         }));
+                        suppressAddressAutocompleteRef.current = true;
                         fetchWeatherForCoords(lat, lng, formData.date);
                     } else {
                         setFormData(prev => ({
@@ -409,6 +697,7 @@ const ManageShootDays = () => {
                                 address: prediction.description
                             }
                         }));
+                        suppressAddressAutocompleteRef.current = true;
                     }
                     setSuggestions([]);
                     setShowSuggestions(false);
@@ -448,6 +737,7 @@ const ManageShootDays = () => {
                         longitude: lng
                     }
                 }));
+                suppressAddressAutocompleteRef.current = true;
                 fetchWeatherForCoords(lat, lng, formData.date);
             } else {
                 console.warn("Geocode was not successful: " + status);
@@ -481,6 +771,7 @@ const ManageShootDays = () => {
                             longitude: lng
                         }
                     }));
+                    suppressAddressAutocompleteRef.current = true;
                 } else {
                     console.warn("Reverse geocode returned no results:", data.status, data.error_message);
                     setFormData(prev => ({
@@ -492,6 +783,7 @@ const ManageShootDays = () => {
                             longitude: lng
                         }
                     }));
+                    suppressAddressAutocompleteRef.current = true;
                 }
             } else {
                 console.warn("Reverse geocode request failed:", res.status);
@@ -504,6 +796,7 @@ const ManageShootDays = () => {
                         longitude: lng
                     }
                 }));
+                suppressAddressAutocompleteRef.current = true;
             }
         } catch (e) {
             console.error("Reverse Geocode Error:", e);
@@ -516,6 +809,7 @@ const ManageShootDays = () => {
                     longitude: lng
                 }
             }));
+            suppressAddressAutocompleteRef.current = true;
         }
     }, []);
 
@@ -538,14 +832,14 @@ const ManageShootDays = () => {
         try {
             const token = getToken();
 
-            const pDays = fetch(getApiUrl(`/api/projects/${id}/shoot-days`)).then(async res => {
+            const pDays = fetchWithAuth(getApiUrl(`/api/projects/${id}/shoot-days`)).then(async res => {
                 if (!res.ok) throw new Error("Failed to fetch shoot days");
                 const days = await res.json();
                 setShootDays(days);
                 return days;
             });
 
-            const pProj = fetch(getApiUrl(`/api/project-name/${id}`), {
+            const pProj = fetchWithAuth(getApiUrl(`/api/project-name/${id}`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(async res => {
                 if (res.ok) return await res.json();
@@ -601,6 +895,7 @@ const ManageShootDays = () => {
             if (projResult) {
                 setProject({
                     title: projResult.projectName || projResult.name || `Project ${id}`,
+                    projectType: projResult.projectType || '',
                     productionCompany: 'Production Company',
                     totalDays: daysResult ? daysResult.length : 0
                 });
@@ -616,7 +911,10 @@ const ManageShootDays = () => {
         }
     };
 
-    const handleDaySelect = (day) => {
+    const handleDaySelect = useCallback((day, options = {}) => {
+        const { syncRoute = true, replace = false } = options;
+        clearPendingAutoSave();
+        resetAddressAutocomplete();
         setViewMode('editor');
         setSelectedDayId(day.id);
         // Load day data with fresh default structure (no merging with previous day)
@@ -625,7 +923,6 @@ const ManageShootDays = () => {
             contact_name: '', contact_phone: '',
             latitude: null, longitude: null,
             hospital: { name: '', loc: '' },
-            emergency: { name: '', phone: '' },
             safety_hotline: { name: '', phone: '' },
             instructions: ['']
         };
@@ -634,15 +931,14 @@ const ManageShootDays = () => {
             breakfast: '', lunch: '', dinner: '', snacks: ''
         };
 
-        setFormData(prev => ({
-            ...prev,
+        const nextFormData = {
+            ...formData,
             ...day,
             meals: { ...freshMeals, ...(day.meals || {}) },
             location_details: {
                 ...freshDefaults,
                 ...(day.location_details || {}),
                 hospital: { name: '', loc: '', ...(day.location_details?.hospital || {}) },
-                emergency: { name: '', phone: '', ...(day.location_details?.emergency || {}) },
                 safety_hotline: { name: '', phone: '', ...(day.location_details?.safety_hotline || {}) },
                 instructions: Array.isArray(day.location_details?.instructions)
                     ? day.location_details.instructions
@@ -652,9 +948,59 @@ const ManageShootDays = () => {
             characters: day.characters || [],
             department_notes: day.department_notes || {},
             crew_calls: day.crew_calls || {},
+            crew_call_bulk: day.crew_call_bulk || {},
             advanced_schedule: ensureIds(day.advanced_schedule)
-        }));
-    };
+        };
+
+        lastSavedSnapshotRef.current = serializeSaveSnapshot(nextFormData);
+        setHasUnsavedChanges(false);
+        setSaveError('');
+        setLastSavedAt(null);
+        setFormData(nextFormData);
+        setDeptBulkSettings(day.crew_call_bulk || {});
+        if (syncRoute) {
+            navigate(`/${user}/${id}/call-sheets/day/${day.id}`, { replace });
+        }
+    }, [clearPendingAutoSave, formData, id, navigate, resetAddressAutocomplete, serializeSaveSnapshot, user]);
+
+    useEffect(() => {
+        if (isLoading) return;
+
+        if (!dayId) {
+            if (viewMode !== 'dashboard' || selectedDayId !== null) {
+                clearPendingAutoSave();
+                resetAddressAutocomplete();
+                setViewMode('dashboard');
+                setSelectedDayId(null);
+                setHasUnsavedChanges(false);
+                setSaveError('');
+                setLastSavedAt(null);
+            }
+            return;
+        }
+
+        const targetDay = shootDays.find((day) => String(day.id) === String(dayId));
+        if (!targetDay) {
+            navigate(`/${user}/${id}/call-sheets`, { replace: true });
+            return;
+        }
+
+        if (selectedDayId !== targetDay.id || viewMode !== 'editor') {
+            handleDaySelect(targetDay, { syncRoute: false, replace: true });
+        }
+    }, [
+        clearPendingAutoSave,
+        dayId,
+        handleDaySelect,
+        id,
+        isLoading,
+        navigate,
+        resetAddressAutocomplete,
+        selectedDayId,
+        shootDays,
+        user,
+        viewMode
+    ]);
 
     const handleCreateDay = async () => {
         try {
@@ -682,14 +1028,20 @@ const ManageShootDays = () => {
         }
     };
 
-    const handleSave = async () => {
-        if (!selectedDayId) return;
-        setIsSaving(true);
+    const persistShootDay = useCallback(async (payload, { showSuccessAlert = false, autoSave = false } = {}) => {
+        if (!selectedDayId) return false;
+
+        if (autoSave) {
+            setIsAutoSaving(true);
+        } else {
+            setIsSaving(true);
+        }
+
         try {
             const res = await fetch(getApiUrl(`/api/shoot-days/${selectedDayId}?project_id=${id}`), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
             if (!res.ok) throw new Error("Failed to save");
 
@@ -701,14 +1053,45 @@ const ManageShootDays = () => {
                 scenes: ensureIds(updated.scenes),
                 advanced_schedule: ensureIds(updated.advanced_schedule)
             };
-            setShootDays(shootDays.map(d => d.id === processedUpdated.id ? processedUpdated : d));
-            alert("Shoot Day Saved Successfully!");
+            setShootDays(prev => prev.map(d => d.id === processedUpdated.id ? processedUpdated : d));
+            lastSavedSnapshotRef.current = serializeSaveSnapshot(payload);
+            setHasUnsavedChanges(false);
+            setSaveError('');
+            setLastSavedAt(Date.now());
+            if (!autoSave) {
+                resetAddressAutocomplete();
+            }
+            if (showSuccessAlert) {
+                alert("Shoot Day Saved Successfully!");
+            }
+            return true;
         } catch (err) {
-            alert("Error saving: " + err.message);
+            setSaveError(autoSave ? 'Auto-save failed' : err.message);
+            if (!autoSave) {
+                alert("Error saving: " + err.message);
+            }
+            return false;
         } finally {
-            setIsSaving(false);
+            if (autoSave) {
+                setIsAutoSaving(false);
+            } else {
+                setIsSaving(false);
+            }
         }
-    };
+    }, [id, resetAddressAutocomplete, selectedDayId, serializeSaveSnapshot]);
+
+    useEffect(() => {
+        if (!selectedDayId || viewMode !== 'editor' || !hasUnsavedChanges || isSaving || isAutoSaving) {
+            clearPendingAutoSave();
+            return undefined;
+        }
+
+        autoSaveTimeoutRef.current = setTimeout(() => {
+            persistShootDay(formData, { autoSave: true });
+        }, 1200);
+
+        return () => clearPendingAutoSave();
+    }, [clearPendingAutoSave, formData, hasUnsavedChanges, isAutoSaving, isSaving, persistShootDay, selectedDayId, viewMode]);
 
     const handleSaveAndPreview = async () => {
         if (!showPreview) {
@@ -729,6 +1112,21 @@ const ManageShootDays = () => {
             if (pageElements.length === 0) {
                 return;
             }
+
+            if (document.fonts && document.fonts.ready) {
+                await document.fonts.ready;
+            }
+
+            const images = Array.from(wrapper.querySelectorAll('img'));
+            await Promise.all(images.map((img) => new Promise((resolve) => {
+                if (img.complete) return resolve();
+                const onDone = () => resolve();
+                img.addEventListener('load', onDone, { once: true });
+                img.addEventListener('error', onDone, { once: true });
+            })));
+
+            await new Promise(requestAnimationFrame);
+
             const options = {
                 margin: 0,
                 image: { type: 'jpeg', quality: 0.98 },
@@ -744,8 +1142,8 @@ const ManageShootDays = () => {
                 URL.revokeObjectURL(pdfPreviewUrl);
             }
             const url = URL.createObjectURL(blob);
-            // toolbar=1, scrollbar=1, navpanes=0 typical settings for a cleaner viewer
-            setPdfPreviewUrl(url + '#toolbar=1&navpanes=0&scrollbar=1');
+            // Hide the browser PDF toolbar so the page preview can use more of the modal.
+            setPdfPreviewUrl(url + '#toolbar=0&navpanes=0&scrollbar=0&zoom=page-fit&pagemode=none');
             setIsPdfPreviewOpen(true);
         } catch (err) {
             console.error('Error generating PDF preview:', err);
@@ -783,12 +1181,284 @@ const ManageShootDays = () => {
 
     // --- Import Scenes & Auto-Add Characters Logic ---
 
-    const addCharactersForScene = (sceneNumber, currentCharacters) => {
-        const scene = breakdownScenes.find(s =>
-            s.scene_number === sceneNumber ||
-            s.scene_number?.toString() === sceneNumber ||
-            s.id === sceneNumber
-        );
+    const getSceneIdentity = (sceneNumber, episodeNumber = '') => ({
+        sceneNumber: String(sceneNumber || '').trim(),
+        episodeNumber: String(episodeNumber || '').trim()
+    });
+
+    const resolveScheduleSceneNumber = (schedScene) => {
+        let sceneNum = schedScene?.scene_number;
+
+        if (!sceneNum && schedScene?.scene_id !== undefined && schedScene?.scene_id !== null) {
+            const breakdownByIndex = breakdownScenes[schedScene.scene_id];
+            if (breakdownByIndex) {
+                sceneNum = breakdownByIndex.scene_number;
+            } else {
+                sceneNum = String(schedScene.scene_id);
+            }
+        }
+
+        if (!sceneNum) sceneNum = String(schedScene?.scene_id || '');
+        return String(sceneNum || '').trim();
+    };
+
+    const mapBreakdownCastIds = (breakdown) => {
+        if (!breakdown?.characters) return '';
+
+        const charArray = Array.isArray(breakdown.characters) ? breakdown.characters : String(breakdown.characters).split(',');
+        const castIds = charArray.map(name => {
+            if (!name) return '';
+            const cleanName = String(name).trim().toLowerCase();
+            const found = castList?.find(c => c.character && String(c.character).trim().toLowerCase() === cleanName);
+            return found && found.cast_id ? found.cast_id : String(name).trim();
+        }).filter(id => id !== '')
+            .sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+
+        return castIds.join(', ');
+    };
+
+    const buildImportedScene = (schedScene) => {
+        const sceneNum = resolveScheduleSceneNumber(schedScene);
+        if (!sceneNum) return null;
+
+        const breakdown = findBreakdownScene(sceneNum, schedScene?.episode_number || '');
+
+        return {
+            scene_number: sceneNum,
+            episode_number: schedScene?.episode_number || breakdown?.episode_number || '',
+            int_ext: breakdown?.int_ext || breakdown?.ie || '',
+            day_night: breakdown?.time || breakdown?.day_night || '',
+            description: breakdown?.synopsis || breakdown?.description || '',
+            location: breakdown?.set || breakdown?.location || '',
+            pages: breakdown?.page_eighths || '',
+            cast_ids: mapBreakdownCastIds(breakdown)
+        };
+    };
+
+    const buildSceneFromBreakdown = (sceneNumber, episodeNumber = '', existingScene = {}) => {
+        const breakdown = findBreakdownScene(sceneNumber, episodeNumber);
+        const resolvedSceneNumber = String(sceneNumber || breakdown?.scene_number || '').trim();
+        if (!resolvedSceneNumber) {
+            return {
+                ...existingScene,
+                scene_number: ''
+            };
+        }
+
+        return {
+            ...existingScene,
+            scene_number: resolvedSceneNumber,
+            episode_number: episodeNumber || breakdown?.episode_number || existingScene?.episode_number || '',
+            int_ext: breakdown?.int_ext || breakdown?.ie || existingScene?.int_ext || '',
+            day_night: breakdown?.time || breakdown?.day_night || existingScene?.day_night || '',
+            description: breakdown?.synopsis || breakdown?.description || existingScene?.description || '',
+            location: breakdown?.set || breakdown?.location || existingScene?.location || '',
+            pages: breakdown?.page_eighths || existingScene?.pages || '',
+            cast_ids: mapBreakdownCastIds(breakdown) || existingScene?.cast_ids || '',
+            remarks: existingScene?.remarks || ''
+        };
+    };
+
+    const findExistingSceneIndex = (existingScenes, importedScene) => {
+        const importedIdentity = getSceneIdentity(importedScene?.scene_number, importedScene?.episode_number);
+        if (!importedIdentity.sceneNumber) return -1;
+
+        const exactIndex = existingScenes.findIndex(scene => {
+            const currentIdentity = getSceneIdentity(scene?.scene_number, scene?.episode_number);
+            return currentIdentity.sceneNumber === importedIdentity.sceneNumber &&
+                importedIdentity.episodeNumber &&
+                currentIdentity.episodeNumber === importedIdentity.episodeNumber;
+        });
+
+        if (exactIndex !== -1) return exactIndex;
+
+        return existingScenes.findIndex(scene => {
+            const currentIdentity = getSceneIdentity(scene?.scene_number, scene?.episode_number);
+            return currentIdentity.sceneNumber === importedIdentity.sceneNumber;
+        });
+    };
+
+    const mergeImportedScenesIntoDay = (existingScenes, existingCharacters, scheduleScenes) => {
+        const mergedScenes = [...(existingScenes || [])];
+        let mergedCharacters = [...(existingCharacters || [])];
+        let refreshedCount = 0;
+        let addedCount = 0;
+
+        (scheduleScenes || []).forEach(schedScene => {
+            const importedScene = buildImportedScene(schedScene);
+            if (!importedScene) return;
+
+            const existingIndex = findExistingSceneIndex(mergedScenes, importedScene);
+
+            if (existingIndex !== -1) {
+                const existingScene = mergedScenes[existingIndex];
+                mergedScenes[existingIndex] = {
+                    ...existingScene,
+                    ...importedScene,
+                    _id: existingScene._id || crypto.randomUUID(),
+                    remarks: existingScene?.remarks ?? ''
+                };
+                refreshedCount += 1;
+            } else {
+                mergedScenes.push({
+                    _id: crypto.randomUUID(),
+                    ...importedScene
+                });
+                addedCount += 1;
+            }
+
+            mergedCharacters = addCharactersForScene(
+                importedScene.scene_number,
+                mergedCharacters,
+                importedScene.episode_number
+            );
+        });
+
+        return {
+            scenes: mergedScenes,
+            characters: mergedCharacters,
+            refreshedCount,
+            addedCount
+        };
+    };
+
+    const hasExactBreakdownSceneMatch = (sceneNumber, episodeNumber = '') => {
+        const identity = getSceneIdentity(sceneNumber, episodeNumber);
+        if (!identity.sceneNumber) return false;
+        return !!findBreakdownScene(identity.sceneNumber, identity.episodeNumber);
+    };
+
+    const hasDuplicateSceneNumberInList = (list = [], indexToSkip, sceneNumber) => {
+        const normalizedSceneNumber = String(sceneNumber || '').trim().toLowerCase();
+        if (!normalizedSceneNumber) return false;
+
+        return list.some((scene, idx) => (
+            idx !== indexToSkip &&
+            String(scene?.scene_number || '').trim().toLowerCase() === normalizedSceneNumber
+        ));
+    };
+
+    const hasSceneNumberInList = (list = [], sceneNumber) => {
+        const normalizedSceneNumber = String(sceneNumber || '').trim().toLowerCase();
+        if (!normalizedSceneNumber) return false;
+
+        return list.some(scene => String(scene?.scene_number || '').trim().toLowerCase() === normalizedSceneNumber);
+    };
+
+    const handleManualSceneSelection = (listKey, index, selectedSceneNumber, { finalize = false } = {}) => {
+        const normalizedSceneNumber = String(selectedSceneNumber || '').trim();
+
+        setFormData(prev => {
+            const targetList = [...(prev[listKey] || [])];
+            const existingScene = targetList[index] || { _id: crypto.randomUUID() };
+            const hasDuplicate = hasDuplicateSceneNumberInList(targetList, index, normalizedSceneNumber);
+            const otherListKey = listKey === 'scenes' ? 'advanced_schedule' : 'scenes';
+            const otherList = [...(prev[otherListKey] || [])];
+
+            if (hasDuplicate) {
+                if (finalize && normalizedSceneNumber) {
+                    alert(`Scene ${normalizedSceneNumber} is already added in this list.`);
+                }
+
+                targetList[index] = {
+                    ...existingScene,
+                    scene_number: finalize ? '' : normalizedSceneNumber,
+                    _isSelectingSceneNumber: true
+                };
+
+                return {
+                    ...prev,
+                    [listKey]: targetList
+                };
+            }
+
+            if (finalize && normalizedSceneNumber && listKey === 'advanced_schedule' && hasSceneNumberInList(otherList, normalizedSceneNumber)) {
+                alert(`Scene ${normalizedSceneNumber} is already in Shooting Schedule. You cannot add it to Advance Shooting Schedule.`);
+                targetList[index] = {
+                    ...existingScene,
+                    scene_number: '',
+                    _isSelectingSceneNumber: true
+                };
+
+                return {
+                    ...prev,
+                    [listKey]: targetList
+                };
+            }
+
+            const hasBreakdownMatch = hasExactBreakdownSceneMatch(normalizedSceneNumber, existingScene?.episode_number || '');
+
+            targetList[index] = hasBreakdownMatch
+                ? buildSceneFromBreakdown(
+                    normalizedSceneNumber,
+                    existingScene?.episode_number || '',
+                    existingScene
+                )
+                : {
+                    ...existingScene,
+                    scene_number: normalizedSceneNumber,
+                    _isSelectingSceneNumber: existingScene?._isSelectingSceneNumber ?? true
+                };
+
+            if (finalize && normalizedSceneNumber) {
+                targetList[index] = {
+                    ...targetList[index],
+                    _isSelectingSceneNumber: false
+                };
+            }
+
+            const nextState = {
+                ...prev,
+                [listKey]: targetList
+            };
+
+            if (finalize && normalizedSceneNumber && listKey === 'scenes' && otherList.length > 0) {
+                nextState[otherListKey] = otherList.filter(scene =>
+                    String(scene?.scene_number || '').trim().toLowerCase() !== normalizedSceneNumber.toLowerCase()
+                );
+            }
+
+            if (normalizedSceneNumber && hasBreakdownMatch) {
+                nextState.characters = addCharactersForScene(
+                    normalizedSceneNumber,
+                    prev.characters,
+                    targetList[index]?.episode_number || ''
+                );
+            }
+
+            return nextState;
+        });
+    };
+
+    const handleSceneEpisodeSelection = (listKey, index, selectedEpisodeNumber) => {
+        const normalizedEpisodeNumber = String(selectedEpisodeNumber || '').trim();
+
+        setFormData(prev => {
+            const targetList = [...(prev[listKey] || [])];
+            const existingScene = targetList[index] || { _id: crypto.randomUUID() };
+
+            targetList[index] = {
+                ...existingScene,
+                episode_number: normalizedEpisodeNumber,
+                scene_number: '',
+                int_ext: '',
+                day_night: '',
+                description: '',
+                location: '',
+                pages: '',
+                cast_ids: '',
+                _isSelectingSceneNumber: true
+            };
+
+            return {
+                ...prev,
+                [listKey]: targetList
+            };
+        });
+    };
+
+    const addCharactersForScene = (sceneNumber, currentCharacters, episodeNumber = '') => {
+        const scene = findBreakdownScene(sceneNumber, episodeNumber) || breakdownScenes.find(s => s.id === sceneNumber);
         if (!scene || !scene.characters) return currentCharacters;
 
         let newCharacters = [...currentCharacters];
@@ -840,8 +1510,6 @@ const ManageShootDays = () => {
             }
         });
 
-        const removedCast = removedSceneCastIds.split(',').map(id => id.trim().toLowerCase()).filter(id => id);
-
         return currentCharacters.filter(char => {
             const name = char.character_name?.toLowerCase().trim();
             const rawId = (char.character_id || getCastId(char.character_name))?.toString().trim();
@@ -861,6 +1529,65 @@ const ManageShootDays = () => {
         });
     };
 
+    const isCharacterPresentInScheduledScenes = (character, scenes = [], advanceSchedule = []) => {
+        const normalizedName = String(character?.character_name || '').trim().toLowerCase();
+        const resolvedCharacterId = String(character?.character_id || getCastId(character?.character_name) || '').trim();
+        const normalizedCharacterId = resolvedCharacterId && resolvedCharacterId !== '-' ? resolvedCharacterId.toLowerCase() : '';
+
+        if (!normalizedName && !normalizedCharacterId) return false;
+
+        return [...scenes, ...advanceSchedule].some(scene => {
+            if (!scene?.cast_ids) return false;
+
+            return String(scene.cast_ids)
+                .split(',')
+                .map(castIdentity => castIdentity.trim().toLowerCase())
+                .filter(Boolean)
+                .some(castIdentity => castIdentity === normalizedName || (normalizedCharacterId && castIdentity === normalizedCharacterId));
+        });
+    };
+
+    const handleRemoveCharacter = (characterIndex) => {
+        const characterToRemove = formData.characters?.[characterIndex];
+        if (!characterToRemove) return;
+
+        const isReferencedInScenes = isCharacterPresentInScheduledScenes(
+            characterToRemove,
+            formData.scenes || [],
+            formData.advanced_schedule || []
+        );
+
+        if (isReferencedInScenes) {
+            const shouldProceed = window.confirm("he's there in the scenes, still wanna proceed?");
+            if (!shouldProceed) return;
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            characters: prev.characters.filter((_, i) => i !== characterIndex)
+        }));
+    };
+
+    const getScheduledScenesForDate = async (targetDate) => {
+        if (!targetDate) return [];
+
+        for (const sched of schedules) {
+            const res = await fetch(getApiUrl(`/api/${id}/schedule/${sched.id}`));
+            if (!res.ok) continue;
+
+            const fullSched = await res.json();
+            const scheduleByDay = fullSched.schedule?.schedule_by_day;
+            if (!scheduleByDay) continue;
+
+            const matchedDay = Object.values(scheduleByDay).find(daySched => daySched.date === targetDate);
+            if (matchedDay?.scenes?.length) {
+                return matchedDay.scenes;
+            }
+        }
+
+        return [];
+    };
+
 
     const handleImportSchedule = async () => {
         if (!formData.date && !formData.day_number) {
@@ -873,96 +1600,19 @@ const ManageShootDays = () => {
 
         setIsImporting(true);
         try {
-            let foundScenes = [];
-
-            // Iterate through available schedules to find matching date
-            for (const sched of schedules) {
-                // Fetch full schedule details
-                const res = await fetch(getApiUrl(`/api/${id}/schedule/${sched.id}`));
-                if (res.ok) {
-                    const fullSched = await res.json();
-                    const scheduleByDay = fullSched.schedule?.schedule_by_day;
-
-                    if (scheduleByDay) {
-                        // Check each day in the schedule
-                        Object.values(scheduleByDay).forEach(daySched => {
-                            // Match by Date
-                            if (daySched.date === formData.date) {
-                                foundScenes = daySched.scenes || [];
-                            }
-                            // Fallback: Match by Day Number (if date is missing in formData)
-                            // Note: scheduleByDay keys are usually '1', '2' etc.
-                        });
-                    }
-                }
-                if (foundScenes.length > 0) break; // Stop if found
-            }
+            const foundScenes = await getScheduledScenesForDate(formData.date);
 
             if (foundScenes.length === 0) {
                 alert("No scenes found in any schedule for this date.");
-                setIsImporting(false);
                 return;
             }
 
-            // Process found scenes
-            let updatedScenes = [...formData.scenes];
-            let updatedCharacters = [...formData.characters];
-
-            foundScenes.forEach(schedScene => {
-                // Fix off-by-one: Check if scene_number exists, otherwise use scene_id + 1 if it looks like an index
-                let sceneNum = schedScene.scene_number;
-                if (!sceneNum && (schedScene.scene_id !== undefined && schedScene.scene_id !== null)) {
-                    // If we only have scene_id, it might be an index.
-                    // However, usually scene_number is the string "1", "1A", etc.
-                    // If scene_id is an integer, it might be the index.
-                    // Let's try to find the match in breakdown first using scene_id as index if valid
-                    const breakdownByIndex = breakdownScenes[schedScene.scene_id];
-                    if (breakdownByIndex) {
-                        sceneNum = breakdownByIndex.scene_number;
-                    } else {
-                        sceneNum = String(schedScene.scene_id);
-                    }
-                }
-
-                // Final fallback if still empty
-                if (!sceneNum) sceneNum = String(schedScene.scene_id || '');
-
-                // Check if scene already exists
-                if (!updatedScenes.some(s => s.scene_number === sceneNum)) {
-                    // Get details from breakdown
-                    const breakdown = breakdownScenes.find(s => s.scene_number === sceneNum || s.scene_number?.toString() === sceneNum);
-
-                    // Map Cast Names to IDs
-                    let castIdsStr = '';
-                    if (breakdown?.characters) {
-                        const charArray = Array.isArray(breakdown.characters) ? breakdown.characters : String(breakdown.characters).split(',');
-                        const castIds = charArray.map(name => {
-                            if (!name) return '';
-                            const cleanName = String(name).trim().toLowerCase();
-                            const found = castList?.find(c => c.character && String(c.character).trim().toLowerCase() === cleanName);
-                            return found && found.cast_id ? found.cast_id : String(name).trim();
-                        }).filter(id => id !== '')
-                            .sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
-                        castIdsStr = castIds.join(', ');
-                    }
-
-                    updatedScenes.push({
-                        _id: crypto.randomUUID(), // Add _id for new scenes
-                        scene_number: sceneNum,
-                        int_ext: breakdown?.int_ext || breakdown?.ie || '',
-                        day_night: breakdown?.time || breakdown?.day_night || '',
-                        description: breakdown?.synopsis || breakdown?.description || '',
-                        // Map Set/Location from breakdown to Location field
-                        location: breakdown?.set || breakdown?.location || '',
-                        // set: breakdown?.set || breakdown?.location || '', // No longer using set
-                        pages: breakdown?.page_eighths || '',
-                        cast_ids: castIdsStr
-                    });
-
-                    // Auto-add characters
-                    updatedCharacters = addCharactersForScene(sceneNum, updatedCharacters);
-                }
-            });
+            const {
+                scenes: updatedScenes,
+                characters: updatedCharacters,
+                refreshedCount,
+                addedCount
+            } = mergeImportedScenesIntoDay(formData.scenes, formData.characters, foundScenes);
 
             setFormData(prev => ({
                 ...prev,
@@ -970,7 +1620,7 @@ const ManageShootDays = () => {
                 characters: updatedCharacters
             }));
 
-            alert(`Imported ${foundScenes.length} scenes and updated character list.`);
+            alert(`Imported ${foundScenes.length} schedule scenes. Added ${addedCount} new scene(s) and refreshed ${refreshedCount} existing scene(s).`);
 
         } catch (e) {
             console.error(e);
@@ -1017,43 +1667,53 @@ const ManageShootDays = () => {
         verifyDate();
     }, [formData.date, schedules]);
 
-
+    useEffect(() => {
+        if (!isEditingShootDate.current) {
+            setShootDateDisplay(formatDateDMY(formData.date || ''));
+        }
+    }, [formData.date, formatDateDMY]);
 
     // ... (renderGeneralInfo update)
-    const checkWordLimit = (text, limit) => {
-        const words = text ? text.trim().split(/\s+/) : [];
-        return words.length <= limit;
+    const checkCharLimit = (text, limit) => {
+        const chars = text ? text.length : 0;
+        return chars <= limit;
     };
 
     const renderGeneralInfo = () => (
         <div className="msd-section">
             <div className="msd-section-header"><PiCalendar /> General Information</div>
             <div className="msd-grid-2">
-                <label className="msd-label">Shoot Date <input type="date" className="msd-input" value={formData.date || ''} onChange={e => setFormData({ ...formData, date: e.target.value })} /></label>
-                <label className="msd-label">Shoot Day # <input type="number" className="msd-input" value={formData.day_number || ''} onChange={e => setFormData({ ...formData, day_number: parseInt(e.target.value) })} /></label>
+                <div className="msd-label msd-label--static-row">
+                    <span>Shoot Date</span>
+                    <div className="msd-static-value">{shootDateDisplay || '-'}</div>
+                </div>
+                <div className="msd-label msd-label--static-row">
+                    <span>Shoot Day #</span>
+                    <div className="msd-static-value">{formData.day_number || '-'}</div>
+                </div>
 
-                <label className="msd-label">Shift Start <TimePicker value={formData.shift_start || ''} onChange={v => setFormData({ ...formData, shift_start: v })} /></label>
-                <label className="msd-label">Shift End <TimePicker value={formData.shift_end || ''} onChange={v => setFormData({ ...formData, shift_end: v })} /></label>
-                <label className="msd-label">Crew Call <TimePicker value={formData.crew_call || ''} onChange={v => setFormData({ ...formData, crew_call: v })} /></label>
-                <label className="msd-label">Shoot Call <TimePicker value={formData.shoot_call || ''} onChange={v => setFormData({ ...formData, shoot_call: v })} /></label>
-                <label className="msd-label">Est. Wrap <TimePicker value={formData.estimated_wrap || ''} onChange={v => setFormData({ ...formData, estimated_wrap: v })} /></label>
+                <div className="msd-label msd-label--time" data-preview-target="shift-start"><span>Shift Start</span><TimePicker value={formData.shift_start || ''} onChange={v => setFormData({ ...formData, shift_start: v })} /></div>
+                <div className="msd-label msd-label--time" data-preview-target="shift-end"><span>Shift End</span><TimePicker value={formData.shift_end || ''} onChange={v => setFormData({ ...formData, shift_end: v })} /></div>
+                <div className="msd-label msd-label--time" data-preview-target="time-crew-call"><span>Crew Call</span><TimePicker value={formData.crew_call || ''} onChange={v => setFormData({ ...formData, crew_call: v })} /></div>
+                <div className="msd-label msd-label--time" data-preview-target="time-shooting-call"><span>Shoot Call</span><TimePicker value={formData.shoot_call || ''} onChange={v => setFormData({ ...formData, shoot_call: v })} /></div>
+                <div className="msd-label msd-label--time" data-preview-target="time-est-wrap"><span>Est. Wrap</span><TimePicker value={formData.estimated_wrap || ''} onChange={v => setFormData({ ...formData, estimated_wrap: v })} /></div>
             </div>
 
             <div className="msd-grid-3" style={{ marginTop: 10 }}>
-                Quote of the Day <span style={{ fontSize: '0.8em', color: '#666' }}>(Max 20 words)</span>
-                <div style={{ position: 'relative' }}>
-                    <input
-                        type="text"
-                        className="msd-input"
+                Quote of the Day <span style={{ fontSize: '0.8em', color: '#666' }}>(Max 26 chars)</span>
+                <div style={{ position: 'relative' }} data-preview-target="quote" data-preview-focus-mode="debounced">
+                    <textarea
+                        className="msd-input msd-input-wrap"
+                        rows={2}
                         value={formData.quote || ''}
                         onChange={e => {
-                            if (checkWordLimit(e.target.value, 20)) {
+                            if (checkCharLimit(e.target.value, 26)) {
                                 setFormData({ ...formData, quote: e.target.value });
                             }
                         }}
-                    />
+                    ></textarea>
                     <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: '#999' }}>
-                        {(formData.quote?.trim().split(/\s+/).filter(w => w).length || 0)}/20
+                        {(formData.quote?.length || 0)}/26
                     </span>
                 </div>
             </div>
@@ -1061,33 +1721,48 @@ const ManageShootDays = () => {
     );
 
     const renderMeals = () => (
-        <div className="msd-section">
+        <div className="msd-section" data-preview-target="time-weather">
             <div className="msd-section-header"><PiClock /> Meals</div>
             <div className="msd-grid-4">
-                <label className="msd-label">Breakfast <TimePicker value={formData.meals.breakfast || ''} onChange={v => setFormData({ ...formData, meals: { ...formData.meals, breakfast: v } })} /></label>
-                <label className="msd-label">Lunch <TimePicker value={formData.meals.lunch || ''} onChange={v => setFormData({ ...formData, meals: { ...formData.meals, lunch: v } })} /></label>
-                <label className="msd-label">Snacks <TimePicker value={formData.meals.snacks || ''} onChange={v => setFormData({ ...formData, meals: { ...formData.meals, snacks: v } })} /></label>
-                <label className="msd-label">Dinner <TimePicker value={formData.meals.dinner || ''} onChange={v => setFormData({ ...formData, meals: { ...formData.meals, dinner: v } })} /></label>
+                <div className="msd-label msd-label--time" data-preview-target="time-breakfast"><span>Breakfast</span><TimePicker value={formData.meals.breakfast || ''} onChange={v => setFormData({ ...formData, meals: { ...formData.meals, breakfast: v } })} /></div>
+                <div className="msd-label msd-label--time" data-preview-target="time-lunch"><span>Lunch</span><TimePicker value={formData.meals.lunch || ''} onChange={v => setFormData({ ...formData, meals: { ...formData.meals, lunch: v } })} /></div>
+                <div className="msd-label msd-label--time" data-preview-target="time-snacks"><span>Snacks</span><TimePicker value={formData.meals.snacks || ''} onChange={v => setFormData({ ...formData, meals: { ...formData.meals, snacks: v } })} /></div>
+                <div className="msd-label msd-label--time" data-preview-target="time-dinner"><span>Dinner</span><TimePicker value={formData.meals.dinner || ''} onChange={v => setFormData({ ...formData, meals: { ...formData.meals, dinner: v } })} /></div>
             </div>
         </div>
     );
 
+    const getInstructionLines = () => (
+        Array.isArray(formData.location_details.instructions)
+            ? formData.location_details.instructions
+            : [formData.location_details.instructions || '']
+    );
+
     const renderLocation = () => (
-        <div className="msd-section">
-            <div className="msd-section-header"><PiMapPin /> Location & Safety</div>
-            <label className="msd-label">Set Name <input type="text" className="msd-input" value={formData.location_details.set_name || ''} onChange={e => setFormData({ ...formData, location_details: { ...formData.location_details, set_name: e.target.value } })} /></label>
-            <label className="msd-label">Address / Pin
+        <div className="msd-section" data-preview-target="location-panel" data-preview-focus-mode="debounced">
+            <div className="msd-section-header"><PiMapPin /> Location</div>
+            <label className="msd-label" data-preview-target="location-set-name" data-preview-focus-mode="debounced">Set Name <input type="text" className="msd-input" value={formData.location_details.set_name || ''} onChange={e => setFormData({ ...formData, location_details: { ...formData.location_details, set_name: e.target.value } })} /></label>
+            <label className="msd-label" data-preview-target="location-address" data-preview-focus-mode="debounced">Address / Pin
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
                     <input
                         type="text"
                         className="msd-input"
                         value={formData.location_details.address || ''}
                         onChange={e => {
+                            isAddressInputActiveRef.current = true;
                             setFormData({ ...formData, location_details: { ...formData.location_details, address: e.target.value } });
                             setShowSuggestions(true);
                         }}
-                        onFocus={() => setShowSuggestions(true)}
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                        onFocus={() => {
+                            isAddressInputActiveRef.current = true;
+                            setShowSuggestions(true);
+                        }}
+                        onBlur={() => {
+                            window.setTimeout(() => {
+                                isAddressInputActiveRef.current = false;
+                                setShowSuggestions(false);
+                            }, 200);
+                        }}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                                 e.preventDefault();
@@ -1127,55 +1802,48 @@ const ManageShootDays = () => {
             </div>
 
             <div style={{ marginTop: '10px' }}>
-                <label className="msd-label">Contact Phone <input type="text" className="msd-input" value={formData.location_details.contact_phone || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.contact_phone', e.target.value))} /></label>
+                <label className="msd-label" data-preview-target="location-contact-phone" data-preview-focus-mode="debounced">Contact Phone <input type="tel" className="msd-input" value={formData.location_details.contact_phone || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.contact_phone', sanitizePhoneInput(e.target.value)))} /></label>
             </div>
 
             <div className="msd-sub-header"><PiFirstAid /> Nearest Hospital</div>
             <div className="msd-grid-2">
-                <label className="msd-label">Name <input type="text" className="msd-input" value={formData.location_details.hospital.name || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.hospital.name', e.target.value))} /></label>
-                <label className="msd-label">Location <input type="text" className="msd-input" value={formData.location_details.hospital.loc || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.hospital.loc', e.target.value))} /></label>
+                <label className="msd-label" data-preview-target="hospital-name" data-preview-focus-mode="debounced">Name <input type="text" className="msd-input" value={formData.location_details.hospital.name || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.hospital.name', e.target.value))} /></label>
+                <label className="msd-label" data-preview-target="hospital-location" data-preview-focus-mode="debounced">Location <input type="text" className="msd-input" value={formData.location_details.hospital.loc || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.hospital.loc', e.target.value))} /></label>
             </div>
 
-            <div className="msd-sub-header">Emergency Contact</div>
-            <div className="msd-grid-2">
-                <label className="msd-label">Name <input type="text" className="msd-input" value={formData.location_details.emergency.name || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.emergency.name', e.target.value))} /></label>
-                <label className="msd-label">Phone <input type="text" className="msd-input" value={formData.location_details.emergency.phone || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.emergency.phone', e.target.value))} /></label>
-            </div>
+        </div>
+    );
 
-            <div className="msd-sub-header">🛡️ Safety Hotline</div>
-            <div className="msd-grid-2">
-                <label className="msd-label">Name <input type="text" className="msd-input" value={formData.location_details.safety_hotline.name || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.safety_hotline.name', e.target.value))} placeholder="e.g., Safe Set Hotline" /></label>
-                <label className="msd-label">Phone <input type="text" className="msd-input" value={formData.location_details.safety_hotline.phone || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.safety_hotline.phone', e.target.value))} placeholder="e.g., (555) 123-4567" /></label>
-            </div>
-
+    const renderGeneralInstructionsSection = () => (
+        <div className="msd-section" data-preview-target="instructions-strip" data-preview-focus-mode="debounced">
+            <div className="msd-section-header"><PiList /> General Instructions</div>
             <label className="msd-label">
-                General Instructions <span style={{ fontSize: '0.8em', color: '#666' }}>(Max 60 words total)</span>
+                General Instructions <span style={{ fontSize: '0.8em', color: '#666' }}>(Max 180 chars total)</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {(Array.isArray(formData.location_details.instructions) ? formData.location_details.instructions : [formData.location_details.instructions || '']).map((instruction, idx) => (
+                    {getInstructionLines().map((instruction, idx) => (
                         <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            <input
-                                type="text"
-                                className="msd-input"
+                            <textarea
+                                className="msd-input msd-input-wrap"
+                                rows={2}
                                 value={instruction}
                                 onChange={e => {
-                                    const newInstructions = [...(Array.isArray(formData.location_details.instructions) ? formData.location_details.instructions : [formData.location_details.instructions || ''])];
+                                    const newInstructions = [...getInstructionLines()];
                                     const oldVal = newInstructions[idx];
                                     newInstructions[idx] = e.target.value;
 
-                                    // Check total word limit
-                                    const totalWords = newInstructions.join(' ').trim().split(/\s+/).filter(w => w.length > 0).length;
-                                    const currentWords = oldVal.trim().split(/\s+/).filter(w => w.length > 0).length;
-                                    const newWords = e.target.value.trim().split(/\s+/).filter(w => w.length > 0).length;
+                                    const totalChars = newInstructions.join(' ').length;
+                                    const currentChars = oldVal.length;
+                                    const newChars = e.target.value.length;
 
-                                    if (totalWords <= 60 || newWords < currentWords) {
+                                    if (totalChars <= 180 || newChars < currentChars) {
                                         setFormData(p => updateNested(p, 'location_details.instructions', newInstructions));
                                     }
                                 }}
                                 placeholder={`Instruction line ${idx + 1}`}
-                            />
+                            ></textarea>
                             <button
                                 onClick={() => {
-                                    const newInstructions = [...(Array.isArray(formData.location_details.instructions) ? formData.location_details.instructions : [formData.location_details.instructions || ''])];
+                                    const newInstructions = [...getInstructionLines()];
                                     newInstructions.splice(idx, 1);
                                     setFormData(p => updateNested(p, 'location_details.instructions', newInstructions));
                                 }}
@@ -1188,7 +1856,7 @@ const ManageShootDays = () => {
                     ))}
                     <button
                         onClick={() => {
-                            const newInstructions = [...(Array.isArray(formData.location_details.instructions) ? formData.location_details.instructions : [formData.location_details.instructions || ''])];
+                            const newInstructions = [...getInstructionLines()];
                             newInstructions.push('');
                             setFormData(p => updateNested(p, 'location_details.instructions', newInstructions));
                         }}
@@ -1198,30 +1866,45 @@ const ManageShootDays = () => {
                         <PiPlus /> Add Line
                     </button>
                     <span style={{ fontSize: '11px', color: '#999', alignSelf: 'flex-end' }}>
-                        {(Array.isArray(formData.location_details.instructions) ? formData.location_details.instructions : [formData.location_details.instructions || '']).join(' ').trim().split(/\s+/).filter(w => w).length}/60 words
+                        {getInstructionLines().join(' ').length}/180 chars
                     </span>
                 </div>
             </label>
+        </div>
+    );
 
-            <label className="msd-label" style={{ marginTop: '10px' }}>
-                Attention <span style={{ fontSize: '0.8em', color: '#666' }}>(Max 30 words)</span>
+    const renderAttentionSection = () => (
+        <div className="msd-section" data-preview-target="attention-block" data-preview-focus-mode="debounced">
+            <div className="msd-section-header"><PiMegaphoneBold /> Attention</div>
+            <label className="msd-label">
+                Attention <span style={{ fontSize: '0.8em', color: '#666' }}>(Max 180 chars)</span>
                 <div style={{ position: 'relative' }}>
-                    <input
-                        type="text"
-                        className="msd-input"
+                    <textarea
+                        className="msd-input msd-input-wrap"
+                        rows={2}
                         value={formData.attention || ''}
                         onChange={e => {
-                            if (checkWordLimit(e.target.value, 30)) {
+                            if (checkCharLimit(e.target.value, 180)) {
                                 setFormData({ ...formData, attention: e.target.value });
                             }
                         }}
                         placeholder="Important Notice..."
-                    />
+                    ></textarea>
                     <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: '#999' }}>
-                        {(formData.attention?.trim().split(/\s+/).filter(w => w).length || 0)}/30
+                        {(formData.attention?.length || 0)}/180
                     </span>
                 </div>
             </label>
+        </div>
+    );
+
+    const renderSafetyHotlineSection = () => (
+        <div className="msd-section" data-preview-target="safety-hotline" data-preview-focus-mode="debounced">
+            <div className="msd-section-header">🛡️ Safety Hotline</div>
+            <div className="msd-grid-2">
+                <label className="msd-label" data-preview-target="safety-hotline-name" data-preview-focus-mode="debounced">Name <input type="text" className="msd-input" value={formData.location_details.safety_hotline.name || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.safety_hotline.name', e.target.value))} placeholder="e.g., Safe Set Hotline" /></label>
+                <label className="msd-label" data-preview-target="safety-hotline-phone" data-preview-focus-mode="debounced">Phone <input type="text" className="msd-input" value={formData.location_details.safety_hotline.phone || ''} onChange={e => setFormData(p => updateNested(p, 'location_details.safety_hotline.phone', e.target.value))} placeholder="e.g., (555) 123-4567" /></label>
+            </div>
         </div>
     );
 
@@ -1259,7 +1942,7 @@ const ManageShootDays = () => {
     };
 
     const renderUsefulContactsSection = () => (
-        <div className="msd-section">
+        <div className="msd-section" data-preview-target="useful-contacts" data-preview-focus-mode="debounced">
             <div className="msd-section-header" style={{ justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><PiUsersThree /> Useful Contacts (Call Sheet Preview)</div>
                 <button
@@ -1278,11 +1961,14 @@ const ManageShootDays = () => {
                 </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: formData.useful_contacts?.length > 0 ? '10px' : '0' }}>
-                {(formData.useful_contacts || []).map((contact, idx) => (
+                {(formData.useful_contacts || []).map((contact, idx) => {
+                    const previewKey = buildContactPreviewKey(contact, idx);
+                    return (
                     <div key={contact.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 30px', gap: '8px', alignItems: 'center' }}>
                         <input
                             type="text"
                             className="msd-input"
+                            data-preview-target={`useful-contact:${previewKey}`}
                             placeholder="Role (e.g. Producer)"
                             value={contact.role}
                             onChange={e => {
@@ -1294,6 +1980,7 @@ const ManageShootDays = () => {
                         <input
                             type="text"
                             className="msd-input"
+                            data-preview-target={`useful-contact:${previewKey}`}
                             placeholder="Name"
                             value={contact.name}
                             onChange={e => {
@@ -1305,6 +1992,7 @@ const ManageShootDays = () => {
                         <input
                             type="text"
                             className="msd-input"
+                            data-preview-target={`useful-contact:${previewKey}`}
                             placeholder="Phone"
                             value={contact.phone}
                             onChange={e => {
@@ -1324,7 +2012,8 @@ const ManageShootDays = () => {
                             <PiTrash />
                         </button>
                     </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
@@ -1333,30 +2022,28 @@ const ManageShootDays = () => {
     const renderScenes = () => (
 
 
-        <div className="msd-section">
+        <div className="msd-section" data-preview-target="today-schedule" data-preview-focus-mode="debounced">
             <div className="msd-section-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><PiList /> Shooting Schedule (Scenes)</div>
             </div>
-            <datalist id="scene-numbers">
-                {breakdownScenes.map(s => (
-                    <option key={s.id || s.scene_number} value={s.scene_number} />
-                ))}
-            </datalist>
             <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragEnd={(e) => handleDragEnd(e, 'main')}
             >
+                {(() => {
+                    const showEpisodeColumn = isEpisodicProject || hasEpisodeColumn(formData.scenes || []);
+                    const episodeOptions = getEpisodeOptions();
+                    return (
                 <table className="msd-table">
                     <thead>
                         <tr>
                             <th style={{ width: '30px' }}></th>
+                            {showEpisodeColumn && <th style={{ width: '50px', textAlign: 'center' }}>EP</th>}
                             <th style={{ width: '50px', textAlign: 'center' }}>Scene</th>
-                            <th style={{ width: '60px' }}>Int/Ext</th>
-                            <th style={{ width: '30%' }}>Location / Set</th>
-                            <th style={{ width: '25%' }}>Desc</th>
-                            <th style={{ width: '70px', textAlign: 'center' }}>Day/Night</th>
+                            <th style={{ width: '42%' }}>Sets and Description</th>
                             <th style={{ width: '70px', textAlign: 'center' }}>Cast ID</th>
+                            <th style={{ width: '70px', textAlign: 'center' }}>Day/Night</th>
                             <th style={{ width: '60px', textAlign: 'center' }}>Pages</th>
                             <th style={{ width: '15%' }}>Remarks</th>
                             <th style={{ width: '50px', textAlign: 'center' }}>Action</th>
@@ -1367,7 +2054,12 @@ const ManageShootDays = () => {
                             items={(formData.scenes || []).map(s => s._id)}
                             strategy={verticalListSortingStrategy}
                         >
-                            {formData.scenes.map((scene, idx) => (
+                            {formData.scenes.map((scene, idx) => {
+                                const previewKey = buildScenePreviewKey(scene, idx);
+                                const isSceneNumberEditable = scene._isSelectingSceneNumber || !scene.scene_number;
+                                const { summary, description } = formatSceneSetDescription(scene);
+                                const sceneOptions = getSceneOptionsForEpisode(scene.episode_number || '');
+                                return (
                                 <SortableRow key={scene._id} data-row-key={scene._id}>
                                     <td key="drag-handle" style={{ textAlign: 'center', cursor: 'grab', verticalAlign: 'middle', padding: '0 4px' }}>
                                         <span style={{
@@ -1381,80 +2073,96 @@ const ManageShootDays = () => {
                                             <PiDotsSixVertical />
                                         </span>
                                     </td>
-                                    <td>
-                                        <input
-                                            list="scene-numbers"
-                                            type="text"
-                                            className="msd-td-input"
-                                            value={scene.scene_number || ''}
-                                            onChange={e => {
-                                                const val = e.target.value;
-                                                const newScenes = [...formData.scenes];
-                                                newScenes[idx].scene_number = val;
-
-                                                // Duplicate Check (Same Schedule)
-                                                if (formData.scenes.some((s, i) => i !== idx && s.scene_number === val)) {
-                                                    alert(`Scene ${val} is already in the Main Shooting Schedule!`);
-                                                    newScenes[idx].scene_number = ''; // Clear duplicate
-                                                    setFormData({ ...formData, scenes: newScenes });
-                                                    return;
-                                                }
-
-                                                // Overlap Check (Main vs Advance)
-                                                let filteredAdvance = formData.advanced_schedule || [];
-                                                if (filteredAdvance.some(s => s.scene_number === val)) {
-                                                    filteredAdvance = filteredAdvance.filter(s => s.scene_number !== val);
-                                                }
-
-                                                // Auto-fill logic
-                                                const match = breakdownScenes.find(s => s.scene_number === val || s.scene_number?.toString() === val);
-                                                if (match) {
-                                                    newScenes[idx].int_ext = match.int_ext || match.ie || '';
-                                                    // Map Breakdown Location/Set to Scene Location
-                                                    newScenes[idx].location = match.set || match.location || '';
-                                                    // newScenes[idx].set = ...; // No longer using 'set' field
-                                                    newScenes[idx].day_night = match.time || match.day_night || '';
-                                                    newScenes[idx].description = match.synopsis || match.description || '';
-                                                    newScenes[idx].pages = match.page_eighths || '';
-                                                    if (match.characters) {
-                                                        // Map character names to Cast IDs
-                                                        const charArray = Array.isArray(match.characters) ? match.characters : String(match.characters).split(',');
-                                                        const ids = charArray.map(name => {
-                                                            if (!name) return '';
-                                                            const cleanName = String(name).trim().toLowerCase();
-                                                            const found = castList?.find(c => c.character && String(c.character).trim().toLowerCase() === cleanName);
-                                                            return found && found.cast_id ? found.cast_id : String(name).trim();
-                                                        }).filter(id => id !== '')
-                                                            .sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
-                                                        newScenes[idx].cast_ids = ids.join(', ');
+                                    {showEpisodeColumn && (
+                                        <td
+                                            style={{ textAlign: 'center', verticalAlign: 'middle' }}
+                                            data-preview-target={`scene-cell:main:${previewKey}:episode_number`}
+                                        >
+                                            {isSceneNumberEditable ? (
+                                                <select
+                                                    className="msd-td-input-center"
+                                                    value={scene.episode_number || ''}
+                                                    onChange={e => handleSceneEpisodeSelection('scenes', idx, e.target.value)}
+                                                >
+                                                    <option value="">EP</option>
+                                                    {episodeOptions.map((episodeNumber) => (
+                                                        <option key={episodeNumber} value={episodeNumber}>{episodeNumber}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <div className="msd-td-display msd-td-display-center">{scene.episode_number || '-'}</div>
+                                            )}
+                                        </td>
+                                    )}
+                                    <td
+                                        data-preview-target={`scene-cell:main:${previewKey}:scene_number`}
+                                        style={{ textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', whiteSpace: 'nowrap' }}
+                                    >
+                                        {isSceneNumberEditable && showEpisodeColumn ? (
+                                            <select
+                                                className="msd-td-input-center"
+                                                value={scene.scene_number || ''}
+                                                onChange={e => handleManualSceneSelection('scenes', idx, e.target.value, { finalize: true })}
+                                                disabled={!String(scene.episode_number || '').trim()}
+                                            >
+                                                <option value="">{String(scene.episode_number || '').trim() ? 'Select Scene' : 'Select EP first'}</option>
+                                                {sceneOptions.map((sceneNumber) => (
+                                                    <option key={`${scene.episode_number || 'ep'}-${sceneNumber}`} value={sceneNumber}>{sceneNumber}</option>
+                                                ))}
+                                            </select>
+                                        ) : isSceneNumberEditable ? (
+                                            <input
+                                                type="text"
+                                                list="available-scenes-list"
+                                                className="msd-td-input-center"
+                                                value={scene.scene_number || ''}
+                                                placeholder="Scene"
+                                                onChange={e => handleManualSceneSelection('scenes', idx, e.target.value)}
+                                                onBlur={e => handleManualSceneSelection('scenes', idx, e.target.value, { finalize: true })}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        e.currentTarget.blur();
                                                     }
-                                                }
-
-                                                let newFormData = { ...formData, scenes: newScenes, advanced_schedule: filteredAdvance };
-
-                                                // Auto-add characters to list if match found
-                                                if (match && val) {
-                                                    newFormData.characters = addCharactersForScene(val, newFormData.characters);
-                                                }
-
-                                                setFormData(newFormData);
-                                            }}
-                                            placeholder="No."
-                                        />
+                                                }}
+                                            />
+                                        ) : (
+                                            scene.scene_number || '-'
+                                        )}
                                     </td>
-                                    <td><input type="text" className="msd-td-input" value={scene.int_ext || ''} onChange={e => { const newScenes = [...formData.scenes]; newScenes[idx].int_ext = e.target.value; setFormData({ ...formData, scenes: newScenes }); }} /></td>
-                                    <td><textarea className="msd-td-textarea" value={scene.location || ''} onChange={e => { const newScenes = [...formData.scenes]; newScenes[idx].location = e.target.value; setFormData({ ...formData, scenes: newScenes }); }} /></td>
-                                    <td><textarea className="msd-td-textarea" value={scene.description || ''} onChange={e => { const newScenes = [...formData.scenes]; newScenes[idx].description = e.target.value; setFormData({ ...formData, scenes: newScenes }); }} /></td>
-                                    <td><input type="text" className="msd-td-input-center" value={scene.day_night || ''} onChange={e => { const newScenes = [...formData.scenes]; newScenes[idx].day_night = e.target.value; setFormData({ ...formData, scenes: newScenes }); }} /></td>
-                                    <td><textarea className="msd-td-textarea-center" value={scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : ''} onChange={e => {
-                                        const val = e.target.value;
-                                        const newScenes = [...formData.scenes];
-                                        newScenes[idx].cast_ids = val;
-                                        const updatedCharacters = pruneCharactersAfterRemoval(null, newScenes, formData.advanced_schedule || [], formData.characters);
-                                        setFormData({ ...formData, scenes: newScenes, characters: updatedCharacters });
-                                    }} /></td>
-                                    <td><textarea className="msd-td-textarea-center" value={scene.pages || ''} onChange={e => { const newScenes = [...formData.scenes]; newScenes[idx].pages = e.target.value; setFormData({ ...formData, scenes: newScenes }); }} /></td>
-                                    <td><textarea className="msd-td-textarea" value={scene.remarks || ''} onChange={e => { const newScenes = [...formData.scenes]; newScenes[idx].remarks = e.target.value; setFormData({ ...formData, scenes: newScenes }); }} /></td>
+                                    <td className="msd-scene-setdesc-cell">
+                                        <div
+                                            className="msd-scene-setdesc-summary"
+                                            data-preview-target={`scene-cell:main:${previewKey}:location`}
+                                        >
+                                            {summary || '-'}
+                                        </div>
+                                        <div
+                                            className="msd-scene-setdesc-description"
+                                            data-preview-target={`scene-cell:main:${previewKey}:description`}
+                                        >
+                                            {description || '-'}
+                                        </div>
+                                    </td>
+                                    <td
+                                        className="msd-td-display msd-td-display-center"
+                                        data-preview-target={`scene-cell:main:${previewKey}:cast_ids`}
+                                    >
+                                        {scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : '-'}
+                                    </td>
+                                    <td
+                                        className="msd-td-display msd-td-display-center"
+                                        data-preview-target={`scene-cell:main:${previewKey}:day_night`}
+                                    >
+                                        {scene.day_night || '-'}
+                                    </td>
+                                    <td
+                                        className="msd-td-display msd-td-display-center"
+                                        data-preview-target={`scene-cell:main:${previewKey}:pages`}
+                                    >
+                                        {scene.pages || '-'}
+                                    </td>
+                                    <td data-preview-target={`scene-cell:main:${previewKey}:remarks`}><textarea className="msd-td-textarea" value={scene.remarks || ''} onChange={e => { const newScenes = [...formData.scenes]; newScenes[idx].remarks = e.target.value; setFormData({ ...formData, scenes: newScenes }); }} /></td>
                                     <td style={{ textAlign: 'center' }}><button onClick={() => {
                                         const removedScene = formData.scenes[idx];
                                         const updatedScenes = formData.scenes.filter((_, i) => i !== idx);
@@ -1463,12 +2171,27 @@ const ManageShootDays = () => {
                                         setFormData(p => ({ ...p, scenes: updatedScenes, characters: updatedCharacters }));
                                     }}><PiTrash /></button></td>
                                 </SortableRow>
-                            ))}
+                                );
+                            })}
                         </SortableContext>
                     </tbody>
                 </table>
+                    );
+                })()}
             </DndContext>
-            <button className="msd-add-button" onClick={() => setFormData(p => ({ ...p, scenes: [...p.scenes, { _id: crypto.randomUUID() }] }))}><PiPlus /> Add Scene</button>
+            {!isEpisodicProject && (
+                <datalist id="available-scenes-list">
+                    {breakdownScenes.map((scene, idx) => {
+                        const sceneNumber = String(scene.scene_number || '').trim();
+                        if (!sceneNumber) return null;
+                        const episodeNumber = String(scene.episode_number || '').trim();
+                        const optionKey = `${sceneNumber}-${episodeNumber || idx}`;
+                        const optionLabel = episodeNumber ? `${sceneNumber} (Ep ${episodeNumber})` : sceneNumber;
+                        return <option key={optionKey} value={sceneNumber} label={optionLabel} />;
+                    })}
+                </datalist>
+            )}
+            <button className="msd-add-button" onClick={() => setFormData(p => ({ ...p, scenes: [...p.scenes, { _id: crypto.randomUUID(), episode_number: '', scene_number: '', _isSelectingSceneNumber: true }] }))}><PiPlus /> Add Scene</button>
         </div>
     );
 
@@ -1485,6 +2208,28 @@ const ManageShootDays = () => {
             { name: 'Set Dressing', keys: ['set_dressing'] }
         ];
 
+        const parseRequirementItems = (content) => {
+            if (!content) return [];
+            return content
+                .split(/[\n,]/)
+                .map(item => item.trim())
+                .filter(item => item);
+        };
+
+        const mergeRequirementItems = (existingItems, incomingItems) => {
+            const seen = new Set(existingItems.map(item => item.trim().toLowerCase()).filter(Boolean));
+            const merged = [...existingItems];
+
+            incomingItems.forEach(item => {
+                const normalizedItem = item.trim().toLowerCase();
+                if (!normalizedItem || seen.has(normalizedItem)) return;
+                seen.add(normalizedItem);
+                merged.push(item);
+            });
+
+            return merged;
+        };
+
         let newReqs = [...(formData.daily_requirements || [])];
 
         categoriesToCheck.forEach(cat => {
@@ -1492,7 +2237,7 @@ const ManageShootDays = () => {
 
             // Iterate over current scenes to find breakdown matches
             formData.scenes.forEach(scene => {
-                const match = breakdownScenes.find(b => b.scene_number === scene.scene_number || b.scene_number?.toString() === scene.scene_number);
+                const match = findBreakdownScene(scene.scene_number, scene.episode_number || '');
                 if (match) {
                     cat.keys.forEach(key => {
                         if (match[key]) {
@@ -1514,18 +2259,19 @@ const ManageShootDays = () => {
             });
 
             if (items.size > 0) {
-                // Join with Newline for clearer list view
-                const content = Array.from(items).join('\n');
+                const incomingItems = Array.from(items);
                 const existingIdx = newReqs.findIndex(r => r.category === cat.name);
 
                 if (existingIdx >= 0) {
-                    newReqs[existingIdx].content = content;
+                    const existingItems = parseRequirementItems(newReqs[existingIdx].content);
+                    const mergedItems = mergeRequirementItems(existingItems, incomingItems);
+                    newReqs[existingIdx].content = mergedItems.join('\n');
                     newReqs[existingIdx].isAuto = true;
                 } else {
                     newReqs.push({
                         id: crypto.randomUUID(),
                         category: cat.name,
-                        content: content,
+                        content: incomingItems.join('\n'),
                         isAuto: true
                     });
                 }
@@ -1563,7 +2309,7 @@ const ManageShootDays = () => {
         };
 
         return (
-            <div className="msd-section">
+            <div className="msd-section" data-preview-target="requirements" data-preview-focus-mode="debounced">
                 <div className="msd-section-header" style={{ justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><PiList /> Daily Requirements</div>
                     <div style={{ display: 'flex', gap: '10px' }}>
@@ -1587,9 +2333,10 @@ const ManageShootDays = () => {
                     )}
 
                     {(formData.daily_requirements || []).map((req, idx) => {
+                        const previewKey = buildRequirementPreviewKey(req, idx);
                         const items = parseItems(req.content);
                         return (
-                            <div key={req.id || `req-${idx}`} className="msd-req-card">
+                            <div key={req.id || `req-${idx}`} className="msd-req-card" data-preview-target={`requirement-card:${previewKey}`} data-preview-focus-mode="debounced">
                                 <div className="msd-req-card-header">
                                     <input
                                         type="text"
@@ -1657,7 +2404,7 @@ const ManageShootDays = () => {
     };
 
     const renderAdvanceScenes = () => (
-        <div className="msd-section">
+        <div className="msd-section" data-preview-target="advance-schedule" data-preview-focus-mode="debounced">
             <div className="msd-section-header" style={{ justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><PiList /> Advance Shooting Schedule (Scenes)</div>
             </div>
@@ -1667,16 +2414,19 @@ const ManageShootDays = () => {
                 collisionDetection={closestCenter}
                 onDragEnd={(e) => handleDragEnd(e, 'advance')}
             >
+                {(() => {
+                    const showEpisodeColumn = isEpisodicProject || hasEpisodeColumn(formData.advanced_schedule || []);
+                    const episodeOptions = getEpisodeOptions();
+                    return (
                 <table className="msd-table">
                     <thead>
                         <tr>
                             <th style={{ width: '30px' }}></th>
+                            {showEpisodeColumn && <th style={{ width: '50px', textAlign: 'center' }}>EP</th>}
                             <th style={{ width: '50px', textAlign: 'center' }}>Scene</th>
-                            <th style={{ width: '60px' }}>Int/Ext</th>
-                            <th style={{ width: '30%' }}>Location / Set</th>
-                            <th style={{ width: '25%' }}>Desc</th>
-                            <th style={{ width: '70px', textAlign: 'center' }}>Day/Night</th>
+                            <th style={{ width: '42%' }}>Sets and Description</th>
                             <th style={{ width: '70px', textAlign: 'center' }}>Cast ID</th>
+                            <th style={{ width: '70px', textAlign: 'center' }}>Day/Night</th>
                             <th style={{ width: '60px', textAlign: 'center' }}>Pages</th>
                             <th style={{ width: '15%' }}>Remarks</th>
                             <th style={{ width: '50px', textAlign: 'center' }}>Action</th>
@@ -1687,7 +2437,12 @@ const ManageShootDays = () => {
                             items={(formData.advanced_schedule || []).map(s => s._id)}
                             strategy={verticalListSortingStrategy}
                         >
-                            {(formData.advanced_schedule || []).map((scene, idx) => (
+                            {(formData.advanced_schedule || []).map((scene, idx) => {
+                                const previewKey = buildScenePreviewKey(scene, idx);
+                                const isSceneNumberEditable = scene._isSelectingSceneNumber || !scene.scene_number;
+                                const { summary, description } = formatSceneSetDescription(scene);
+                                const sceneOptions = getSceneOptionsForEpisode(scene.episode_number || '');
+                                return (
                                 <SortableRow key={scene._id} data-row-key={scene._id}>
                                     <td key="drag-handle" style={{ textAlign: 'center', cursor: 'grab', verticalAlign: 'middle', padding: '0 4px' }}>
                                         <span style={{
@@ -1701,82 +2456,96 @@ const ManageShootDays = () => {
                                             <PiDotsSixVertical />
                                         </span>
                                     </td>
-                                    <td>
-                                        <input
-                                            list="scene-numbers"
-                                            type="text"
-                                            className="msd-td-input"
-                                            value={scene.scene_number || ''}
-                                            onChange={e => {
-                                                const val = e.target.value;
-                                                const newAdv = [...(formData.advanced_schedule || [])];
-                                                newAdv[idx] = { ...newAdv[idx], scene_number: val };
-
-                                                // Duplicate Check (Same Schedule)
-                                                if (formData.advanced_schedule?.some((s, i) => i !== idx && s.scene_number === val)) {
-                                                    alert(`Scene ${val} is already in the Advance Schedule!`);
-                                                    newAdv[idx].scene_number = ''; // Clear duplicate
-                                                    setFormData({ ...formData, advanced_schedule: newAdv });
-                                                    return;
-                                                }
-
-                                                // Overlap Check (Advance vs Main)
-                                                // Overlap Check (Advance vs Main)
-                                                if (formData.scenes.some(s => s.scene_number === val)) {
-                                                    alert(`Scene ${val} is already in the Main Shooting Schedule!`);
-                                                    newAdv[idx].scene_number = ''; // Prevent overlap
-                                                    setFormData({ ...formData, advanced_schedule: newAdv });
-                                                    return;
-                                                }
-
-                                                // Auto-fill logic
-                                                const match = breakdownScenes.find(s => s.scene_number === val || s.scene_number?.toString() === val);
-                                                if (match) {
-                                                    newAdv[idx].int_ext = match.int_ext || match.ie || '';
-                                                    // Map Breakdown Location/Set to Scene Location (Fix)
-                                                    newAdv[idx].location = match.set || match.location || '';
-                                                    // newAdv[idx].set = ...;
-                                                    newAdv[idx].day_night = match.time || match.day_night || '';
-                                                    newAdv[idx].description = match.synopsis || match.description || '';
-                                                    newAdv[idx].pages = match.page_eighths || '';
-                                                    if (match.characters) {
-                                                        const charArray = Array.isArray(match.characters) ? match.characters : String(match.characters).split(',');
-                                                        const ids = charArray.map(name => {
-                                                            if (!name) return '';
-                                                            const cleanName = String(name).trim().toLowerCase();
-                                                            const found = castList?.find(c => c.character && String(c.character).trim().toLowerCase() === cleanName);
-                                                            return found && found.cast_id ? found.cast_id : String(name).trim();
-                                                        }).filter(id => id !== '')
-                                                            .sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
-                                                        newAdv[idx].cast_ids = ids.join(', ');
+                                    {showEpisodeColumn && (
+                                        <td
+                                            style={{ textAlign: 'center', verticalAlign: 'middle' }}
+                                            data-preview-target={`scene-cell:advance:${previewKey}:episode_number`}
+                                        >
+                                            {isSceneNumberEditable ? (
+                                                <select
+                                                    className="msd-td-input-center"
+                                                    value={scene.episode_number || ''}
+                                                    onChange={e => handleSceneEpisodeSelection('advanced_schedule', idx, e.target.value)}
+                                                >
+                                                    <option value="">EP</option>
+                                                    {episodeOptions.map((episodeNumber) => (
+                                                        <option key={episodeNumber} value={episodeNumber}>{episodeNumber}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <div className="msd-td-display msd-td-display-center">{scene.episode_number || '-'}</div>
+                                            )}
+                                        </td>
+                                    )}
+                                    <td
+                                        data-preview-target={`scene-cell:advance:${previewKey}:scene_number`}
+                                        style={{ textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', whiteSpace: 'nowrap' }}
+                                    >
+                                        {isSceneNumberEditable && showEpisodeColumn ? (
+                                            <select
+                                                className="msd-td-input-center"
+                                                value={scene.scene_number || ''}
+                                                onChange={e => handleManualSceneSelection('advanced_schedule', idx, e.target.value, { finalize: true })}
+                                                disabled={!String(scene.episode_number || '').trim()}
+                                            >
+                                                <option value="">{String(scene.episode_number || '').trim() ? 'Select Scene' : 'Select EP first'}</option>
+                                                {sceneOptions.map((sceneNumber) => (
+                                                    <option key={`${scene.episode_number || 'ep'}-${sceneNumber}`} value={sceneNumber}>{sceneNumber}</option>
+                                                ))}
+                                            </select>
+                                        ) : isSceneNumberEditable ? (
+                                            <input
+                                                type="text"
+                                                list="available-scenes-list"
+                                                className="msd-td-input-center"
+                                                value={scene.scene_number || ''}
+                                                placeholder="Scene"
+                                                onChange={e => handleManualSceneSelection('advanced_schedule', idx, e.target.value)}
+                                                onBlur={e => handleManualSceneSelection('advanced_schedule', idx, e.target.value, { finalize: true })}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        e.currentTarget.blur();
                                                     }
-                                                }
-
-                                                let newFormData = { ...formData, advanced_schedule: newAdv };
-
-                                                // Auto-add characters to MAIN LIST (optional, but typical for call sheet)
-                                                if (match && val) {
-                                                    newFormData.characters = addCharactersForScene(val, newFormData.characters);
-                                                }
-
-                                                setFormData(newFormData);
-                                            }}
-                                            placeholder="No."
-                                        />
+                                                }}
+                                            />
+                                        ) : (
+                                            scene.scene_number || '-'
+                                        )}
                                     </td>
-                                    <td><input type="text" className="msd-td-input" value={scene.int_ext || ''} onChange={e => { const newAdv = [...(formData.advanced_schedule || [])]; newAdv[idx].int_ext = e.target.value; setFormData({ ...formData, advanced_schedule: newAdv }); }} /></td>
-                                    <td><textarea className="msd-td-textarea" value={scene.location || ''} onChange={e => { const newAdv = [...(formData.advanced_schedule || [])]; newAdv[idx].location = e.target.value; setFormData({ ...formData, advanced_schedule: newAdv }); }} /></td>
-                                    <td><textarea className="msd-td-textarea" value={scene.description || ''} onChange={e => { const newAdv = [...(formData.advanced_schedule || [])]; newAdv[idx].description = e.target.value; setFormData({ ...formData, advanced_schedule: newAdv }); }} /></td>
-                                    <td><input type="text" className="msd-td-input-center" value={scene.day_night || ''} onChange={e => { const newAdv = [...(formData.advanced_schedule || [])]; newAdv[idx].day_night = e.target.value; setFormData({ ...formData, advanced_schedule: newAdv }); }} /></td>
-                                    <td><textarea className="msd-td-textarea-center" value={scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : ''} onChange={e => {
-                                        const val = e.target.value;
-                                        const newAdv = [...(formData.advanced_schedule || [])];
-                                        newAdv[idx].cast_ids = val;
-                                        const updatedCharacters = pruneCharactersAfterRemoval(null, formData.scenes || [], newAdv, formData.characters);
-                                        setFormData({ ...formData, advanced_schedule: newAdv, characters: updatedCharacters });
-                                    }} /></td>
-                                    <td><textarea className="msd-td-textarea-center" value={scene.pages || ''} onChange={e => { const newAdv = [...(formData.advanced_schedule || [])]; newAdv[idx].pages = e.target.value; setFormData({ ...formData, advanced_schedule: newAdv }); }} /></td>
-                                    <td><textarea className="msd-td-textarea" value={scene.remarks || ''} onChange={e => { const newAdv = [...(formData.advanced_schedule || [])]; newAdv[idx].remarks = e.target.value; setFormData({ ...formData, advanced_schedule: newAdv }); }} /></td>
+                                    <td className="msd-scene-setdesc-cell">
+                                        <div
+                                            className="msd-scene-setdesc-summary"
+                                            data-preview-target={`scene-cell:advance:${previewKey}:location`}
+                                        >
+                                            {summary || '-'}
+                                        </div>
+                                        <div
+                                            className="msd-scene-setdesc-description"
+                                            data-preview-target={`scene-cell:advance:${previewKey}:description`}
+                                        >
+                                            {description || '-'}
+                                        </div>
+                                    </td>
+                                    <td
+                                        className="msd-td-display msd-td-display-center"
+                                        data-preview-target={`scene-cell:advance:${previewKey}:cast_ids`}
+                                    >
+                                        {scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : '-'}
+                                    </td>
+                                    <td
+                                        className="msd-td-display msd-td-display-center"
+                                        data-preview-target={`scene-cell:advance:${previewKey}:day_night`}
+                                    >
+                                        {scene.day_night || '-'}
+                                    </td>
+                                    <td
+                                        className="msd-td-display msd-td-display-center"
+                                        data-preview-target={`scene-cell:advance:${previewKey}:pages`}
+                                    >
+                                        {scene.pages || '-'}
+                                    </td>
+                                    <td data-preview-target={`scene-cell:advance:${previewKey}:remarks`}><textarea className="msd-td-textarea" value={scene.remarks || ''} onChange={e => { const newAdv = [...(formData.advanced_schedule || [])]; newAdv[idx].remarks = e.target.value; setFormData({ ...formData, advanced_schedule: newAdv }); }} /></td>
                                     <td style={{ textAlign: 'center' }}><button onClick={() => {
                                         const removedScene = formData.advanced_schedule[idx];
                                         const updatedAdvance = formData.advanced_schedule.filter((_, i) => i !== idx);
@@ -1785,12 +2554,15 @@ const ManageShootDays = () => {
                                         setFormData(p => ({ ...p, advanced_schedule: updatedAdvance, characters: updatedCharacters }));
                                     }}><PiTrash /></button></td>
                                 </SortableRow>
-                            ))}
+                                );
+                            })}
                         </SortableContext>
                     </tbody>
                 </table>
+                    );
+                })()}
             </DndContext>
-            <button className="msd-add-button" onClick={() => setFormData(p => ({ ...p, advanced_schedule: [...(p.advanced_schedule || []), { _id: crypto.randomUUID() }] }))}><PiPlus /> Add Advance Scene</button>
+            <button className="msd-add-button" onClick={() => setFormData(p => ({ ...p, advanced_schedule: [...(p.advanced_schedule || []), { _id: crypto.randomUUID(), episode_number: '', scene_number: '', _isSelectingSceneNumber: true }] }))}><PiPlus /> Add Advance Scene</button>
         </div>
     );
 
@@ -1803,7 +2575,7 @@ const ManageShootDays = () => {
 
     const renderCharacters = () => {
         return (
-            <div className="msd-section">
+            <div className="msd-section" data-preview-target="cast" data-preview-focus-mode="debounced">
                 <div className="msd-section-header"><PiUser /> Characters & Cast</div>
 
                 {/* Datalist for Available Characters */}
@@ -1835,10 +2607,12 @@ const ManageShootDays = () => {
                                 const castOptions = charInCastList?.cast_options ? Object.entries(charInCastList.cast_options) : [];
                                 const lockedOptionId = charInCastList?.locked;
 
+                                const previewKey = buildCharacterPreviewKey(char, getCastId(char.character_name));
+
                                 return (
                                     <tr key={originalIdx}>
                                         <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{getCastId(char.character_name)}</td>
-                                        <td><input type="text" list="available-characters-list" className="msd-td-input" value={char.character_name || ''} placeholder="Character" onChange={e => {
+                                        <td data-preview-target={`cast-cell:${previewKey}:character_name`}><input type="text" list="available-characters-list" className="msd-td-input" value={char.character_name || ''} placeholder="Character" onChange={e => {
                                             const newData = [...formData.characters];
                                             const val = e.target.value;
                                             newData[originalIdx].character_name = val;
@@ -1859,7 +2633,7 @@ const ManageShootDays = () => {
 
                                             setFormData({ ...formData, characters: newData });
                                         }} /></td>
-                                        <td style={{ position: 'relative' }}>
+                                        <td style={{ position: 'relative' }} data-preview-target={`cast-cell:${previewKey}:cast_name`}>
                                             {(() => {
                                                 // Sort: locked option first, rest below
                                                 const lockedEntry = castOptions.find(([optId]) => String(lockedOptionId) === String(optId));
@@ -1920,11 +2694,11 @@ const ManageShootDays = () => {
                                                 );
                                             })()}
                                         </td>
-                                        <td><TimePicker className="tp-compact" value={char.pickup || ''} onChange={v => { const newData = [...formData.characters]; newData[originalIdx].pickup = v; setFormData({ ...formData, characters: newData }); }} /></td>
-                                        <td><TimePicker className="tp-compact" value={char.on_location || ''} onChange={v => { const newData = [...formData.characters]; newData[originalIdx].on_location = v; setFormData({ ...formData, characters: newData }); }} /></td>
-                                        <td>
+                                        <td data-preview-target={`cast-cell:${previewKey}:pickup`}><TimePicker className="tp-compact msd-cast-timepicker" value={char.pickup || ''} onChange={v => { const newData = [...formData.characters]; newData[originalIdx].pickup = v; setFormData({ ...formData, characters: newData }); }} /></td>
+                                        <td data-preview-target={`cast-cell:${previewKey}:on_location`}><TimePicker className="tp-compact msd-cast-timepicker" value={char.on_location || ''} onChange={v => { const newData = [...formData.characters]; newData[originalIdx].on_location = v; setFormData({ ...formData, characters: newData }); }} /></td>
+                                        <td data-preview-target={`cast-cell:${previewKey}:hmu`}>
                                             <TimePicker
-                                                className="tp-compact"
+                                                className="tp-compact msd-cast-timepicker"
                                                 value={char.hmu || ''}
                                                 onChange={v => {
                                                     const newData = [...formData.characters];
@@ -1934,9 +2708,9 @@ const ManageShootDays = () => {
                                                 }}
                                             />
                                         </td>
-                                        <td><TimePicker className="tp-compact" value={char.on_set || ''} onChange={v => { const newData = [...formData.characters]; newData[originalIdx].on_set = v; setFormData({ ...formData, characters: newData }); }} /></td>
-                                        <td><input type="text" className="msd-td-input" value={char.remarks || ''} onChange={e => { const newData = [...formData.characters]; newData[originalIdx].remarks = e.target.value; setFormData({ ...formData, characters: newData }); }} /></td>
-                                        <td><button onClick={() => setFormData(p => ({ ...p, characters: p.characters.filter((_, i) => i !== originalIdx) }))}><PiTrash /></button></td>
+                                        <td data-preview-target={`cast-cell:${previewKey}:on_set`}><TimePicker className="tp-compact msd-cast-timepicker" value={char.on_set || ''} onChange={v => { const newData = [...formData.characters]; newData[originalIdx].on_set = v; setFormData({ ...formData, characters: newData }); }} /></td>
+                                        <td data-preview-target={`cast-cell:${previewKey}:remarks`}><input type="text" className="msd-td-input" value={char.remarks || ''} onChange={e => { const newData = [...formData.characters]; newData[originalIdx].remarks = e.target.value; setFormData({ ...formData, characters: newData }); }} /></td>
+                                        <td><button onClick={() => handleRemoveCharacter(originalIdx)}><PiTrash /></button></td>
                                     </tr>
                                 );
                             })}
@@ -1948,39 +2722,135 @@ const ManageShootDays = () => {
     };
 
     const CALL_MODES = [
-        { value: 'custom', label: 'Custom' },
         { value: 'crew_call', label: 'Crew Call' },
         { value: 'on_call', label: 'On Call' },
         { value: 'na', label: 'N/A' },
         { value: 'as_per_hod', label: 'As per HOD' },
+        { value: 'custom', label: 'Custom' },
     ];
 
     const renderCrewCalls = () => {
+        const formatTimeDisplay = (val) => {
+            if (!val || !val.includes(':')) return '';
+            const [hStr, mStr] = val.split(':');
+            let h = parseInt(hStr, 10);
+            const m = parseInt(mStr, 10) || 0;
+            if (Number.isNaN(h)) return val;
+            const ap = h >= 12 ? 'PM' : 'AM';
+            h = h % 12;
+            if (h === 0) h = 12;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ap}`;
+        };
+
+        const getLegacyCrewKey = (crew) => {
+            const rawCrewId = crew?.id;
+            if (rawCrewId === undefined || rawCrewId === null) return null;
+            const trimmed = String(rawCrewId).trim();
+            return trimmed ? trimmed : null;
+        };
+
+        const getCrewEntry = (crewKey, legacyCrewKey = null) => {
+            const currentEntry = formData.crew_calls?.[crewKey];
+            if (currentEntry !== undefined) return currentEntry;
+            if (legacyCrewKey && legacyCrewKey !== crewKey) {
+                return formData.crew_calls?.[legacyCrewKey];
+            }
+            return undefined;
+        };
+
         // Helper to safely get time string
-        const getCrewTime = (crewId) => {
-            const val = formData.crew_calls[crewId];
+        const getCrewTime = (crewKey, legacyCrewKey = null) => {
+            const val = getCrewEntry(crewKey, legacyCrewKey);
             if (!val) return '';
             return typeof val === 'object' ? (val.time || '') : val;
         };
 
-        // Helper to get call mode (default to 'custom' for legacy plain-string values)
-        const getCrewMode = (crewId) => {
-            const val = formData.crew_calls[crewId];
-            if (!val) return 'custom';
-            return typeof val === 'object' ? (val.mode || 'custom') : 'custom';
+        // Helper to get call mode (default to 'crew_call' for empty, but 'custom' for legacy plain-string values)
+        const getCrewMode = (crewKey, legacyCrewKey = null) => {
+            const val = getCrewEntry(crewKey, legacyCrewKey);
+            if (!val) return 'crew_call';
+            return typeof val === 'object' ? (val.mode || 'crew_call') : 'custom';
         };
 
         // Helper to check if crew member is marked as key
-        const isKey = (crewId) => {
-            const val = formData.crew_calls[crewId];
+        const isKey = (crewKey, legacyCrewKey = null) => {
+            const val = getCrewEntry(crewKey, legacyCrewKey);
             return typeof val === 'object' && val.is_key === true;
         };
 
-        // Count selected key crew members
-        const selectedCount = Object.values(formData.crew_calls || {}).filter(v => typeof v === 'object' && v.is_key).length;
+        const visibleCrew = (crewList?.departments || []).flatMap((dept) =>
+            (dept.crew_members || dept.crew || []).map((crew, crewIdx) => ({
+                crewKey: buildCrewStateKey(crew, dept.id, crewIdx),
+                legacyCrewKey: getLegacyCrewKey(crew),
+            }))
+        );
+
+        const selectedCount = visibleCrew.filter(({ crewKey, legacyCrewKey }) => isKey(crewKey, legacyCrewKey)).length;
+
+        const applyDeptCallTime = (dept, setting) => {
+            const nextMode = setting?.mode || 'crew_call';
+            const nextTime = nextMode === 'custom' ? (setting?.time || '') : '';
+
+            setFormData(p => {
+                const crewEntries = { ...(p.crew_calls || {}) };
+                (dept.crew_members || dept.crew || []).forEach((crew, crewIdx) => {
+                    const crewKey = buildCrewStateKey(crew, dept.id, crewIdx);
+                    const legacyCrewKey = getLegacyCrewKey(crew);
+                    const existing = crewEntries[crewKey] ?? (legacyCrewKey && legacyCrewKey !== crewKey ? crewEntries[legacyCrewKey] : undefined);
+                    const isKey = typeof existing === 'object' && existing.is_key === true;
+                    crewEntries[crewKey] = { mode: nextMode, time: nextTime, ...(isKey ? { is_key: true } : {}) };
+                    if (legacyCrewKey && legacyCrewKey !== crewKey) {
+                        delete crewEntries[legacyCrewKey];
+                    }
+                });
+                return { ...p, crew_calls: crewEntries };
+            });
+        };
+
+        const handleDeptBulkToggle = (dept, enabled) => {
+            setDeptBulkSettings(prevAll => {
+                const prev = prevAll[dept.id];
+                let nextSetting = prev ? { ...prev, enabled } : { enabled, mode: 'crew_call', time: '' };
+
+                if (enabled) {
+                    const crewListForDept = dept.crew_members || dept.crew || [];
+                    if (!prev && crewListForDept.length > 0) {
+                        const firstCrew = crewListForDept[0];
+                        const firstCrewKey = buildCrewStateKey(firstCrew, dept.id, 0);
+                        const firstLegacyCrewKey = getLegacyCrewKey(firstCrew);
+                        const mode = getCrewMode(firstCrewKey, firstLegacyCrewKey);
+                        const time = mode === 'custom' ? getCrewTime(firstCrewKey, firstLegacyCrewKey) : '';
+                        nextSetting = { ...nextSetting, mode, time };
+                    }
+                    applyDeptCallTime(dept, nextSetting);
+                }
+
+                const nextAll = { ...prevAll, [dept.id]: nextSetting };
+                setFormData(p => ({ ...p, crew_call_bulk: nextAll }));
+                return nextAll;
+            });
+        };
+
+        const updateDeptBulkSetting = (dept, patch) => {
+            setDeptBulkSettings(prevAll => {
+                const prev = prevAll[dept.id] || { enabled: false, mode: 'crew_call', time: '' };
+                const nextSetting = { ...prev, ...patch };
+                const nextAll = { ...prevAll, [dept.id]: nextSetting };
+                if (nextSetting.enabled) {
+                    applyDeptCallTime(dept, nextSetting);
+                }
+                setFormData(p => ({ ...p, crew_call_bulk: nextAll }));
+                return nextAll;
+            });
+        };
+
+        const getModeLabel = (modeValue) => {
+            const match = CALL_MODES.find(m => m.value === modeValue);
+            return match ? match.label : 'Crew Call';
+        };
 
         return (
-            <div className="msd-section">
+            <div className="msd-section" data-preview-target="crew-page" data-preview-focus-mode="debounced">
                 <div className="msd-section-header">
                     <PiUser /> Crew Call Times (Linked to Crew List)
                     <span style={{ marginLeft: '16px', fontSize: '0.82em', fontWeight: 'normal', color: '#6b7280' }}>
@@ -1996,69 +2866,144 @@ const ManageShootDays = () => {
                     <div className="msd-dept-grid">
                         {crewList.departments.map(dept => (
                             <div key={dept.id} className="msd-dept-box">
-                                <h4 className="msd-dept-name">{dept.name}</h4>
+                                <div className="msd-dept-header">
+                                    <h4 className="msd-dept-name">{dept.name}</h4>
+                                </div>
+                                <div className="msd-dept-bulk-row">
+                                    <div className="msd-dept-bulk-inline">
+                                        <label className="msd-dept-bulk-label">
+                                            <input
+                                                type="checkbox"
+                                                checked={!!deptBulkSettings[dept.id]?.enabled}
+                                                onChange={e => handleDeptBulkToggle(dept, e.target.checked)}
+                                            />
+                                            Same for all
+                                        </label>
+                                        <div className="msd-dept-bulk-stack">
+                                            <select
+                                                className="msd-calltime-select"
+                                                value={(deptBulkSettings[dept.id]?.mode) || 'crew_call'}
+                                                onChange={e => updateDeptBulkSetting(dept, { mode: e.target.value })}
+                                                title="Applies to all crew in this department"
+                                            >
+                                                {CALL_MODES.map(m => (
+                                                    <option key={m.value} value={m.value}>{m.label}</option>
+                                                ))}
+                                            </select>
+                                            {(deptBulkSettings[dept.id]?.mode || 'crew_call') === 'custom' && (
+                                                <TimePicker
+                                                    className="tp-compact"
+                                                    value={deptBulkSettings[dept.id]?.time || ''}
+                                                    onChange={v => updateDeptBulkSetting(dept, { mode: 'custom', time: v })}
+                                                    title="Applies to all crew in this department"
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                                 <table className="msd-mini-table">
                                     <thead>
                                         <tr>
-                                            <th style={{ width: '35%' }}>Role</th>
+                                            <th style={{ width: '32%' }}>Role</th>
                                             <th>Name</th>
-                                            <th style={{ width: '180px', textAlign: 'center' }}>Call Time</th>
-                                            <th style={{ width: '50px', textAlign: 'center' }}>Key</th>
+                                            <th style={{ width: '140px', textAlign: 'center' }}>Call Time</th>
+                                            <th style={{ width: '34px', textAlign: 'center' }}>Key</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {(dept.crew_members || dept.crew || []).map(crew => {
-                                            const time = getCrewTime(crew.id);
-                                            const mode = getCrewMode(crew.id);
-                                            const keySelected = isKey(crew.id);
+                                        {(dept.crew_members || dept.crew || []).map((crew, crewIdx) => {
+                                            const crewKey = buildCrewStateKey(crew, dept.id, crewIdx);
+                                            const legacyCrewKey = getLegacyCrewKey(crew);
+                                            const time = getCrewTime(crewKey, legacyCrewKey);
+                                            const mode = getCrewMode(crewKey, legacyCrewKey);
+                                            const keySelected = isKey(crewKey, legacyCrewKey);
+                                            const deptBulkEnabled = !!deptBulkSettings[dept.id]?.enabled;
 
                                             const updateCrewCall = (newMode, newTime) => {
                                                 const entry = { mode: newMode, time: newTime, ...(keySelected ? { is_key: true } : {}) };
                                                 setFormData(p => ({
                                                     ...p,
-                                                    crew_calls: { ...p.crew_calls, [crew.id]: entry }
+                                                    crew_calls: (() => {
+                                                        const nextCrewCalls = { ...(p.crew_calls || {}), [crewKey]: entry };
+                                                        if (legacyCrewKey && legacyCrewKey !== crewKey) {
+                                                            delete nextCrewCalls[legacyCrewKey];
+                                                        }
+                                                        return nextCrewCalls;
+                                                    })()
                                                 }));
                                             };
 
+                                            const setKeySelection = (isChecked) => {
+                                                if (isChecked && !keySelected && selectedCount >= 13) {
+                                                    alert("You can only select up to 13 Key Crew members for the preview.");
+                                                    return;
+                                                }
+
+                                                const entry = { mode, time, ...(isChecked ? { is_key: true } : {}) };
+                                                setFormData(p => ({
+                                                    ...p,
+                                                    crew_calls: (() => {
+                                                        const nextCrewCalls = { ...(p.crew_calls || {}), [crewKey]: entry };
+                                                        if (legacyCrewKey && legacyCrewKey !== crewKey) {
+                                                            delete nextCrewCalls[legacyCrewKey];
+                                                        }
+                                                        return nextCrewCalls;
+                                                    })()
+                                                }));
+                                                previewIntentRef.current = {
+                                                    target: 'key-crew-box',
+                                                    mode: 'instant',
+                                                    source: 'key-crew-box',
+                                                };
+                                            };
+
                                             return (
-                                                <tr key={crew.id}>
+                                                <tr key={crewKey}>
                                                     <td className="msd-role-col">{crew.role}</td>
                                                     <td>{crew.name}</td>
-                                                    <td style={{ width: '180px' }}>
-                                                        <div className="msd-calltime-cell">
-                                                            <select
-                                                                className="msd-calltime-select"
-                                                                value={mode}
-                                                                onChange={e => updateCrewCall(e.target.value, time)}
-                                                            >
-                                                                {CALL_MODES.map(m => (
-                                                                    <option key={m.value} value={m.value}>{m.label}</option>
-                                                                ))}
-                                                            </select>
-                                                            {mode === 'custom' && (
-                                                                <TimePicker
-                                                                    className="tp-compact"
-                                                                    value={time}
-                                                                    onChange={v => updateCrewCall('custom', v)}
-                                                                />
-                                                            )}
-                                                        </div>
+                                                    <td style={{ width: '140px' }} data-preview-target={`crew-call:${crewKey}`}>
+                                                        {deptBulkEnabled ? (
+                                                            <div className="msd-calltime-locked">
+                                                                {(deptBulkSettings[dept.id]?.mode || 'crew_call') === 'custom'
+                                                                    ? (deptBulkSettings[dept.id]?.time ? formatTimeDisplay(deptBulkSettings[dept.id]?.time) : '--:--')
+                                                                    : getModeLabel(deptBulkSettings[dept.id]?.mode || 'crew_call')}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="msd-calltime-cell">
+                                                                <select
+                                                                    className="msd-calltime-select"
+                                                                    value={mode}
+                                                                    onChange={e => updateCrewCall(e.target.value, time)}
+                                                                >
+                                                                    {CALL_MODES.map(m => (
+                                                                        <option key={m.value} value={m.value}>{m.label}</option>
+                                                                    ))}
+                                                                </select>
+                                                                {mode === 'custom' && (
+                                                                    <TimePicker
+                                                                        className="tp-compact"
+                                                                        value={time}
+                                                                        onChange={v => updateCrewCall('custom', v)}
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </td>
-                                                    <td style={{ textAlign: 'center' }}>
+                                                    <td style={{ width: '34px', textAlign: 'center' }} data-preview-target="key-crew-box">
                                                         <input
                                                             type="checkbox"
                                                             checked={keySelected}
-                                                            onChange={e => {
-                                                                const isChecked = e.target.checked;
-                                                                if (isChecked && selectedCount >= 13) {
-                                                                    alert("You can only select up to 13 Key Crew members for the preview.");
-                                                                    return;
+                                                            readOnly
+                                                            onClick={e => {
+                                                                e.stopPropagation();
+                                                                setKeySelection(!keySelected);
+                                                            }}
+                                                            onKeyDown={e => {
+                                                                if (e.key === ' ' || e.key === 'Enter') {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    setKeySelection(!keySelected);
                                                                 }
-                                                                const entry = { mode, time, ...(isChecked ? { is_key: true } : {}) };
-                                                                setFormData(p => ({
-                                                                    ...p,
-                                                                    crew_calls: { ...p.crew_calls, [crew.id]: entry }
-                                                                }));
                                                             }}
                                                         />
                                                     </td>
@@ -2068,7 +3013,7 @@ const ManageShootDays = () => {
                                     </tbody>
                                 </table>
                                 <div style={{ marginTop: 10 }}>
-                                    <label className="msd-label">Notes:
+                                    <label className="msd-label" data-preview-target={`crew-note:${dept.id}`} data-preview-focus-mode="debounced">Department Notes:
                                         <textarea
                                             className="msd-textarea"
                                             style={{ minHeight: '60px', marginTop: '5px' }}
@@ -2077,7 +3022,7 @@ const ManageShootDays = () => {
                                                 ...p,
                                                 department_notes: { ...p.department_notes, [dept.id]: e.target.value }
                                             }))}
-                                            placeholder={`Notes for ${dept.name}`}
+                                            placeholder={`Department notes for ${dept.name}`}
                                         />
                                     </label>
                                 </div>
@@ -2092,17 +3037,14 @@ const ManageShootDays = () => {
 
 
     // --- Upload Logo Logic ---
-    const handleLogoUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
+    const uploadLogoBlob = async (blob, slot = 'logo') => {
         const formData = new FormData();
-        formData.append('file', file);
-
+        formData.append('file', new File([blob], `${slot}.png`, { type: 'image/png' }));
         const token = getToken();
+        const endpoint = slot === 'logo2' ? 'logo2' : 'logo';
 
         try {
-            const res = await fetch(getApiUrl(`/api/projects/${id}/logo`), {
+            const res = await fetch(getApiUrl(`/api/projects/${id}/${endpoint}`), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -2111,47 +3053,42 @@ const ManageShootDays = () => {
                 credentials: 'include'
             });
             if (res.ok) {
-                setProjectLogoTs(Date.now());
-                alert("Logo 1 uploaded successfully!");
+                if (slot === 'logo2') {
+                    setProjectLogo2Ts(Date.now());
+                    alert("Logo 2 uploaded successfully!");
+                } else {
+                    setProjectLogoTs(Date.now());
+                    alert("Logo 1 uploaded successfully!");
+                }
             } else {
                 const errorText = await res.text();
                 throw new Error(errorText || "Failed to upload");
             }
         } catch (err) {
             console.error(err);
-            alert("Error uploading logo");
+            alert(slot === 'logo2' ? "Error uploading logo 2" : "Error uploading logo");
         }
     };
 
-    const handleLogo2Upload = async (e) => {
-        const file = e.target.files[0];
+    const handleLogoFileSelect = (event, slot = 'logo') => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
         if (!file) return;
 
-        const formData = new FormData();
-        formData.append('file', file);
+        setLogoEditorState({
+            isOpen: true,
+            file,
+            slot
+        });
+    };
 
-        const token = getToken();
+    const closeLogoEditor = () => {
+        setLogoEditorState({ isOpen: false, file: null, slot: 'logo' });
+    };
 
-        try {
-            const res = await fetch(getApiUrl(`/api/projects/${id}/logo2`), {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formData,
-                credentials: 'include'
-            });
-            if (res.ok) {
-                setProjectLogo2Ts(Date.now());
-                alert("Logo 2 uploaded successfully!");
-            } else {
-                const errorText = await res.text();
-                throw new Error(errorText || "Failed to upload");
-            }
-        } catch (err) {
-            console.error(err);
-            alert("Error uploading logo 2");
-        }
+    const handleConfirmLogoEdit = async (blob) => {
+        await uploadLogoBlob(blob, logoEditorState.slot);
+        closeLogoEditor();
     };
 
 
@@ -2179,9 +3116,8 @@ const ManageShootDays = () => {
         }
     };
 
-    const handleCreateDateChange = (e) => {
-        const date = e.target.value;
-        setCreateData({ ...createData, date });
+    const handleCreateDateChange = (date) => {
+        setCreateData(prev => ({ ...prev, date }));
         checkScheduleDate(date);
     };
 
@@ -2205,63 +3141,10 @@ const ManageShootDays = () => {
 
             // 2. Import if checked
             if (createData.importFromSchedule && scheduleHasDate) {
-                // Reuse import logic but targeting the new day
-                // We need to execute the import logic on the NEW day data
-                // and then SAVE it.
-
-                let foundScenes = [];
-                let foundChars = [];
-
-                // Fetch/Find schedule again (or optimize)
-                for (const sched of schedules) {
-                    const resSched = await fetch(getApiUrl(`/api/${id}/schedule/${sched.id}`));
-                    if (resSched.ok) {
-                        const fullSched = await resSched.json();
-                        const scheduleByDay = fullSched.schedule?.schedule_by_day;
-                        if (scheduleByDay) {
-                            Object.values(scheduleByDay).forEach(daySched => {
-                                if (daySched.date === createData.date) {
-                                    foundScenes = daySched.scenes || [];
-                                }
-                            });
-                        }
-                    }
-                    if (foundScenes.length > 0) break;
-                }
+                const foundScenes = await getScheduledScenesForDate(createData.date);
 
                 if (foundScenes.length > 0) {
-                    // Process scenes
-                    let updatedScenes = [];
-                    let updatedCharacters = []; // Start fresh for new day or merge? New day is empty.
-
-                    foundScenes.forEach(schedScene => {
-                        const sceneNum = schedScene.scene_id || schedScene.scene_number;
-                        if (!updatedScenes.some(s => s.scene_number === sceneNum)) {
-                            const breakdown = breakdownScenes.find(s => s.scene_number === sceneNum || s.scene_number?.toString() === sceneNum);
-
-                            let castIdsStr = '';
-                            if (breakdown?.characters) {
-                                const charArray = Array.isArray(breakdown.characters) ? breakdown.characters : String(breakdown.characters).split(',');
-                                const mappedIds = charArray.map(name => {
-                                    if (!name) return '';
-                                    const cleanName = String(name).trim().toLowerCase();
-                                    const found = castList?.find(c => c.character && String(c.character).trim().toLowerCase() === cleanName);
-                                    return found && found.cast_id ? found.cast_id : String(name).trim();
-                                }).filter(id => id !== '');
-                                castIdsStr = mappedIds.join(', ');
-                            }
-
-                            updatedScenes.push({
-                                scene_number: sceneNum,
-                                int_ext: breakdown?.int_ext || breakdown?.ie || '',
-                                description: breakdown?.synopsis || breakdown?.description || '',
-                                location: breakdown?.set || breakdown?.location || '',
-                                pages: breakdown?.page_eighths || '',
-                                cast_ids: castIdsStr
-                            });
-                            updatedCharacters = addCharactersForScene(sceneNum, updatedCharacters);
-                        }
-                    });
+                    const { scenes: updatedScenes, characters: updatedCharacters } = mergeImportedScenesIntoDay([], [], foundScenes);
 
                     // Update the new day object
                     newDay.scenes = updatedScenes;
@@ -2288,16 +3171,21 @@ const ManageShootDays = () => {
         }
     };
 
-    const handleDeleteDay = async (e, dayId) => {
+    const handleDeleteDay = useCallback(async (e, dayId) => {
         e.stopPropagation(); // Prevent selecting the day
         if (!window.confirm("Are you sure you want to delete this shoot day? This cannot be undone.")) return;
 
         try {
             const res = await fetch(getApiUrl(`/api/shoot-days/${dayId}?project_id=${id}`), { method: 'DELETE' });
             if (res.ok) {
+                clearPendingAutoSave();
                 setShootDays(prev => prev.filter(d => d.id !== dayId));
                 if (selectedDayId === dayId) {
+                    resetAddressAutocomplete();
                     setSelectedDayId(null);
+                    setHasUnsavedChanges(false);
+                    setSaveError('');
+                    setLastSavedAt(null);
                     // Reset necessary form data if needed
                 }
             } else {
@@ -2307,19 +3195,41 @@ const ManageShootDays = () => {
             console.error(err);
             alert("Error deleting shoot day");
         }
-    };
+    }, [clearPendingAutoSave, id, resetAddressAutocomplete, selectedDayId]);
 
     // --- Dashboard Render Logic ---
     const handleBackToDashboard = () => {
-        setViewMode('dashboard');
-        setSelectedDayId(null);
+        clearPendingAutoSave();
+        resetAddressAutocomplete();
+        navigate(`/${user}/${id}/call-sheets`);
     };
+
+    const saveStatusText = useMemo(() => {
+        if (saveError) return saveError;
+        if (isSaving || isAutoSaving) return 'Saving...';
+        if (hasUnsavedChanges) return 'Unsaved changes';
+        if (lastSavedAt) return 'Saved';
+        return '';
+    }, [hasUnsavedChanges, isAutoSaving, isSaving, lastSavedAt, saveError]);
+
+    const saveStatusClassName = useMemo(() => {
+        if (saveError) return 'msd-save-status is-error';
+        if (isSaving || isAutoSaving) return 'msd-save-status is-saving';
+        if (lastSavedAt) return 'msd-save-status is-saved';
+        return 'msd-save-status';
+    }, [isAutoSaving, isSaving, lastSavedAt, saveError]);
+
+    const isResolvingRequestedDay = Boolean(dayId) && (
+        isLoading ||
+        selectedDayId === null ||
+        String(selectedDayId) !== String(dayId)
+    );
 
     const renderDashboard = () => (
         <div className="msd-dashboard-container">
             {/* Header */}
             <div className="msd-dashboard-header">
-                <h1 className="msd-dashboard-title">Manage Shoot Days</h1>
+                <h1 className="msd-dashboard-title">Call Sheets</h1>
                 <button
                     onClick={() => navigate(`/${user}/${id}/crew-list`)}
                     className="msd-neutral-action-btn"
@@ -2345,12 +3255,13 @@ const ManageShootDays = () => {
                                         src={`/api/projects/${id}/logo?t=${projectLogoTs}`}
                                         alt="Production Logo 1"
                                         className="msd-logo-preview"
+                                        onLoad={(e) => { e.target.style.display = 'block'; }}
                                         onError={(e) => e.target.style.display = 'none'}
                                     />
                                 </div>
                                 <label className="msd-upload-btn msd-upload-btn-small">
-                                    + Upload Logo 1
-                                    <input type="file" style={{ display: 'none' }} onChange={handleLogoUpload} accept="image/*" />
+                                    + Edit & Upload Logo 1
+                                    <input type="file" style={{ display: 'none' }} onChange={(event) => handleLogoFileSelect(event, 'logo')} accept="image/*" />
                                 </label>
                             </div>
                             <div className="msd-logo-slot">
@@ -2360,14 +3271,18 @@ const ManageShootDays = () => {
                                         src={`/api/projects/${id}/logo2?t=${projectLogo2Ts}`}
                                         alt="Production Logo 2"
                                         className="msd-logo-preview"
+                                        onLoad={(e) => { e.target.style.display = 'block'; }}
                                         onError={(e) => e.target.style.display = 'none'}
                                     />
                                 </div>
                                 <label className="msd-upload-btn msd-upload-btn-small">
-                                    + Upload Logo 2
-                                    <input type="file" style={{ display: 'none' }} onChange={handleLogo2Upload} accept="image/*" />
+                                    + Edit & Upload Logo 2
+                                    <input type="file" style={{ display: 'none' }} onChange={(event) => handleLogoFileSelect(event, 'logo2')} accept="image/*" />
                                 </label>
                             </div>
+                        </div>
+                        <div className="msd-logo-guidance">
+                            Upload any logo shape, then crop and fit it into a fixed frame before saving. Final output is normalized for the call sheet.
                         </div>
                     </div>
                 </div>
@@ -2399,7 +3314,15 @@ const ManageShootDays = () => {
                                 </button>
                             </div>
                             <div className="msd-day-card-body">
-                                <div className="msd-card-date">{day.date ? new Date(day.date).toLocaleDateString() : 'No Date'}</div>
+                                <div className="msd-card-date">
+                                    {day.date
+                                        ? new Date(day.date).toLocaleDateString("en-GB", {
+                                            day: "2-digit",
+                                            month: "2-digit",
+                                            year: "numeric",
+                                        })
+                                        : "No Date"}
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -2409,7 +3332,7 @@ const ManageShootDays = () => {
     );
 
     return (
-        <div className="msd-page-container">
+        <div className={`msd-page-container ${viewMode === 'editor' ? 'msd-editor-active' : ''}`}>
             {/* <ProjectHeader /> */}
             {viewMode === 'dashboard' ? renderDashboard() : (
                 <div className="msd-main-container">
@@ -2418,35 +3341,51 @@ const ManageShootDays = () => {
                         {/* Editor Header / Nav */}
                         <div className="msd-editor-nav">
                             <div className="msd-editor-nav-left">
-                                <button onClick={handleBackToDashboard} className="msd-back-btn" title="Back to Dashboard">
+                                <button onClick={handleBackToDashboard} className="msd-back-btn" title="Back to Call Sheets">
                                     <PiArrowLeft size={18} /> Back
                                 </button>
                                 <div className="msd-nav-divider"></div>
-                                <h2 className="msd-editor-title">Manage Call Sheet - Day {formData.day_number || '?'}</h2>
+                                <h2 className="msd-editor-title">
+                                    {isResolvingRequestedDay ? 'Loading Call Sheet...' : `Call Sheet - Day ${formData.day_number || '?'}`}
+                                </h2>
                             </div>
                             <div className="msd-editor-actions">
+                                <div className={saveStatusClassName} aria-live="polite">
+                                    <span className="msd-save-status-icon" aria-hidden="true">
+                                        {(isSaving || isAutoSaving) ? '' : saveError ? '!' : lastSavedAt ? '✓' : ''}
+                                    </span>
+                                    <span>{saveStatusText || ' '}</span>
+                                </div>
                                 <button
                                     className={`msd-preview-toggle-btn ${showPreview ? 'active' : ''}`}
                                     onClick={handleSaveAndPreview}
                                 >
                                     <PiEye /> Preview and Export
                                 </button>
-                                <button onClick={handleSave} disabled={isSaving} className="msd-save-btn">
-                                    {isSaving ? 'Saving...' : <><PiFloppyDisk /> Save Shoot Day</>}
-                                </button>
                             </div>
                         </div>
 
                         {/* Editor Content Area */}
                         <div className="msd-editor-content">
-                            {selectedDayId ? (
+                            {isResolvingRequestedDay ? (
+                                <div className="msd-empty-state">
+                                    <p>Loading call sheet...</p>
+                                </div>
+                            ) : selectedDayId ? (
                                 <div className="msd-split-view-container">
 
                                     {/* Left Column - Editor Form */}
-                                    <div className="msd-left-column">
+                                    <div
+                                        className="msd-left-column"
+                                        onFocusCapture={capturePreviewIntent}
+                                        onChangeCapture={capturePreviewIntent}
+                                        onClickCapture={capturePreviewIntent}
+                                    >
                                         {renderGeneralInfo()}
-                                        {renderMeals()}
                                         {renderLocation()}
+                                        {renderMeals()}
+                                        {renderGeneralInstructionsSection()}
+                                        {renderAttentionSection()}
                                         <div className="msd-import-wrap" style={{ display: 'flex', gap: '10px' }}>
                                             <button
                                                 onClick={handleImportSchedule}
@@ -2459,9 +3398,10 @@ const ManageShootDays = () => {
 
                                         {renderScenes()}
                                         {renderCharacters()}
+                                        {renderRequirementsSection()}
                                         {renderCrewCalls()}
                                         {renderUsefulContactsSection()}
-                                        {renderRequirementsSection()}
+                                        {renderSafetyHotlineSection()}
                                         {renderAdvanceScenes()}
                                     </div>
 
@@ -2485,7 +3425,16 @@ const ManageShootDays = () => {
                                                         marginBottom: '-50%'
                                                     }}
                                                 >
-                                                    <CallSheetPreview data={formData} project={project} logoTs={projectLogoTs} logo2Ts={projectLogo2Ts} crewList={crewList} showActions={false} />
+                                                    <CallSheetPreview
+                                                        data={formData}
+                                                        project={project}
+                                                        logoTs={projectLogoTs}
+                                                        logo2Ts={projectLogo2Ts}
+                                                        crewList={crewList}
+                                                        showActions={false}
+                                                        activePreviewTarget={previewFocus.target}
+                                                        previewPulseKey={previewFocus.pulseKey}
+                                                    />
                                                 </div>
                                             </div>
                                         </>
@@ -2494,8 +3443,8 @@ const ManageShootDays = () => {
                                 </div>
                             ) : (
                                 <div className="msd-empty-state">
-                                    <p>Select or Create a Shoot Day to start editing</p>
-                                    <button onClick={handleBackToDashboard}>Back to Dashboard</button>
+                                    <p>Select or create a shoot day to start editing this call sheet.</p>
+                                    <button onClick={handleBackToDashboard}>Back to Call Sheets</button>
                                 </div>
                             )}
                         </div>
@@ -2507,7 +3456,7 @@ const ManageShootDays = () => {
             {showCreateModal && (
                 <div className="modal-overlay">
                     <div className="modal-content msd-create-modal">
-                        <h3>Create New Shoot Day</h3>
+                        <h3>Create New Call Sheet Day</h3>
                         <div className="msd-create-form">
                             <label>
                                 Day Number:
@@ -2523,8 +3472,8 @@ const ManageShootDays = () => {
                                 <input
                                     type="date"
                                     className="msd-input"
-                                    value={createData.date}
-                                    onChange={handleCreateDateChange}
+                                    value={createData.date || ''}
+                                    onChange={e => handleCreateDateChange(e.target.value)}
                                 />
                             </label>
                             {createWarning && <div className="msd-create-warning">{createWarning}</div>}
@@ -2575,6 +3524,14 @@ const ManageShootDays = () => {
                     </div>
                 </div>
             )}
+
+            <LogoEditorModal
+                isOpen={logoEditorState.isOpen}
+                file={logoEditorState.file}
+                slotLabel={logoEditorState.slot === 'logo2' ? 'Logo 2' : 'Logo 1'}
+                onCancel={closeLogoEditor}
+                onConfirm={handleConfirmLogoEdit}
+            />
         </div>
     );
 };

@@ -15,6 +15,10 @@
     width: 100%;
 }
 
+.tp-wrapper--open {
+    z-index: 10020;
+}
+
 .tp-trigger {
     display: flex;
     align-items: center;
@@ -41,6 +45,17 @@
 
 .tp-trigger:active {
     transform: scale(0.99);
+}
+
+.tp-wrapper--disabled .tp-trigger {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.tp-wrapper--disabled .tp-trigger:hover {
+    border-color: #e2e6ed;
+    box-shadow: none;
 }
 
 .tp-trigger-text {

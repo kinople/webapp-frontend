@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { fetchEpisodesWithDrafts } from "../utils/episodeDrafts";
 import { useParams } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { setProjectName } from "../redux/actions/projectActions";
@@ -9,6 +10,8 @@ const ProjectDashboard = () => {
 	const { user, id } = useParams();
 	const [metrics, setMetrics] = useState(null);
 	const [loading, setLoading] = useState(true);
+	const [episodeDrafts, setEpisodeDrafts] = useState([]);
+	const [latestDraft, setLatestDraft] = useState(null);
 	const dispatch = useDispatch();
 
 	useEffect(() => {
@@ -33,6 +36,22 @@ const ProjectDashboard = () => {
 				} else {
 					console.error("Error fetching metrics:", metricsData.message);
 				}
+
+				// Fetch episode/draft info for episodic projects
+				if ((metricsData?.project_type || "") === "episodic") {
+					const episodes = await fetchEpisodesWithDrafts(id);
+					setEpisodeDrafts(episodes);
+
+					const scriptsApiUrl = getApiUrl(`/api/${id}/script-list`);
+					const scriptsRes = await fetchWithAuth(scriptsApiUrl);
+					const scriptsData = await scriptsRes.json();
+					if (scriptsRes.ok && Array.isArray(scriptsData) && scriptsData.length > 0) {
+						setLatestDraft(scriptsData[0]);
+					} else {
+						setLatestDraft(null);
+					}
+				}
+
 			} catch (err) {
 				console.error("Error fetching project data:", err);
 			} finally {
@@ -59,11 +78,12 @@ const ProjectDashboard = () => {
 
 	const totalScheduleScenes = (metrics?.schedules?.scheduled_scenes || 0) + (metrics?.schedules?.unscheduled_scenes || 0);
 	const scenesScheduledPercent = totalScheduleScenes > 0 ? Math.round((metrics.schedules.scheduled_scenes / totalScheduleScenes) * 100) : 0;
+	const isEpisodicProject = (metrics?.project_type || "") === "episodic";
 
 	// Check if no scripts are available
 	const hasNoScripts = !metrics?.scripts?.total || metrics.scripts.total === 0;
+return (
 
-	return (
 		<div className="proj-dash-page">
 			{/* Header */}
 			<div className="proj-dash-header">
@@ -92,23 +112,66 @@ const ProjectDashboard = () => {
 
 			{/* Top Stats Grid */}
 			<div className="proj-dash-stats-grid">
-				{/* Scripts Card */}
-				<div className="proj-dash-stat-card">
-					<div className="proj-dash-stat-header">
-						<div className="proj-dash-stat-icon scripts">
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-								<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-								<polyline points="14 2 14 8 20 8" />
-								<line x1="16" y1="13" x2="8" y2="13" />
-								<line x1="16" y1="17" x2="8" y2="17" />
-								<polyline points="10 9 9 9 8 9" />
-							</svg>
+				{/* Episodes & Drafts Card (Episodic only) */}
+				{isEpisodicProject ? (
+					<div className="proj-dash-stat-card" style={{ minWidth: 320 }}>
+						<div className="proj-dash-stat-header">
+							<div className="proj-dash-stat-icon episodes">
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+									<rect x="3" y="4" width="18" height="16" rx="2" ry="2" />
+									<line x1="3" y1="10" x2="21" y2="10" />
+									<line x1="8" y1="2" x2="8" y2="6" />
+									<line x1="16" y1="2" x2="16" y2="6" />
+								</svg>
+							</div>
+							<span className="proj-dash-stat-title">Episodes & Drafts</span>
+						</div>
+						<div className="proj-dash-episode-list">
+							{episodeDrafts.length === 0 ? (
+								<div style={{ color: '#888', fontSize: 15, padding: '8px 0' }}>No episodes found</div>
+							) : (
+								episodeDrafts.map(ep => (
+									<div key={ep.ep_number} className="proj-dash-episode-item">
+										<div className="proj-dash-episode-row">
+											<span className="proj-dash-episode-label">Ep{ep.ep_number}</span>
+											<span className="proj-dash-episode-count">{ep.drafts} draft{ep.drafts === 1 ? '' : 's'}</span>
+										</div>
+										<div className="proj-dash-episode-meta">
+											<span>Latest:</span>
+											<strong>{ep.latest_draft_name || "No drafts yet"}</strong>
+										</div>
+									</div>
+								))
+							)}
+						</div>
+						<div className="proj-dash-episode-latest">
+							<span className="proj-dash-episode-latest-label">Latest Draft</span>
+							<span className="proj-dash-episode-latest-value">
+								{latestDraft
+									? `${latestDraft.name}${latestDraft.episodeNumber ? ` (Ep${latestDraft.episodeNumber})` : ""}`
+									: "No drafts yet"}
+							</span>
+						</div>
+					</div>
+				) : (
+					/* Scripts Card (non-episodic) */
+					<div className="proj-dash-stat-card">
+						<div className="proj-dash-stat-header">
+							<div className="proj-dash-stat-icon scripts">
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+									<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+									<polyline points="14 2 14 8 20 8" />
+									<line x1="16" y1="13" x2="8" y2="13" />
+									<line x1="16" y1="17" x2="8" y2="17" />
+									<polyline points="10 9 9 9 8 9" />
+								</svg>
 						</div>
 						<span className="proj-dash-stat-title">Scripts</span>
+						</div>
+						<div className="proj-dash-stat-value">{metrics?.scripts?.total || 0}</div>
+						<div className="proj-dash-stat-subtitle">{metrics?.scripts?.latest ? `Latest: ${metrics.scripts.latest}` : "No scripts uploaded"}</div>
 					</div>
-					<div className="proj-dash-stat-value">{metrics?.scripts?.total || 0}</div>
-					<div className="proj-dash-stat-subtitle">{metrics?.scripts?.latest ? `Latest: ${metrics.scripts.latest}` : "No scripts uploaded"}</div>
-				</div>
+				)}
 
 				{/* Scenes Card */}
 				<div className="proj-dash-stat-card">
@@ -128,7 +191,7 @@ const ProjectDashboard = () => {
 						<span className="proj-dash-stat-title">Total Scenes</span>
 					</div>
 					<div className="proj-dash-stat-value">{metrics?.scenes?.total || 0}</div>
-					<div className="proj-dash-stat-subtitle">From script breakdown</div>
+					<div className="proj-dash-stat-subtitle">{isEpisodicProject ? "From master breakdown" : "From script breakdown"}</div>
 				</div>
 
 				{/* Shoot Days Card */}

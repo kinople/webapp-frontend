@@ -1,10 +1,284 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { PiCloudSun, PiMoon, PiSun, PiMapPin, PiFirstAid, PiList, PiUser, PiPhone, PiMegaphoneBold } from 'react-icons/pi';
 import '../css/CallSheetPreview.css';
 
-const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showActions = true }) => {
+const CallSheetPreview = ({
+    data,
+    project,
+    logoTs,
+    logo2Ts,
+    crewList,
+    showActions = true,
+    activePreviewTarget = null,
+    previewPulseKey = 0
+}) => {
+    const previewRootRef = useRef(null);
+    const pendingFocusRef = useRef({ target: null, pulseKey: 0 });
+    const mapDirectionsUrl = data.location_details?.latitude && data.location_details?.longitude
+        ? `https://www.google.com/maps/dir/?api=1&destination=${data.location_details.latitude},${data.location_details.longitude}`
+        : '';
+
+    const getPreviewTargetProps = (target, className = '') => ({
+        'data-preview-target': target,
+        className: `csp-preview-target${activePreviewTarget === target ? ' is-active' : ''}${className ? ` ${className}` : ''}`,
+    });
+
+    const handleOpenMapInNewTab = (event) => {
+        if (!mapDirectionsUrl) return;
+        event.preventDefault();
+        window.open(mapDirectionsUrl, '_blank', 'noopener,noreferrer');
+    };
+
+    useEffect(() => {
+        if (!activePreviewTarget || !previewPulseKey || !previewRootRef.current) return;
+
+        pendingFocusRef.current = { target: activePreviewTarget, pulseKey: previewPulseKey };
+
+        let frameId = null;
+        let attempts = 0;
+        const maxAttempts = 12;
+
+        const alignTargetIntoView = () => {
+            if (!previewRootRef.current) return;
+            const latest = pendingFocusRef.current;
+            if (latest.target !== activePreviewTarget || latest.pulseKey !== previewPulseKey) return;
+
+            const target = previewRootRef.current.querySelector(`[data-preview-target="${activePreviewTarget}"]`);
+            const scrollContainer = previewRootRef.current.closest('.msd-right-column');
+
+            if (!scrollContainer) return;
+
+            if (!target) {
+                attempts += 1;
+                if (attempts < maxAttempts) {
+                    frameId = window.requestAnimationFrame(alignTargetIntoView);
+                }
+                return;
+            }
+
+            const targetRect = target.getBoundingClientRect();
+            const containerRect = scrollContainer.getBoundingClientRect();
+            const padding = 36;
+            const isCrewPageTarget =
+                activePreviewTarget === 'crew-page' ||
+                activePreviewTarget === 'key-crew-box' ||
+                activePreviewTarget.startsWith('crew-call:') ||
+                activePreviewTarget.startsWith('crew-note:');
+            const isRequirementsTarget =
+                activePreviewTarget === 'requirements' ||
+                activePreviewTarget.startsWith('requirement-card:');
+            const isSafetyHotlineTarget =
+                activePreviewTarget === 'safety-hotline' ||
+                activePreviewTarget === 'safety-hotline-name' ||
+                activePreviewTarget === 'safety-hotline-phone';
+
+            if (isCrewPageTarget) {
+                const pageNode = target.closest('.csp-page');
+                if (pageNode) {
+                    const pageRect = pageNode.getBoundingClientRect();
+                    const currentScrollTop = scrollContainer.scrollTop;
+                    const pageTopWithinContainer = (pageRect.top - containerRect.top) + currentScrollTop;
+                    const pageBottomWithinContainer = (pageRect.bottom - containerRect.top) + currentScrollTop;
+                    const fullyVisible =
+                        pageRect.top >= containerRect.top + 12 &&
+                        pageRect.bottom <= containerRect.bottom - 12;
+
+                    if (!fullyVisible) {
+                        const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+                        const desiredScrollTop = Math.min(
+                            maxScrollTop,
+                            Math.max(0, pageTopWithinContainer - 16)
+                        );
+
+                        scrollContainer.scrollTo({
+                            top: desiredScrollTop,
+                            behavior: 'smooth',
+                        });
+
+                        attempts += 1;
+                        if (attempts < maxAttempts) {
+                            frameId = window.requestAnimationFrame(alignTargetIntoView);
+                        }
+                        return;
+                    }
+
+                    const targetFullyVisibleWithinPage =
+                        targetRect.top >= containerRect.top + padding &&
+                        targetRect.bottom <= containerRect.bottom - padding;
+
+                    if (targetFullyVisibleWithinPage) return;
+
+                    const desiredTargetScrollTop = Math.min(
+                        Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight),
+                        Math.max(
+                            0,
+                            pageTopWithinContainer - 16 + Math.max(0, targetRect.top - pageRect.top) - 24
+                        )
+                    );
+
+                    scrollContainer.scrollTo({
+                        top: desiredTargetScrollTop,
+                        behavior: 'smooth',
+                    });
+                    return;
+                }
+            }
+
+            if (isRequirementsTarget) {
+                const requirementsNode =
+                    target.closest('[data-preview-target="requirements"]') ||
+                    previewRootRef.current.querySelector('[data-preview-target="requirements"]');
+
+                if (requirementsNode) {
+                    const requirementsRect = requirementsNode.getBoundingClientRect();
+                    const currentScrollTop = scrollContainer.scrollTop;
+                    const requirementsTopWithinContainer =
+                        (requirementsRect.top - containerRect.top) + currentScrollTop;
+                    const requirementsBottomWithinContainer =
+                        (requirementsRect.bottom - containerRect.top) + currentScrollTop;
+                    const fullyVisible =
+                        requirementsRect.top >= containerRect.top + 12 &&
+                        requirementsRect.bottom <= containerRect.bottom - 12;
+
+                    if (!fullyVisible) {
+                        const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+                        const desiredScrollTop = Math.min(
+                            maxScrollTop,
+                            Math.max(0, requirementsTopWithinContainer - 16)
+                        );
+
+                        scrollContainer.scrollTo({
+                            top: desiredScrollTop,
+                            behavior: 'smooth',
+                        });
+
+                        attempts += 1;
+                        if (attempts < maxAttempts) {
+                            frameId = window.requestAnimationFrame(alignTargetIntoView);
+                        }
+                        return;
+                    }
+
+                    const targetFullyVisibleWithinSection =
+                        targetRect.top >= containerRect.top + padding &&
+                        targetRect.bottom <= containerRect.bottom - padding;
+
+                    if (targetFullyVisibleWithinSection) return;
+
+                    const desiredTargetScrollTop = Math.min(
+                        Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight),
+                        Math.max(
+                            0,
+                            requirementsTopWithinContainer - 16 + Math.max(0, targetRect.top - requirementsRect.top) - 24
+                        )
+                    );
+
+                    scrollContainer.scrollTo({
+                        top: desiredTargetScrollTop,
+                        behavior: 'smooth',
+                    });
+                    return;
+                }
+            }
+
+            if (isSafetyHotlineTarget) {
+                const hotlineNode =
+                    target.closest('[data-preview-target="safety-hotline"]') ||
+                    previewRootRef.current.querySelector('[data-preview-target="safety-hotline"]');
+
+                if (hotlineNode) {
+                    const pageNode = hotlineNode.closest('.csp-page');
+                    const currentScrollTop = scrollContainer.scrollTop;
+
+                    if (pageNode) {
+                        const pageRect = pageNode.getBoundingClientRect();
+                        const pageTopWithinContainer = (pageRect.top - containerRect.top) + currentScrollTop;
+                        const pageFullyVisible =
+                            pageRect.top >= containerRect.top + 12 &&
+                            pageRect.bottom <= containerRect.bottom - 12;
+
+                        if (!pageFullyVisible) {
+                            const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+                            scrollContainer.scrollTo({
+                                top: Math.min(maxScrollTop, Math.max(0, pageTopWithinContainer - 16)),
+                                behavior: 'smooth',
+                            });
+
+                            attempts += 1;
+                            if (attempts < maxAttempts) {
+                                frameId = window.requestAnimationFrame(alignTargetIntoView);
+                            }
+                            return;
+                        }
+                    }
+
+                    const hotlineRect = hotlineNode.getBoundingClientRect();
+                    const hotlineTopWithinContainer = (hotlineRect.top - containerRect.top) + currentScrollTop;
+                    const hotlineBottomWithinContainer = (hotlineRect.bottom - containerRect.top) + currentScrollTop;
+                    const hotlineFullyVisible =
+                        hotlineRect.top >= containerRect.top + 12 &&
+                        hotlineRect.bottom <= containerRect.bottom - 12;
+
+                    if (!hotlineFullyVisible) {
+                        const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+                        const desiredScrollTop = hotlineRect.top < containerRect.top + 12
+                            ? Math.max(0, hotlineTopWithinContainer - 16)
+                            : Math.max(0, hotlineBottomWithinContainer - scrollContainer.clientHeight + 16);
+
+                        scrollContainer.scrollTo({
+                            top: Math.min(maxScrollTop, desiredScrollTop),
+                            behavior: 'smooth',
+                        });
+                        return;
+                    }
+                }
+            }
+
+            const isVisible =
+                targetRect.top >= containerRect.top + padding &&
+                targetRect.bottom <= containerRect.bottom - padding;
+
+            if (isVisible) return;
+
+            const currentScrollTop = scrollContainer.scrollTop;
+            const targetTopWithinContainer = (targetRect.top - containerRect.top) + currentScrollTop;
+            const targetBottomWithinContainer = (targetRect.bottom - containerRect.top) + currentScrollTop;
+            const targetHeight = Math.max(targetRect.height, target.offsetHeight, 1);
+            const desiredTop = Math.max(
+                0,
+                targetTopWithinContainer - ((scrollContainer.clientHeight - Math.min(targetHeight, scrollContainer.clientHeight)) * 0.35)
+            );
+            const desiredBottom = Math.max(0, targetBottomWithinContainer - scrollContainer.clientHeight + padding);
+            const nextScrollTop = targetRect.top < containerRect.top + padding
+                ? desiredTop
+                : desiredBottom;
+
+            scrollContainer.scrollTo({
+                top: nextScrollTop,
+                behavior: 'smooth',
+            });
+        };
+
+        alignTargetIntoView();
+
+        return () => {
+            if (frameId !== null) {
+                window.cancelAnimationFrame(frameId);
+            }
+        };
+    }, [activePreviewTarget, previewPulseKey]);
+    const formatSceneDisplay = (scene) => {
+        const sceneNumber = String(scene?.scene_number ?? '').trim();
+        if (!sceneNumber) return '';
+        return sceneNumber;
+    };
+
+    const hasEpisodeColumn = (scenes = []) => {
+        return Array.isArray(scenes) && scenes.some((scene) => String(scene?.episode_number ?? '').trim() !== '');
+    };
+
     // Helper to format time
     const fmtTime = (time) => {
         if (!time) return '';
@@ -52,11 +326,82 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
         return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     };
 
-    const limitWords = (text, maxWords) => {
+    const limitChars = (text, maxChars) => {
         if (!text) return '';
-        const words = text.split(/\s+/).filter(Boolean);
-        if (words.length <= maxWords) return text;
-        return words.slice(0, maxWords).join(' ');
+        if (text.length <= maxChars) return text;
+        return text.slice(0, maxChars);
+    };
+
+    const buildCharacterPreviewKey = (character, fallbackIndex = 0) => {
+        const rawId = String(character?.character_id || '').trim();
+        if (rawId) return `id:${rawId}`;
+
+        const rawName = String(character?.character_name || '').trim().toLowerCase();
+        if (rawName) return `name:${rawName.replace(/\s+/g, '-')}`;
+
+        return `row:${fallbackIndex}`;
+    };
+
+    const buildScenePreviewKey = (scene, fallbackIndex = 0) => {
+        const rawScene = String(scene?.scene_number || '').trim();
+        if (rawScene) return `scene:${rawScene.replace(/\s+/g, '-')}`;
+        return `row:${fallbackIndex}`;
+    };
+
+    const buildRequirementPreviewKey = (requirement, fallbackIndex = 0) => {
+        const rawCategory = String(requirement?.category || requirement?.label || '').trim().toLowerCase();
+        if (rawCategory) return rawCategory.replace(/\s+/g, '-');
+        return `req-${fallbackIndex}`;
+    };
+
+    const buildContactPreviewKey = (contact, fallbackIndex = 0) => {
+        if (contact?.id) return String(contact.id);
+        const rawRole = String(contact?.role || '').trim().toLowerCase();
+        if (rawRole) return rawRole.replace(/\s+/g, '-');
+        return `contact-${fallbackIndex}`;
+    };
+
+    const buildCrewStateKey = (crew, deptId = '', fallbackIndex = 0) => {
+        const rawCrewId = crew?.id;
+        if (rawCrewId !== undefined && rawCrewId !== null && String(rawCrewId).trim() !== '') {
+            return `id:${String(rawCrewId).trim()}`;
+        }
+
+        const namePart = String(crew?.name || '').trim().toLowerCase().replace(/\s+/g, '-');
+        const rolePart = String(crew?.role || '').trim().toLowerCase().replace(/\s+/g, '-');
+        return `temp:${String(deptId || 'dept').trim() || 'dept'}:${fallbackIndex}:${namePart || 'crew'}:${rolePart || 'role'}`;
+    };
+
+    const formatPhoneDisplay = (raw) => {
+        if (!raw) return '';
+        const trimmed = String(raw).trim();
+        if (!trimmed) return '';
+        const hasPlus = trimmed.startsWith('+');
+        const digits = trimmed.replace(/\D/g, '');
+        if (!digits) return trimmed;
+
+        const groupDigits = (d) => {
+            if (d.length <= 3) return d;
+            if (d.length <= 6) return `${d.slice(0, 3)} ${d.slice(3)}`;
+            if (d.length <= 10) return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`;
+            return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6, 10)} ${d.slice(10)}`;
+        };
+
+        const formatNational10 = (d) => {
+            if (d.length !== 10) return null;
+            return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+        };
+
+        if (hasPlus) {
+            if (digits.length > 10) {
+                const country = digits.slice(0, digits.length - 10);
+                const national = digits.slice(-10);
+                return `+${country} ${formatNational10(national) || groupDigits(national)}`.trim();
+            }
+            return `+${groupDigits(digits)}`.trim();
+        }
+
+        return formatNational10(digits) || groupDigits(digits);
     };
 
     const sumPages = (scenes) => {
@@ -319,39 +664,46 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                     WALKIE CHANNEL NO. - {data.walkie_channel}
                 </div>
             )}
-            <div className="csp-banner-red">
-                <div className="csp-banner-col">
-                    <strong><PiFirstAid /> EMERGENCY</strong><br />
-                    {data.location_details?.emergency?.name || '911'} : {data.location_details?.emergency?.phone || ''}
-                </div>
-                <div className="csp-banner-divider"></div>
+            <div {...getPreviewTargetProps('safety-hotline', 'csp-banner-red')}>
                 <div className="csp-banner-col">
                     <strong>🛡️ HARASSMENT & SAFETY</strong><br />
-                    {data.location_details?.safety_hotline?.name || 'Safe set hotline'}: {data.location_details?.safety_hotline?.phone || 'N/A'}
+                    <span {...getPreviewTargetProps('safety-hotline-name')}>
+                        {data.location_details?.safety_hotline?.name || 'Safe set hotline'}
+                    </span>
+                    :{' '}
+                    <span {...getPreviewTargetProps('safety-hotline-phone')}>
+                        {data.location_details?.safety_hotline?.phone || 'N/A'}
+                    </span>
                 </div>
             </div>
         </div>
     );
 
     const renderHeader = () => (
-        <div className="csp-ref-header">
+        <div {...getPreviewTargetProps('header-summary', 'csp-ref-header')}>
             {/* Left: Prod Co, Title, Logo */}
             <div className="csp-ref-header-left">
 
                 <div className="csp-ref-title">{project?.title || 'PROJECT TITLE'}</div>
                 <div className="csp-logos-row">
-                    <img
-                        src={`/api/projects/${project?.id || data.project_id}/logo${logoTs ? `?t=${logoTs}` : ''}`}
-                        alt="Logo"
-                        className="csp-ref-logo"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                    />
-                    <img
-                        src={`/api/projects/${project?.id || data.project_id}/logo2${logo2Ts ? `?t=${logo2Ts}` : ''}`}
-                        alt="Logo 2"
-                        className="csp-ref-logo"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                    />
+                    <div className="csp-ref-logo-slot">
+                        <img
+                            src={`/api/projects/${project?.id || data.project_id}/logo${logoTs ? `?t=${logoTs}` : ''}`}
+                            alt="Logo"
+                            className="csp-ref-logo"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                            onLoad={(e) => { e.target.style.display = 'block'; }}
+                        />
+                    </div>
+                    <div className="csp-ref-logo-slot">
+                        <img
+                            src={`/api/projects/${project?.id || data.project_id}/logo2${logo2Ts ? `?t=${logo2Ts}` : ''}`}
+                            alt="Logo 2"
+                            className="csp-ref-logo"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                            onLoad={(e) => { e.target.style.display = 'block'; }}
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -379,7 +731,7 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
             <div className="csp-ref-header-right">
                 <div className="csp-ref-date">{fmtDate(data.date)}</div>
                 {data.quote && (
-                    <div className="csp-ref-header-quote">
+                    <div {...getPreviewTargetProps('quote', 'csp-ref-header-quote')}>
                         "{data.quote}"
                     </div>
                 )}
@@ -389,24 +741,298 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
     );
 
 
+    const PAGE_1_CAPACITY = 570;
+    const PAGE_N_CAPACITY = 980;
+    const HEIGHTS = {
+        SECTION_HEADER: 35,
+        TABLE_HEADER: 32,
+        SCENE_ROW: 55,
+        CAST_ROW: 30,
+        REQ_CARD_GROUP: 100,
+        ADVANCE_ROW: 55,
+        CREW_HEADER: 32,
+        CREW_DEPT_BASE: 46,
+        CREW_DEPT_ROW: 19,
+        CREW_GRID_GAP: 6,
+        CREW_BOTTOM_GRID: 20,
+        BOTTOM_BOX_HEADER: 24,
+        BOTTOM_BOX_MIN: 34,
+        BOTTOM_BOX_LINE: 14,
+        BANNER: 56,
+        WALKIE_STRIP: 20
+    };
+
+    const estimateTextLines = (value, charsPerLine = 48) => {
+        if (!value) return 0;
+        return String(value)
+            .split('\n')
+            .reduce((total, line) => {
+                const trimmed = line.trim();
+                if (!trimmed) return total + 1;
+                return total + Math.max(1, Math.ceil(trimmed.length / charsPerLine));
+            }, 0);
+    };
+
+    const getCrewDepartmentMembers = (dept) => dept?.crew_members || dept?.crew || [];
+
+    const getCrewDepartmentEstimatedHeight = (memberCount = 0) => {
+        return HEIGHTS.CREW_DEPT_BASE + (memberCount * HEIGHTS.CREW_DEPT_ROW) + HEIGHTS.CREW_GRID_GAP;
+    };
+
+    const buildCrewPageLayouts = (departments = [], gridCapacity = PAGE_N_CAPACITY) => {
+        if (!departments.length) return [];
+
+        const pages = [];
+        let pageIndex = 0;
+        let currentColumn = 0;
+        let columns = [[], []];
+        let remainingHeights = [gridCapacity, gridCapacity];
+        let columnHeights = [0, 0];
+
+        const pushPage = () => {
+            pages.push({
+                pageIndex,
+                columns,
+                columnHeights: [...columnHeights]
+            });
+            pageIndex += 1;
+            currentColumn = 0;
+            columns = [[], []];
+            remainingHeights = [gridCapacity, gridCapacity];
+            columnHeights = [0, 0];
+        };
+
+        departments.forEach((dept) => {
+            const members = getCrewDepartmentMembers(dept);
+            let startIndex = 0;
+            let chunkIndex = 0;
+
+            if (members.length === 0) {
+                while (remainingHeights[currentColumn] < getCrewDepartmentEstimatedHeight(0)) {
+                    if (currentColumn === 0) {
+                        currentColumn = 1;
+                    } else {
+                        pushPage();
+                    }
+                }
+
+                columns[currentColumn].push({
+                    dept,
+                    members: [],
+                    chunkIndex,
+                    isContinuation: false
+                });
+                const chunkHeight = getCrewDepartmentEstimatedHeight(0);
+                remainingHeights[currentColumn] -= chunkHeight;
+                columnHeights[currentColumn] += chunkHeight;
+                return;
+            }
+
+            while (startIndex < members.length) {
+                const availableHeight = remainingHeights[currentColumn];
+                const maxRowsForColumn = Math.floor((availableHeight - HEIGHTS.CREW_DEPT_BASE - HEIGHTS.CREW_GRID_GAP) / HEIGHTS.CREW_DEPT_ROW);
+
+                if (maxRowsForColumn <= 0) {
+                    if (currentColumn === 0) {
+                        currentColumn = 1;
+                    } else {
+                        pushPage();
+                    }
+                    continue;
+                }
+
+                const takeCount = Math.min(members.length - startIndex, maxRowsForColumn);
+                const chunkMembers = members.slice(startIndex, startIndex + takeCount);
+                const chunkHeight = getCrewDepartmentEstimatedHeight(chunkMembers.length);
+
+                columns[currentColumn].push({
+                    dept,
+                    members: chunkMembers,
+                    chunkIndex,
+                    isContinuation: startIndex > 0
+                });
+                remainingHeights[currentColumn] -= chunkHeight;
+                columnHeights[currentColumn] += chunkHeight;
+                startIndex += takeCount;
+                chunkIndex += 1;
+
+                if (startIndex < members.length) {
+                    if (currentColumn === 0) {
+                        currentColumn = 1;
+                    } else {
+                        pushPage();
+                    }
+                }
+            }
+        });
+
+        if (columns[0].length > 0 || columns[1].length > 0) {
+            pushPage();
+        }
+
+        return pages;
+    };
+
+    const estimateCrewBottomHeight = (cl, d) => {
+        const noteLines = Math.max(
+            2,
+            (Array.isArray(cl?.departments) ? cl.departments : []).reduce((total, dept) => {
+                const note = d?.department_notes?.[dept.id];
+                if (!note) return total;
+                return total + estimateTextLines(`${dept.name}: ${note}`, 52);
+            }, 0)
+        );
+
+        const usefulContactLines = Array.isArray(d?.useful_contacts) && d.useful_contacts.length > 0
+            ? d.useful_contacts.reduce((total, contact) => {
+                const label = `${contact?.role || ''} ${contact?.name ? `(${contact.name})` : ''} ${contact?.phone || ''}`.trim();
+                return total + Math.max(1, estimateTextLines(label, 42));
+            }, 0)
+            : 2;
+
+        const notesHeight = HEIGHTS.BOTTOM_BOX_HEADER + Math.max(HEIGHTS.BOTTOM_BOX_MIN, noteLines * HEIGHTS.BOTTOM_BOX_LINE);
+        const contactsHeight = HEIGHTS.BOTTOM_BOX_HEADER + Math.max(HEIGHTS.BOTTOM_BOX_MIN, usefulContactLines * HEIGHTS.BOTTOM_BOX_LINE);
+
+        return HEIGHTS.CREW_BOTTOM_GRID + Math.max(notesHeight, contactsHeight);
+    };
+
+    const estimateCrewPageUsedHeight = (gridHeight, cl, d) => {
+        const baseHeight =
+            HEIGHTS.CREW_HEADER +
+            gridHeight +
+            estimateCrewBottomHeight(cl, d) +
+            HEIGHTS.BANNER;
+
+        return baseHeight + (d?.walkie_channel ? HEIGHTS.WALKIE_STRIP : 0);
+    };
+
+    const splitAdvanceScenesForEnding = (advanceScenes, remainingHeight = 0) => {
+        const scenes = Array.isArray(advanceScenes) ? advanceScenes : [];
+        if (scenes.length === 0) {
+            return { inlineScenes: [], overflowChunks: [] };
+        }
+
+        const headerFootprint = HEIGHTS.SECTION_HEADER + HEIGHTS.TABLE_HEADER;
+        const safeRemainingHeight = Math.max(0, remainingHeight);
+        const maxInlineRows = safeRemainingHeight >= (headerFootprint + HEIGHTS.ADVANCE_ROW)
+            ? Math.max(0, Math.floor((safeRemainingHeight - headerFootprint) / HEIGHTS.ADVANCE_ROW))
+            : 0;
+
+        const inlineCount = Math.min(scenes.length, maxInlineRows);
+        const inlineScenes = scenes.slice(0, inlineCount);
+        const overflowScenes = scenes.slice(inlineCount);
+        const rowsPerOverflowPage = Math.max(
+            1,
+            Math.floor((PAGE_N_CAPACITY - headerFootprint) / HEIGHTS.ADVANCE_ROW)
+        );
+
+        return {
+            inlineScenes,
+            overflowChunks: chunkItems(overflowScenes, rowsPerOverflowPage)
+        };
+    };
+
+    const renderAdvanceScheduleSection = (scenes, options = {}) => {
+        if (!Array.isArray(scenes) || scenes.length === 0) return null;
+
+        const {
+            target = null,
+            title = 'ADVANCE SCHEDULE'
+        } = options;
+        const showEpisodeColumn = hasEpisodeColumn(scenes);
+
+        return (
+            <div style={{ marginTop: '15px' }}>
+                <div
+                    {...(target
+                        ? getPreviewTargetProps(target, 'csp-section-header-bar')
+                        : { className: 'csp-section-header-bar' })}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                        <PiList />
+                        {title}
+                    </div>
+                </div>
+                <div className="csp-section-no-border" style={{ marginTop: 0 }}>
+                    <table className="csp-table-redesign">
+                        <thead>
+                            <tr>
+                                {showEpisodeColumn && <th style={{ width: '32px' }}>EP</th>}
+                                <th style={{ width: '38px' }}>SCENE</th>
+                                <th style={{ width: '35%' }}>SET/DESCRIPTION</th>
+                                <th style={{ width: '45px' }}>CAST</th>
+                                <th style={{ width: '55px' }}>D/N</th>
+                                <th style={{ width: '38px' }}>PGS</th>
+                                <th>REMARK</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {scenes.map((scene, sIdx) => {
+                                const previewKey = buildScenePreviewKey(scene, sIdx);
+                                return (
+                                    <tr key={`${previewKey}-${sIdx}`}>
+                                        {showEpisodeColumn && <td className="csp-center">{scene.episode_number || '-'}</td>}
+                                        <td {...getPreviewTargetProps(`scene-cell:advance:${previewKey}:scene_number`, 'csp-strong-center')}>{formatSceneDisplay(scene)}</td>
+                                        <td {...getPreviewTargetProps(`scene-cell:advance:${previewKey}:location`)}>
+                                            <strong>{scene.int_ext} {scene.location ? `- ${scene.location}` : ''}</strong>
+                                            <div {...getPreviewTargetProps(`scene-cell:advance:${previewKey}:description`)} style={{ fontSize: '0.8em', marginTop: '2px' }}>{scene.description}</div>
+                                        </td>
+                                        <td {...getPreviewTargetProps(`scene-cell:advance:${previewKey}:cast_ids`, 'csp-center')}>{scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : ''}</td>
+                                        <td {...getPreviewTargetProps(`scene-cell:advance:${previewKey}:day_night`, 'csp-center')}>
+                                            {scene.day_night === 'CONTINUOUS' ? 'CONT' : scene.day_night}
+                                        </td>
+                                        <td {...getPreviewTargetProps(`scene-cell:advance:${previewKey}:pages`, 'csp-center')}>{scene.pages}</td>
+                                        <td {...getPreviewTargetProps(`scene-cell:advance:${previewKey}:remarks`)} style={{ fontSize: '8.5px' }}>
+                                            <div style={{ wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap' }}>
+                                                {limitChars(scene.remarks, 150)}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+    };
+
+    const renderCrewDepartmentBox = (chunk, chunkRenderIndex) => (
+        <div key={`${chunk.dept.id}-${chunk.chunkIndex}-${chunkRenderIndex}`} className="csp-ref-dept-box">
+            <div className="csp-ref-dept-header">
+                <span>
+                    {chunk.dept.name.toUpperCase()}
+                    {chunk.isContinuation ? ' (CONT.)' : ''}
+                </span>
+            </div>
+            <div className="csp-ref-dept-row" style={{ fontWeight: '800', fontSize: '10px', borderBottom: '1px solid #000', paddingBottom: '2px', marginBottom: '2px' }}>
+                <div className="csp-ref-dept-col" style={{ width: '35%' }}>POSITION</div>
+                <div className="csp-ref-dept-col" style={{ flex: 1 }}>NAME</div>
+                <div className="csp-ref-dept-col" style={{ width: '80px', justifyContent: 'center' }}>RPT LOC</div>
+            </div>
+            <div className="csp-ref-dept-rows">
+                {chunk.members.map((m, memberIdx) => {
+                    const globalMemberIndex = getCrewDepartmentMembers(chunk.dept).findIndex((candidate) => candidate === m);
+                    const resolvedMemberIndex = globalMemberIndex >= 0 ? globalMemberIndex : memberIdx;
+                    const crewKey = buildCrewStateKey(m, chunk.dept.id, resolvedMemberIndex);
+                    const displayValue = getCrewCallDisplayValue(m, chunk.dept.id, resolvedMemberIndex);
+                    return (
+                        <div key={crewKey} className="csp-ref-dept-row">
+                            <div className="csp-ref-dept-col" style={{ width: '35%' }}><span className="csp-ref-role">{m.role}</span></div>
+                            <div className="csp-ref-dept-col" style={{ flex: 1 }}><span className="csp-ref-name">{m.name}</span></div>
+                            <div {...getPreviewTargetProps(`crew-call:${crewKey}`, 'csp-ref-dept-col')} style={{ width: '80px', justifyContent: 'center', fontWeight: 'normal' }}>
+                                {displayValue}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+
     // --- PAGINATION ENGINE (DYNAMIC FLOW) ---
     const calculatePagination = () => {
         const pages = [];
-
-        // Capacity in pixels (approximate for A4 at standard print DPI)
-        // Usable content height after padding (5mm top + 15mm bottom ≈ 76px) and footer (~30px)
-        // Total available: ~1016px per page
-        // Page 1 usable area after the header block (~430px taken)
-        const PAGE_1_CAPACITY = 570;
-        const PAGE_N_CAPACITY = 980;
-
-        const HEIGHTS = {
-            SECTION_HEADER: 35,
-            SCENE_ROW: 55,
-            CAST_ROW: 30,
-            REQ_CARD_GROUP: 100,
-            ADVANCE_ROW: 55
-        };
 
         let currentItems = [];
         let currentHeight = 0;
@@ -482,22 +1108,6 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
             addItem({ type: 'req-block', data: requirementItems }, estimatedReqHeight);
         }
 
-        // 4. Advance Schedule
-        const advanceScenes = data.advanced_schedule || [];
-        if (advanceScenes.length > 0) {
-            // Check if header + at least 2 advance rows fit
-            const requiredSpace = HEIGHTS.SECTION_HEADER + (HEIGHTS.ADVANCE_ROW * 2);
-            const capacity = isFirstPage ? PAGE_1_CAPACITY : PAGE_N_CAPACITY;
-            if (currentHeight + requiredSpace > capacity && currentItems.length > 0) {
-                flushPage();
-            }
-
-            addItem({ type: 'section-header', text: "ADVANCE SCHEDULE", icon: 'list' }, HEIGHTS.SECTION_HEADER);
-            advanceScenes.forEach(s => {
-                addItem({ type: 'advance-row', data: s }, HEIGHTS.ADVANCE_ROW);
-            });
-        }
-
         flushPage();
 
         // Ensure at least one page exists (Initial Template)
@@ -515,6 +1125,7 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
     const renderPages = () => {
         const pages = [];
         const contentPages = calculatePagination();
+        const advanceScenes = data.advanced_schedule || [];
 
         contentPages.forEach((page, pIdx) => {
             pages.push(
@@ -525,40 +1136,41 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                                 <div data-fixed-block="first">{renderHeader()}</div>
                                 {/* Shift Start / End strip — compact horizontal bar above info grid */}
                                 {(data.shift_start || data.shift_end) && (
-                                    <div style={{
+                                    <div
+                                        {...getPreviewTargetProps('shift-strip')}
+                                        style={{
                                         display: 'flex', gap: '24px', justifyContent: 'center',
                                         alignItems: 'center', padding: '4px 12px',
                                         background: '#f5f5f5', borderBottom: '1.5px solid #000',
                                         fontSize: '10px', fontWeight: '700', textTransform: 'uppercase',
                                         letterSpacing: '0.5px', fontFamily: `'Outfit', sans-serif`
-                                    }} data-fixed-block="first">
-                                        {data.shift_start && <span>Shift Start: <span style={{ fontWeight: 400 }}>{fmtTime(data.shift_start)}</span></span>}
+                                        }}
+                                        data-fixed-block="first"
+                                    >
+                                        {data.shift_start && <span {...getPreviewTargetProps('shift-start')}>Shift Start: <span style={{ fontWeight: 400 }}>{fmtTime(data.shift_start)}</span></span>}
                                         {data.shift_start && data.shift_end && <span style={{ opacity: 0.3 }}>|</span>}
-                                        {data.shift_end && <span>Shift End: <span style={{ fontWeight: 400 }}>{fmtTime(data.shift_end)}</span></span>}
+                                        {data.shift_end && <span {...getPreviewTargetProps('shift-end')}>Shift End: <span style={{ fontWeight: 400 }}>{fmtTime(data.shift_end)}</span></span>}
                                     </div>
                                 )}
                                 <div className="csp-info-grid-3" data-fixed-block="first">
-                                    <div className="csp-col-left">
+                                    <div {...getPreviewTargetProps('hospital-panel', 'csp-col-left')}>
                                         {renderKeyCrew(crewList)}
                                         {(data.location_details?.hospital?.name || data.location_details?.hospital?.loc) && (
                                             <div className="csp-hospital-ref-box">
                                                 <div className="csp-hospital-icon-large"><PiFirstAid /></div>
                                                 <div className="csp-hospital-info-col">
                                                     <div className="csp-hospital-ref-title">NEAREST HOSPITAL</div>
-                                                    <div className="csp-hospital-name-large">{data.location_details.hospital.name}</div>
-                                                    <div className="csp-hospital-details-row">{data.location_details.hospital.loc}</div>
-                                                    {data.location_details?.emergency?.phone && (
-                                                        <div className="csp-hospital-phone-row"><PiPhone /> {data.location_details.emergency.phone}</div>
-                                                    )}
+                                                    <div {...getPreviewTargetProps('hospital-name', 'csp-hospital-name-large')}>{data.location_details.hospital.name}</div>
+                                                    <div {...getPreviewTargetProps('hospital-location', 'csp-hospital-details-row')}>{data.location_details.hospital.loc}</div>
                                                 </div>
                                             </div>
                                         )}
                                     </div>
-                                    <div className="csp-col-center">
+                                    <div {...getPreviewTargetProps('location-panel', 'csp-col-center')}>
                                         <div className="csp-location-box">
                                             <div className="csp-location-title"><u>Set / Location</u></div>
-                                            <div className="csp-location-address">{data.location_details?.set_name || 'Location Name'}</div>
-                                            <div className="csp-location-details">
+                                            <div {...getPreviewTargetProps('location-set-name', 'csp-location-address')}>{data.location_details?.set_name || 'Location Name'}</div>
+                                            <div {...getPreviewTargetProps('location-address', 'csp-location-details')}>
                                                 {(() => {
                                                     const parts = (data.location_details?.address || '').split(',');
                                                     const line1 = parts[0]?.trim() || 'Address Line 1';
@@ -566,27 +1178,32 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                                                     return <>{line1}<br />{line2}</>;
                                                 })()}
                                             </div>
+                                            {data.location_details?.contact_phone && (
+                                                <div {...getPreviewTargetProps('location-contact-phone', 'csp-location-contact')}>
+                                                    <strong>Contact Phone:</strong> {formatPhoneDisplay(data.location_details.contact_phone)}
+                                                </div>
+                                            )}
                                             {data.location_details?.latitude && data.location_details?.longitude ? (
-                                                <a href={`https://www.google.com/maps/dir/?api=1&destination=${data.location_details.latitude},${data.location_details.longitude}`} target="_blank" rel="noopener noreferrer" className="csp-location-map-link" style={{ display: 'block', marginTop: '10px', textDecoration: 'none' }}>
+                                                <a href={mapDirectionsUrl} target="_blank" rel="noopener noreferrer" onClick={handleOpenMapInNewTab} className="csp-location-map-link" style={{ display: 'block', marginTop: '10px', textDecoration: 'none' }}>
                                                     <img src={`https://maps.googleapis.com/maps/api/staticmap?center=${data.location_details.latitude},${data.location_details.longitude}&zoom=15&size=200x120&markers=color:red%7C${data.location_details.latitude},${data.location_details.longitude}&key=AIzaSyBGLCFBaUHw6fGo2XbLIQXNIiLTlMjfITo`} alt="Map" style={{ width: '100%', borderRadius: '4px', border: '1px solid #ddd' }} />
                                                     <div style={{ fontSize: '8px', color: '#0066cc', marginTop: '4px', textAlign: 'center', fontWeight: 'bold' }}>📍 Click for directions</div>
                                                 </a>
                                             ) : <div className="csp-pin-icon"><PiMapPin /></div>}
                                         </div>
                                     </div>
-                                    <div className="csp-col-right">
+                                    <div {...getPreviewTargetProps('time-weather', 'csp-col-right')}>
                                         {(() => {
                                             const times = [
-                                                { label: 'Crew Call', value: data.crew_call },
-                                                { label: 'Shooting Call', value: data.shoot_call },
-                                                { label: 'Breakfast', value: data.meals?.breakfast },
-                                                { label: 'Lunch', value: data.meals?.lunch },
-                                                { label: 'Est. Wrap', value: data.estimated_wrap },
-                                                { label: 'Dinner', value: data.meals?.dinner },
-                                                { label: 'Snacks', value: data.meals?.snacks }
+                                                { label: 'Crew Call', value: data.crew_call, target: 'time-crew-call' },
+                                                { label: 'Shooting Call', value: data.shoot_call, target: 'time-shooting-call' },
+                                                { label: 'Breakfast', value: data.meals?.breakfast, target: 'time-breakfast' },
+                                                { label: 'Lunch', value: data.meals?.lunch, target: 'time-lunch' },
+                                                { label: 'Est. Wrap', value: data.estimated_wrap, target: 'time-est-wrap' },
+                                                { label: 'Dinner', value: data.meals?.dinner, target: 'time-dinner' },
+                                                { label: 'Snacks', value: data.meals?.snacks, target: 'time-snacks' }
                                             ].filter(t => t.value).sort((a, b) => (parseTimeToMinutes(a.value) || 0) - (parseTimeToMinutes(b.value) || 0));
                                             return times.map(t => (
-                                                <div className="csp-time-row" key={t.label}>
+                                                <div {...getPreviewTargetProps(t.target, 'csp-time-row')} key={t.label}>
                                                     <strong>{t.label}:</strong>
                                                     <span className="csp-time-value"><span className="csp-circle-dot">•</span> {fmtTime(t.value)}</span>
                                                 </div>
@@ -595,11 +1212,11 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                                         {renderWeather()}
                                     </div>
                                 </div>
-                                <div className="csp-instructions-strip" data-fixed-block="first">
+                                <div {...getPreviewTargetProps('instructions-strip', 'csp-instructions-strip')} data-fixed-block="first">
                                     {(Array.isArray(data.location_details?.instructions) ? data.location_details.instructions.filter(i => i.trim()).join(' | ') : (data.location_details?.instructions || 'DRINK WATER | NO FORCED CALLS OR VISITORS | WEAR CLOSE-TOED SHOES | NO PHOTOS | REPORT INJURIES | STAY HYDRATED')).toUpperCase()}
                                 </div>
                                 {data.attention && (
-                                    <div className="csp-attention-ref-box" data-fixed-block="first">
+                                    <div {...getPreviewTargetProps('attention-block', 'csp-attention-ref-box')} data-fixed-block="first">
                                         <div className="csp-attention-icon"><PiMegaphoneBold /></div>
                                         <div className="csp-attention-text"><strong>ATTENTION:</strong> {data.attention}</div>
                                     </div>
@@ -630,8 +1247,17 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                             return blocks.map((block, bIdx) => {
                                 if (block.type === 'section-header') {
                                     const isRequirements = block.text === "REQUIREMENTS";
+                                    const blockTarget =
+                                        block.text === "TODAY'S SCHEDULE" ? 'today-schedule'
+                                            : block.text === "CAST" ? 'cast'
+                                                : block.text === "REQUIREMENTS" ? 'requirements'
+                                                    : block.text === "ADVANCE SCHEDULE" ? 'advance-schedule'
+                                                        : null;
                                     return (
-                                        <div key={bIdx} className={isRequirements ? "csp-section-header-clean" : "csp-section-header-bar"}>
+                                        <div
+                                            key={bIdx}
+                                            {...(blockTarget ? getPreviewTargetProps(blockTarget, isRequirements ? "csp-section-header-clean" : "csp-section-header-bar") : { className: isRequirements ? "csp-section-header-clean" : "csp-section-header-bar" })}
+                                        >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
                                                 {block.icon === 'list' && <PiList />}
                                                 {block.icon === 'user' && <PiUser />}
@@ -646,11 +1272,13 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                                     );
                                 }
                                 if (block.type === 'scene-row' || block.type === 'advance-row') {
+                                    const showEpisodeColumn = hasEpisodeColumn(block.data);
                                     return (
                                         <div key={bIdx} className="csp-section-no-border" style={{ marginTop: 0 }}>
                                             <table className="csp-table-redesign">
                                                 <thead>
                                                     <tr>
+                                                        {showEpisodeColumn && <th style={{ width: '32px' }}>EP</th>}
                                                         <th style={{ width: '38px' }}>SCENE</th>
                                                         <th style={{ width: '35%' }}>SET/DESCRIPTION</th>
                                                         <th style={{ width: '45px' }}>CAST</th>
@@ -660,25 +1288,30 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {block.data.map((scene, sIdx) => (
+                                                    {block.data.map((scene, sIdx) => {
+                                                        const previewKey = buildScenePreviewKey(scene, sIdx);
+                                                        const scheduleType = block.type === 'advance-row' ? 'advance' : 'main';
+                                                        return (
                                                         <tr key={sIdx}>
-                                                            <td className="csp-strong-center">{scene.scene_number}</td>
-                                                            <td>
+                                                            {showEpisodeColumn && <td className="csp-center">{scene.episode_number || '-'}</td>}
+                                                            <td {...getPreviewTargetProps(`scene-cell:${scheduleType}:${previewKey}:scene_number`, 'csp-strong-center')}>{formatSceneDisplay(scene)}</td>
+                                                            <td {...getPreviewTargetProps(`scene-cell:${scheduleType}:${previewKey}:location`)}>
                                                                 <strong>{scene.int_ext} {scene.location ? `- ${scene.location}` : ''}</strong>
-                                                                <div style={{ fontSize: '0.8em', marginTop: '2px' }}>{scene.description}</div>
+                                                                <div {...getPreviewTargetProps(`scene-cell:${scheduleType}:${previewKey}:description`)} style={{ fontSize: '0.8em', marginTop: '2px' }}>{scene.description}</div>
                                                             </td>
-                                                            <td className="csp-center">{scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : ''}</td>
-                                                            <td className="csp-center">
+                                                            <td {...getPreviewTargetProps(`scene-cell:${scheduleType}:${previewKey}:cast_ids`, 'csp-center')}>{scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : ''}</td>
+                                                            <td {...getPreviewTargetProps(`scene-cell:${scheduleType}:${previewKey}:day_night`, 'csp-center')}>
                                                                 {scene.day_night === 'CONTINUOUS' ? 'CONT' : scene.day_night}
                                                             </td>
-                                                            <td className="csp-center">{scene.pages}</td>
-                                                            <td style={{ fontSize: '8.5px' }}>
+                                                            <td {...getPreviewTargetProps(`scene-cell:${scheduleType}:${previewKey}:pages`, 'csp-center')}>{scene.pages}</td>
+                                                            <td {...getPreviewTargetProps(`scene-cell:${scheduleType}:${previewKey}:remarks`)} style={{ fontSize: '8.5px' }}>
                                                                 <div style={{ wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap' }}>
-                                                                    {limitWords(scene.remarks, 25)}
+                                                                    {limitChars(scene.remarks, 150)}
                                                                 </div>
                                                             </td>
                                                         </tr>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                         </div>
@@ -701,22 +1334,25 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {block.data.map((char, cIdx) => (
+                                                    {block.data.map((char, cIdx) => {
+                                                        const previewKey = buildCharacterPreviewKey(char, cIdx);
+                                                        return (
                                                         <tr key={cIdx}>
                                                             <td className="csp-strong-center">{char.character_id || '-'}</td>
-                                                            <td><strong>{char.cast_name}</strong></td>
-                                                            <td>{char.character_name}</td>
-                                                            <td className="csp-center">{fmtTime(char.pickup)}</td>
-                                                            <td className="csp-center">{fmtTime(char.on_location)}</td>
-                                                            <td className="csp-center">{fmtTime(char.hmu)}</td>
-                                                            <td className="csp-center">{fmtTime(char.on_set)}</td>
-                                                            <td style={{ fontSize: '8.5px' }}>
+                                                            <td {...getPreviewTargetProps(`cast-cell:${previewKey}:cast_name`)}><strong>{char.cast_name}</strong></td>
+                                                            <td {...getPreviewTargetProps(`cast-cell:${previewKey}:character_name`)}>{char.character_name}</td>
+                                                            <td {...getPreviewTargetProps(`cast-cell:${previewKey}:pickup`, 'csp-center')}>{fmtTime(char.pickup)}</td>
+                                                            <td {...getPreviewTargetProps(`cast-cell:${previewKey}:on_location`, 'csp-center')}>{fmtTime(char.on_location)}</td>
+                                                            <td {...getPreviewTargetProps(`cast-cell:${previewKey}:hmu`, 'csp-center')}>{fmtTime(char.hmu)}</td>
+                                                            <td {...getPreviewTargetProps(`cast-cell:${previewKey}:on_set`, 'csp-center')}>{fmtTime(char.on_set)}</td>
+                                                            <td {...getPreviewTargetProps(`cast-cell:${previewKey}:remarks`)} style={{ fontSize: '8.5px' }}>
                                                                 <div style={{ wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap' }}>
-                                                                    {limitWords(char.remarks, 25)}
+                                                                    {limitChars(char.remarks, 150)}
                                                                 </div>
                                                             </td>
                                                         </tr>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                         </div>
@@ -732,7 +1368,7 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                                             {cols.map((col, ci) => (
                                                 <div key={ci} className="csp-req-flex-col">
                                                     {col.map((req, ridx) => (
-                                                        <div key={ridx} className="csp-req-card-box">
+                                                        <div key={ridx} {...getPreviewTargetProps(`requirement-card:${buildRequirementPreviewKey(req, ridx)}`, 'csp-req-card-box')}>
                                                             <div className="csp-req-card-header">{req.label}</div>
                                                             <div className="csp-req-card-body">
                                                                 {req.content.split('\n').map((line, li) => <div key={li}>{line}</div>)}
@@ -754,82 +1390,87 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
         });
 
         // 5. Always Isolated Crew Page
-        const hasCrewMembers = crewList && crewList.departments && crewList.departments.some(d => d.crew_members && d.crew_members.length > 0);
+        const hasCrewMembers = crewList && crewList.departments && crewList.departments.some(
+            (d) => (d.crew_members || d.crew || []).length > 0
+        );
         if (hasCrewMembers) {
-            pages.push(
-                <div className="csp-page csp-page-crew" key="page-crew">
-                    <div className="csp-page-content">
-                        {renderHeader()}
-                        <div className="csp-ref-crew-grid">
-                            {crewList.departments.map(dept => (
-                                <div key={dept.id} className="csp-ref-dept-box">
-                                    <div className="csp-ref-dept-header">
-                                        <span>{dept.name.toUpperCase()}</span>
-                                    </div>
-                                    <div className="csp-ref-dept-row" style={{ fontWeight: '800', fontSize: '10px', borderBottom: '1px solid #000', paddingBottom: '2px', marginBottom: '2px' }}>
-                                        <div className="csp-ref-dept-col" style={{ width: '35%' }}>POSITION</div>
-                                        <div className="csp-ref-dept-col" style={{ flex: 1 }}>NAME</div>
-                                        <div className="csp-ref-dept-col" style={{ width: '80px', justifyContent: 'center' }}>RPT LOC</div>
-                                    </div>
-                                    <div className="csp-ref-dept-rows">
-                                        {dept.crew_members.map(m => (
-                                            <div key={m.id} className="csp-ref-dept-row">
-                                                <div className="csp-ref-dept-col" style={{ width: '35%' }}><span className="csp-ref-role">{m.role}</span></div>
-                                                <div className="csp-ref-dept-col" style={{ flex: 1 }}><span className="csp-ref-name">{m.name}</span></div>
-                                                <div className="csp-ref-dept-col" style={{ width: '80px', justifyContent: 'center', fontWeight: 'normal' }}>
-                                                    {(() => {
-                                                        const val = data.crew_calls?.[m.id];
-                                                        if (!val) return fmtTime(data.crew_call);
-                                                        if (typeof val === 'object') {
-                                                            const mode = val.mode || 'custom';
-                                                            if (mode === 'crew_call') return fmtTime(data.crew_call);
-                                                            if (mode === 'on_call') return 'On Call';
-                                                            if (mode === 'na') return 'N/A';
-                                                            if (mode === 'as_per_hod') return 'As per HOD';
-                                                            // custom — format the stored time
-                                                            return fmtTime(val.time) || fmtTime(data.crew_call);
-                                                        }
-                                                        // Legacy plain string
-                                                        return fmtTime(val) || fmtTime(data.crew_call);
-                                                    })()}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="csp-ref-bottom-grid">
-                            <div className="csp-ref-bottom-box">
-                                <div className="csp-ref-bottom-header">CREW NOTES</div>
-                                <div className="csp-ref-bottom-content">
-                                    {(() => {
-                                        const allNotes = [];
-                                        if (crewList?.departments) {
-                                            crewList.departments.forEach(dept => {
-                                                if (data.department_notes?.[dept.id]) {
-                                                    allNotes.push(
-                                                        <div key={dept.id} style={{ marginBottom: '4px' }}>
-                                                            {dept.name}: {data.department_notes[dept.id]}
-                                                        </div>
-                                                    );
-                                                }
-                                            });
-                                        }
-                                        return allNotes.length > 0 ? allNotes : 'No additional crew notes.';
-                                    })()}
-                                </div>
-                            </div>
-                            <div className="csp-ref-bottom-box">
-                                <div className="csp-ref-bottom-header">USEFUL CONTACTS</div>
-                                <div className="csp-ref-bottom-content">{renderUsefulContacts(crewList, data)}</div>
-                            </div>
-                        </div>
-                        <div style={{ marginTop: '15px' }}>{renderBanner()}</div>
-                    </div>
-                    <div className="csp-footer">MADE WITH <a href="https://kinople.com" style={{ color: '#e98800ff' }}>KINOPLE</a></div>
-                </div>
+            const crewDepartments = Array.isArray(crewList?.departments) ? crewList.departments : [];
+            const crewBottomHeight = estimateCrewBottomHeight(crewList, data) + HEIGHTS.BANNER + (data?.walkie_channel ? HEIGHTS.WALKIE_STRIP : 0);
+            const crewGridCapacity = Math.max(HEIGHTS.CREW_DEPT_BASE + HEIGHTS.CREW_DEPT_ROW, PAGE_N_CAPACITY - HEIGHTS.CREW_HEADER);
+            const crewPageLayouts = buildCrewPageLayouts(crewDepartments, crewGridCapacity);
+            const totalCrewWithCallTime = (crewList?.departments || []).reduce((count, dept) => {
+                const deptCrew = dept.crew_members || dept.crew || [];
+                return count + deptCrew.filter((member, memberIdx) => {
+                    const displayValue = getCrewCallDisplayValue(member, dept.id, memberIdx);
+                    return displayValue && displayValue !== 'N/A';
+                }).length;
+            }, 0);
+            const lastCrewPageLayout = crewPageLayouts[crewPageLayouts.length - 1] || { columnHeights: [0, 0] };
+            const lastCrewGridHeight = Math.max(...(lastCrewPageLayout.columnHeights || [0, 0]));
+            const lastCrewPageFreeHeight = Math.max(0, PAGE_N_CAPACITY - HEIGHTS.CREW_HEADER - lastCrewGridHeight);
+            const bottomFitsOnLastCrewPage = lastCrewPageFreeHeight >= crewBottomHeight;
+            const advanceSpaceOnBottomPage = bottomFitsOnLastCrewPage
+                ? Math.max(0, lastCrewPageFreeHeight - crewBottomHeight)
+                : Math.max(0, PAGE_N_CAPACITY - estimateCrewPageUsedHeight(0, crewList, data));
+
+            const { inlineScenes, overflowChunks } = splitAdvanceScenesForEnding(
+                advanceScenes,
+                advanceSpaceOnBottomPage
             );
+
+            crewPageLayouts.forEach((layout, layoutIdx) => {
+                const isLastCrewPage = layoutIdx === crewPageLayouts.length - 1;
+                pages.push(
+                    renderCrewPageFrame({
+                        pageKey: `page-crew-${layoutIdx}`,
+                        crewColumns: layout.columns,
+                        totalCrewWithCallTime,
+                        showBottomSections: isLastCrewPage && bottomFitsOnLastCrewPage,
+                        inlineAdvanceScenes: isLastCrewPage && bottomFitsOnLastCrewPage ? inlineScenes : []
+                    })
+                );
+            });
+
+            if (!bottomFitsOnLastCrewPage) {
+                pages.push(
+                    renderCrewPageFrame({
+                        pageKey: 'page-crew-summary',
+                        crewColumns: [[], []],
+                        totalCrewWithCallTime,
+                        showBottomSections: true,
+                        inlineAdvanceScenes: inlineScenes
+                    })
+                );
+            }
+
+            overflowChunks.forEach((chunk, chunkIdx) => {
+                pages.push(
+                    <div className="csp-page" key={`page-advance-${chunkIdx}`}>
+                        <div className="csp-page-content">
+                            {renderAdvanceScheduleSection(chunk, {
+                                target: inlineScenes.length === 0 && chunkIdx === 0 ? 'advance-schedule' : null,
+                                title: 'ADVANCE SCHEDULE'
+                            })}
+                        </div>
+                        <div className="csp-footer">MADE WITH <a href="https://kinople.com" style={{ color: '#e98800ff', textDecoration: 'none' }}>KINOPLE</a></div>
+                    </div>
+                );
+            });
+        } else if (advanceScenes.length > 0) {
+            const { overflowChunks } = splitAdvanceScenesForEnding(advanceScenes, 0);
+            overflowChunks.forEach((chunk, chunkIdx) => {
+                pages.push(
+                    <div className="csp-page" key={`page-advance-only-${chunkIdx}`}>
+                        <div className="csp-page-content">
+                            {renderAdvanceScheduleSection(chunk, {
+                                target: chunkIdx === 0 ? 'advance-schedule' : null,
+                                title: 'ADVANCE SCHEDULE'
+                            })}
+                        </div>
+                        <div className="csp-footer">MADE WITH <a href="https://kinople.com" style={{ color: '#e98800ff', textDecoration: 'none' }}>KINOPLE</a></div>
+                    </div>
+                );
+            });
         }
 
         return pages;
@@ -838,6 +1479,7 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
     // --- SUB-RENDERERS ---
     const renderScenesTable = (scenes, title, totalPages) => {
         if (!scenes || scenes.length === 0) return null;
+        const showEpisodeColumn = hasEpisodeColumn(scenes);
         return (
             <div className="csp-section-no-border">
                 {title && (
@@ -849,6 +1491,7 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                 <table className="csp-table-redesign">
                     <thead>
                         <tr>
+                            {showEpisodeColumn && <th style={{ width: '32px' }}>EP</th>}
                             <th style={{ width: '40px' }}>SCENE</th>
                             <th style={{ width: '30%' }}>SET/DESCRIPTION</th>
                             <th style={{ width: '50px' }}>CAST</th>
@@ -860,7 +1503,8 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                     <tbody>
                         {scenes.map((scene, idx) => (
                             <tr key={idx}>
-                                <td className="csp-strong-center">{scene.scene_number}</td>
+                                {showEpisodeColumn && <td className="csp-center">{scene.episode_number || '-'}</td>}
+                                <td className="csp-strong-center">{formatSceneDisplay(scene)}</td>
                                 <td>
                                     <strong>{scene.int_ext} {scene.location ? `- ${scene.location}` : ''}</strong>
                                     <div style={{ fontSize: '0.85em', marginTop: '2px' }}>{scene.description}</div>
@@ -883,6 +1527,73 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
         );
     };
 
+    const renderCrewPageFrame = ({
+        pageKey,
+        crewColumns,
+        totalCrewWithCallTime,
+        showBottomSections = false,
+        inlineAdvanceScenes = []
+    }) => {
+        const hasCrewChunks = Array.isArray(crewColumns) && crewColumns.some((column) => Array.isArray(column) && column.length > 0);
+
+        return (
+        <div className="csp-page csp-page-crew" key={pageKey}>
+            <div className="csp-page-content">
+                <div className="csp-section-header-bar" style={{ marginBottom: '10px', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <PiUser /> Crew Time
+                    </div>
+                    <div style={{ fontSize: '0.82em', fontWeight: '600' }}>
+                        Total Crew: {totalCrewWithCallTime}
+                    </div>
+                </div>
+                {hasCrewChunks && (
+                    <div {...getPreviewTargetProps('crew-page', 'csp-ref-crew-grid')}>
+                        {crewColumns.map((columnDepartments, columnIdx) => (
+                            <div className="csp-ref-crew-column" key={`crew-column-${pageKey}-${columnIdx}`}>
+                                {columnDepartments.map((chunk, chunkIdx) => renderCrewDepartmentBox(chunk, chunkIdx))}
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {showBottomSections && (
+                    <>
+                        <div className="csp-ref-bottom-grid">
+                            <div {...getPreviewTargetProps('crew-notes', 'csp-ref-bottom-box')}>
+                                <div className="csp-ref-bottom-header">CREW NOTES</div>
+                                <div className="csp-ref-bottom-content">
+                                    {(() => {
+                                        const allNotes = [];
+                                        if (crewList?.departments) {
+                                            crewList.departments.forEach(dept => {
+                                                if (data.department_notes?.[dept.id]) {
+                                                    allNotes.push(
+                                                        <div key={dept.id} {...getPreviewTargetProps(`crew-note:${dept.id}`)} style={{ marginBottom: '4px' }}>
+                                                            {dept.name}: {data.department_notes[dept.id]}
+                                                        </div>
+                                                    );
+                                                }
+                                            });
+                                        }
+                                        return allNotes.length > 0 ? allNotes : 'No additional crew notes.';
+                                    })()}
+                                </div>
+                            </div>
+                            <div {...getPreviewTargetProps('useful-contacts', 'csp-ref-bottom-box')}>
+                                <div className="csp-ref-bottom-header">USEFUL CONTACTS</div>
+                                <div className="csp-ref-bottom-content">{renderUsefulContacts(crewList, data)}</div>
+                            </div>
+                        </div>
+                        <div style={{ marginTop: '15px' }}>{renderBanner()}</div>
+                        {renderAdvanceScheduleSection(inlineAdvanceScenes, { target: 'advance-schedule' })}
+                    </>
+                )}
+            </div>
+            <div className="csp-footer">MADE WITH <a href="https://kinople.com" style={{ color: '#e98800ff' }}>KINOPLE</a></div>
+        </div>
+        );
+    };
+
     const getRequirementsList = (d) => {
         const layoutOrder = [
             { cat: 'Set Dressing', label: 'ART SETUP' },
@@ -899,6 +1610,8 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
             .map(r => {
                 const isStandard = layoutOrder.find(l => l.cat === r.category);
                 return {
+                    id: r.id,
+                    category: r.category,
                     label: isStandard ? isStandard.label : r.category.toUpperCase(),
                     content: r.content,
                     sortIndex: isStandard ? layoutOrder.indexOf(isStandard) : 999
@@ -948,9 +1661,10 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
             if (selectedIds.length > 0) {
                 // Map IDs back to crew members for display
                 cl.departments.forEach(dept => {
-                    dept.crew_members.forEach(m => {
-                        if (selectedIds.includes(String(m.id))) {
-                            contacts.push({ role: m.role, name: m.name, phone: m.contact || m.phone });
+                    (dept.crew_members || dept.crew || []).forEach((m, memberIdx) => {
+                        const crewKey = buildCrewStateKey(m, dept.id, memberIdx);
+                        if (selectedIds.includes(crewKey) || selectedIds.includes(String(m.id))) {
+                            contacts.push({ id: crewKey, role: m.role, name: m.name, phone: m.contact || m.phone });
                         }
                     });
                 });
@@ -961,9 +1675,9 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
         if (contacts.length === 0) {
             const keyRoles = ['Producer', 'UPM', 'Unit Production Manager', '1st AD', 'First Assistant Director', 'Location Manager', 'Medic', 'Set Medic'];
             cl.departments.forEach(dept => {
-                dept.crew_members.forEach(m => {
+                (dept.crew_members || dept.crew || []).forEach(m => {
                     if (keyRoles.some(r => m.role.toLowerCase().includes(r.toLowerCase())) && m.contact) {
-                        contacts.push({ role: m.role, name: m.name, phone: m.contact || m.phone });
+                        contacts.push({ id: String(m.id), role: m.role, name: m.name, phone: m.contact || m.phone });
                     }
                 });
             });
@@ -973,10 +1687,10 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
         const medicContact = contacts.find(c => c.role.toLowerCase().includes('medic'));
 
         return (
-            <div className="csp-key-crew-box">
+            <div {...getPreviewTargetProps('key-crew-box', 'csp-key-crew-box')}>
                 <div className="csp-key-crew-section">
                     {displayContacts.map((c, i) => (
-                        <div key={i} className="csp-key-crew-row">
+                        <div key={c.id || i} className="csp-key-crew-row">
                             <span className="csp-key-crew-label">{c.role}</span>
                             <div className="csp-key-crew-dots"></div>
                             <span className="csp-key-crew-value">{c.name}</span>
@@ -998,11 +1712,28 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
         );
     };
 
+    const getCrewCallDisplayValue = (crew, deptId = '', memberIdx = 0) => {
+        const crewKey = buildCrewStateKey(crew, deptId, memberIdx);
+        const val = data.crew_calls?.[crewKey] ?? data.crew_calls?.[crew.id];
+        if (!val) return fmtTime(data.crew_call);
+
+        if (typeof val === 'object') {
+            const mode = val.mode || 'custom';
+            if (mode === 'crew_call') return fmtTime(data.crew_call);
+            if (mode === 'on_call') return 'On Call';
+            if (mode === 'na') return 'N/A';
+            if (mode === 'as_per_hod') return 'As per HOD';
+            return fmtTime(val.time) || fmtTime(data.crew_call);
+        }
+
+        return fmtTime(val) || fmtTime(data.crew_call);
+    };
+
     const renderUsefulContacts = (cl, d) => {
         // Favor manually entered contacts if present
         if (d.useful_contacts && d.useful_contacts.length > 0) {
             return d.useful_contacts.map((c, i) => (
-                <div key={i} className="csp-contact-row">
+                <div key={i} {...getPreviewTargetProps(`useful-contact:${buildContactPreviewKey(c, i)}`, 'csp-contact-row')}>
                     <span className="csp-contact-role"><strong>{c.role}</strong> {c.name ? `(${c.name})` : ''}</span>
                     <span className="csp-contact-sep">|</span>
                     <span className="csp-contact-phone">{c.phone}</span>
@@ -1023,7 +1754,7 @@ const CallSheetPreview = ({ data, project, logoTs, logo2Ts, crewList, showAction
                 </div>
             )}
 
-            <div id="call-sheet-preview" style={{ margin: 0, padding: 0 }}>
+            <div id="call-sheet-preview" ref={previewRootRef} style={{ margin: 0, padding: 0 }}>
                 {renderPages()}
             </div>
         </div>

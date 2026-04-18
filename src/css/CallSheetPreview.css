@@ -11,6 +11,29 @@
     /* Reduced from 20px */
 }
 
+.csp-preview-target {
+    position: relative;
+    scroll-margin-top: 24px;
+    transition: outline-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.csp-wrapper:not(.csp-pdf-mode) .csp-preview-target.is-active {
+    outline: 2px solid rgba(243, 91, 46, 0.9);
+    box-shadow: 0 0 0 6px rgba(243, 91, 46, 0.14);
+    border-radius: 8px;
+    animation: cspPreviewPulse 1.3s ease;
+}
+
+@keyframes cspPreviewPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(243, 91, 46, 0.32);
+    }
+
+    100% {
+        box-shadow: 0 0 0 6px rgba(243, 91, 46, 0.14);
+    }
+}
+
 .csp-actions {
     width: 100%;
     max-width: 210mm;
@@ -105,8 +128,7 @@
     page-break-inside: avoid !important;
 }
 
-#call-sheet-preview.csp-pdf-mode .csp-page:last-of-type,
-#call-sheet-preview.csp-pdf-mode .csp-page-crew {
+#call-sheet-preview.csp-pdf-mode .csp-page:last-of-type {
     page-break-after: avoid !important;
 }
 
@@ -200,6 +222,17 @@
     /* Ensure table headers repeat on new pages */
     .csp-table-redesign thead {
         display: table-header-group;
+    }
+
+    .csp-preview-target,
+    .csp-preview-target.is-active {
+        outline: none !important;
+        box-shadow: none !important;
+        animation: none !important;
+    }
+
+    .csp-preview-target::after {
+        display: none !important;
     }
 }
 
@@ -369,9 +402,21 @@ a {
 .csp-logos-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     margin-top: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow: visible;
+    width: 100%;
+}
+
+.csp-ref-logo-slot {
+    width: 118px;
+    height: 92px;
+    flex: 0 0 118px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
 }
 
 .csp-logo-small {
@@ -445,7 +490,7 @@ a {
     display: flex;
     justify-content: space-between;
     align-items: stretch;
-    min-height: 120px;
+    min-height: 160px;
     margin-bottom: 1px;
     /* Reduced to align with reference image */
     gap: 0;
@@ -456,6 +501,7 @@ a {
     background: #fff;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     border-bottom: 1.5px solid #000;
+    overflow: visible;
 }
 
 .csp-col-left {
@@ -471,13 +517,13 @@ a {
 .csp-col-right {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
     text-align: right;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
     align-items: flex-end;
-    gap: 4px;
+    gap: 2px;
     padding: 8px;
     /* Added padding to match other columns */
 }
@@ -613,6 +659,11 @@ a {
     font-size: 11px;
 }
 
+.csp-location-contact {
+    font-size: 10px;
+    margin-top: 4px;
+}
+
 .csp-location-map-img {
     width: 100%;
     max-width: 100%;
@@ -632,10 +683,10 @@ a {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 4px;
+    gap: 8px;
+    margin-bottom: 2px;
     width: 100%;
-    font-size: 11px;
+    font-size: 10px;
 }
 
 .csp-time-row strong {
@@ -884,6 +935,8 @@ a {
     gap: 12px;
     margin-bottom: 7px;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 
@@ -901,6 +954,11 @@ a {
     color: #0d47a1;
     line-height: 1.4;
     font-family: 'Roboto Condensed', sans-serif;
+    min-width: 0;
+    flex: 1;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-all;
 }
 
 .csp-attention-text strong {
@@ -1174,8 +1232,8 @@ a {
 
 /* Unified Header */
 .csp-ref-header {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 130px minmax(0, 1fr);
     align-items: flex-start;
     border-bottom: 1.5px solid #000;
     padding-top: 4px;
@@ -1185,10 +1243,11 @@ a {
 }
 
 .csp-ref-header-left {
-    flex: 1;
+    width: 100%;
+    max-width: 320px;
+    justify-self: start;
     text-align: left;
     min-width: 0;
-    max-width: 35%;
 }
 
 .csp-ref-prod-co {
@@ -1210,17 +1269,19 @@ a {
 }
 
 .csp-ref-logo {
-    max-height: 100px;
-    max-width: 150px;
-    object-fit: contain;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
 }
 
 .csp-ref-header-center {
-    flex: 0 0 auto;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-width: 100px;
+    width: 130px;
+    justify-self: center;
 }
 
 /* Reuse .csp-circle-time but tweak for header */
@@ -1257,14 +1318,15 @@ a {
 }
 
 .csp-ref-header-right {
-    flex: 1;
+    width: 100%;
+    max-width: 320px;
+    justify-self: end;
     text-align: right;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
     align-items: flex-end;
     min-width: 0;
-    max-width: 35%;
     padding-top: 20px;
 }
 
@@ -1296,19 +1358,24 @@ a {
 
 /* Crew Grid (Masonry-like 2 columns) */
 .csp-ref-crew-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
     gap: 8px;
     align-items: start;
-    /* align top */
+}
+
+.csp-ref-crew-column {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .csp-ref-dept-box {
     border: 1.5px solid #000;
-    border-radius: 8px;
-    /* Standard professional rounding */
+    border-radius: 0;
     overflow: hidden;
-    margin-bottom: 2px;
+    margin-bottom: 0;
     background: #fff;
     break-inside: avoid;
 }
@@ -1379,7 +1446,7 @@ a {
 
 .csp-ref-bottom-box {
     border: 1.5px solid #000;
-    border-radius: 8px;
+    border-radius: 0;
     overflow: hidden;
 }
 
@@ -1529,6 +1596,21 @@ a {
     flex-direction: row;
     align-items: center;
     gap: 8px;
+    width: 100%;
+    flex: 1;
+    box-sizing: border-box;
+    margin-left: -8px;
+    margin-right: -8px;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.csp-hospital-ref-box {
+    justify-content: center;
+    align-self: stretch;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
 }
 
 .csp-hospital-icon-large {
@@ -1560,38 +1642,44 @@ a {
 
 /* Red Banner (Emergency/Harassment) - Professional Theme */
 .csp-banner-red {
-    background-color: #fff1f0;
-    border: 2px solid #ff4d4f;
+    background: linear-gradient(180deg, rgba(255, 90, 82, 0.88) 0%, rgba(229, 57, 53, 0.88) 100%);
+    border: 1px solid #b42318;
     border-radius: 8px;
-    display: flex;
+    display: inline-flex;
     justify-content: space-between;
     align-items: center;
     padding: 10px 15px;
     margin-top: 15px;
     margin-bottom: 15px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 6px 14px rgba(181, 35, 24, 0.22);
+    width: 48%;
+    max-width: 48%;
+    min-width: 260px;
+    align-self: flex-start;
 }
 
 .csp-banner-col {
-    flex: 1;
+    flex: 0 1 auto;
     font-size: 10px;
-    color: #1a1a1a;
+    color: #fff;
+    width: auto;
 }
 
 .csp-banner-col strong {
-    color: #cf1322;
+    color: #fff;
     text-transform: uppercase;
     font-size: 11px;
     display: flex;
     align-items: center;
     gap: 4px;
     margin-bottom: 2px;
+    letter-spacing: 0.04em;
 }
 
 .csp-banner-divider {
     width: 2px;
     height: 30px;
-    background-color: #ffccc7;
+    background-color: rgba(255, 255, 255, 0.35);
     margin: 0 20px;
 }
 
@@ -1599,6 +1687,12 @@ a {
     display: flex;
     flex-direction: column;
     flex: 1;
+    min-width: 0;
+}
+
+.csp-hospital-info-col {
+    align-items: center;
+    text-align: center;
 }
 
 .csp-hospital-ref-title {
@@ -1614,6 +1708,9 @@ a {
     font-size: 11px;
     font-weight: bold;
     color: #000;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .csp-hospital-details-row {
@@ -1621,6 +1718,11 @@ a {
     color: #000;
     margin-top: 2px;
     font-family: 'Roboto Condensed', sans-serif;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.35;
+    max-width: 100%;
 }
 
 .csp-hospital-phone-row {
@@ -1630,6 +1732,10 @@ a {
     align-items: center;
     gap: 4px;
     font-weight: bold;
+}
+
+.csp-hospital-phone-row {
+    justify-content: center;
 }
 
 /* Weather display refinements */

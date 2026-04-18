@@ -68,6 +68,7 @@ const Navbar = () => {
 	const [newProjectForm, setNewProjectForm] = useState({
 		projectName: "",
 		projectType: "",
+		initialEpisodeCount: "",
 	});
 	const [addAllMembers, setAddAllMembers] = useState(false);
 	// Team members - starts empty, populated from org members or user search
@@ -422,13 +423,32 @@ const Navbar = () => {
 
 	const handleCloseNewProjectModal = () => {
 		setShowNewProjectModal(false);
-		setNewProjectForm({ projectName: "", projectType: "" });
+		setNewProjectForm({ projectName: "", projectType: "", initialEpisodeCount: "" });
 		setAddAllMembers(false);
 		setTeamMembers([]);
 		setCreateProjectError("");
 	};
 
 	const handleNewProjectFormChange = (e) => {
+		if (e.target.name === "initialEpisodeCount") {
+			const digitsOnly = e.target.value.replace(/[^0-9]/g, "");
+			setNewProjectForm({
+				...newProjectForm,
+				initialEpisodeCount: digitsOnly,
+			});
+			return;
+		}
+
+		if (e.target.name === "projectType") {
+			const nextType = e.target.value;
+			setNewProjectForm({
+				...newProjectForm,
+				projectType: nextType,
+				initialEpisodeCount: nextType === "Episodic" ? newProjectForm.initialEpisodeCount : "",
+			});
+			return;
+		}
+
 		setNewProjectForm({
 			...newProjectForm,
 			[e.target.name]: e.target.value,
@@ -458,6 +478,14 @@ const Navbar = () => {
 			return;
 		}
 
+		if (newProjectForm.projectType === "Episodic" && newProjectForm.initialEpisodeCount !== "") {
+			const parsedCount = Number(newProjectForm.initialEpisodeCount);
+			if (!Number.isInteger(parsedCount) || parsedCount < 0) {
+				setCreateProjectError("Initial episode count must be a non-negative integer");
+				return;
+			}
+		}
+
 		setCreatingProject(true);
 		setCreateProjectError("");
 
@@ -469,6 +497,9 @@ const Navbar = () => {
 			const requestBody = {
 				projectName: newProjectForm.projectName,
 				projectType: newProjectForm.projectType,
+				...(newProjectForm.projectType === "Episodic" && {
+					initialEpisodeCount: newProjectForm.initialEpisodeCount === "" ? 0 : Number(newProjectForm.initialEpisodeCount),
+				}),
 				...(organizationId && { organizationId }),
 				members: teamMembers.map(m => ({
 					id: m.id,
@@ -883,6 +914,20 @@ const Navbar = () => {
 										</select>
 									</div>
 								</div>
+
+													{newProjectForm.projectType === "Episodic" && (
+														<div className="new-project-field">
+															<label className="new-project-label">Initial episode count</label>
+															<input
+																type="text"
+																name="initialEpisodeCount"
+																value={newProjectForm.initialEpisodeCount}
+																onChange={handleNewProjectFormChange}
+																placeholder="0"
+																className="new-project-input"
+															/>
+														</div>
+													)}
 							</div>
 
 							{/* Add Team Members Section */}

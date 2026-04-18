@@ -4,9 +4,21 @@ import '../css/TimePicker.css';
 /* ─── helpers ──────────────────────────────────────────── */
 function parse24(val) {
     if (!val || !val.includes(':')) return { h: 12, m: 0, ap: 'AM' };
-    const [hStr, mStr] = val.split(':');
-    let h = parseInt(hStr, 10) || 0;
-    const m = parseInt(mStr, 10) || 0;
+    const trimmed = String(val).trim();
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+    if (!match) return { h: 12, m: 0, ap: 'AM' };
+    const hRaw = parseInt(match[1], 10) || 0;
+    const m = parseInt(match[2], 10) || 0;
+    const meridian = match[3] ? match[3].toUpperCase() : null;
+
+    if (meridian) {
+        let h = hRaw;
+        if (h === 0) h = 12;
+        if (h > 12) h = h % 12 || 12;
+        return { h, m, ap: meridian };
+    }
+
+    let h = hRaw;
     const ap = h < 12 ? 'AM' : 'PM';
     if (h === 0) h = 12; else if (h > 12) h -= 12;
     return { h, m, ap };
@@ -21,6 +33,10 @@ function fmtDisplay(val) {
     const { h, m, ap } = parse24(val);
     return `${pad(h)}:${pad(m)} ${ap}`;
 }
+
+function fmtDisplayParts(h, m, ap) {
+    return `${pad(h)}:${pad(m)} ${ap}`;
+}
 function polar(cx, cy, r, angleDeg) {
     const rad = (angleDeg - 90) * (Math.PI / 180);
     return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
@@ -33,7 +49,7 @@ const MIN_LABELS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 const MIN_TICKS = Array.from({ length: 60 }, (_, i) => i);
 
 /* ─── ClockFace ─────────────────────────────────────────── */
-function ClockFace({ mode, hour, minute, onHourChange, onMinuteChange, onModeSwitch }) {
+function ClockFace({ mode, hour, minute, onHourChange, onMinuteChange, onModeSwitch, onLiveHourChange, onLiveMinuteChange }) {
     const svgRef = useRef(null);
     const dragging = useRef(false);
     const [hoverVal, setHoverVal] = useState(null); // hovering over which value
@@ -79,8 +95,13 @@ function ClockFace({ mode, hour, minute, onHourChange, onMinuteChange, onModeSwi
     const onPointerMove = useCallback((e) => {
         if (!dragging.current) return;
         const deg = getAngle(e);
-        const { angle } = snapFromAngle(deg);
+        const { val, angle } = snapFromAngle(deg);
         setLiveAngle(angle);
+        if (mode === 'hour') {
+            onLiveHourChange?.(val);
+        } else {
+            onLiveMinuteChange?.(val);
+        }
     }, [getAngle, snapFromAngle]);
 
     const onPointerUp = useCallback((e) => {
@@ -90,12 +111,14 @@ function ClockFace({ mode, hour, minute, onHourChange, onMinuteChange, onModeSwi
         const { val } = snapFromAngle(deg);
         setLiveAngle(null);
         if (mode === 'hour') {
+            onLiveHourChange?.(val);
             onHourChange(val);
             setTimeout(onModeSwitch, 200);
         } else {
+            onLiveMinuteChange?.(val);
             onMinuteChange(val);
         }
-    }, [getAngle, snapFromAngle, mode, onHourChange, onMinuteChange, onModeSwitch]);
+    }, [getAngle, snapFromAngle, mode, onHourChange, onMinuteChange, onModeSwitch, onLiveHourChange, onLiveMinuteChange]);
 
     /* clean up pointer capture on unmount */
     useEffect(() => () => { dragging.current = false; }, []);
@@ -212,18 +235,25 @@ function ClockFace({ mode, hour, minute, onHourChange, onMinuteChange, onModeSwi
 }
 
 /* ─── TimePicker ────────────────────────────────────────── */
-export default function TimePicker({ value, onChange, className = '', placeholder = '--:-- --' }) {
+export default function TimePicker({ value, onChange, className = '', placeholder = '--:-- --', disabled = false }) {
     const [open, setOpen] = useState(false);
     const [mode, setMode] = useState('hour');
     const [hour, setHour] = useState(12);
     const [min, setMin] = useState(0);
     const [ap, setAp] = useState('AM');
+    const [liveHour, setLiveHour] = useState(null);
+    const [liveMinute, setLiveMinute] = useState(null);
     const [closing, setClosing] = useState(false);  // for exit animation
     const wrapRef = useRef(null);
+    const lastApRef = useRef('AM');
 
     const openPicker = () => {
+        if (disabled) return;
         const p = parse24(value);
-        setHour(p.h); setMin(p.m); setAp(p.ap);
+        const nextAp = value ? p.ap : lastApRef.current;
+        setHour(p.h); setMin(p.m); setAp(nextAp);
+        lastApRef.current = nextAp;
+        setLiveHour(null); setLiveMinute(null);
         setMode('hour');
         setClosing(false);
         setOpen(true);
@@ -231,7 +261,7 @@ export default function TimePicker({ value, onChange, className = '', placeholde
 
     const closePicker = () => {
         setClosing(true);
-        setTimeout(() => { setOpen(false); setClosing(false); }, 160);
+        setTimeout(() => { setOpen(false); setClosing(false); setLiveHour(null); setLiveMinute(null); }, 160);
     };
 
     const handleOk = () => {
@@ -249,11 +279,13 @@ export default function TimePicker({ value, onChange, className = '', placeholde
     }, [open]);
 
     return (
-        <div className={`tp-wrapper${className ? ' ' + className : ''}`} ref={wrapRef}>
+        <div className={`tp-wrapper${disabled ? ' tp-wrapper--disabled' : ''}${open ? ' tp-wrapper--open' : ''}${className ? ' ' + className : ''}`} ref={wrapRef}>
             {/* trigger */}
             <div className="tp-trigger" onClick={openPicker}>
                 <span className={`tp-trigger-text${!value ? ' tp-trigger-placeholder' : ''}`}>
-                    {value ? fmtDisplay(value) : placeholder}
+                    {(liveHour !== null || liveMinute !== null)
+                        ? fmtDisplayParts(liveHour ?? hour, liveMinute ?? min, ap)
+                        : (value ? fmtDisplay(value) : placeholder)}
                 </span>
                 <span className="tp-clock-icon">🕐</span>
             </div>
@@ -266,15 +298,23 @@ export default function TimePicker({ value, onChange, className = '', placeholde
                         <span
                             className={`tp-analog-seg${mode === 'hour' ? ' tp-analog-seg--active' : ''}`}
                             onClick={() => setMode('hour')}
-                        >{pad(hour)}</span>
+                        >{pad(liveHour ?? hour)}</span>
                         <span className="tp-analog-colon">:</span>
                         <span
                             className={`tp-analog-seg${mode === 'minute' ? ' tp-analog-seg--active' : ''}`}
                             onClick={() => setMode('minute')}
-                        >{pad(min)}</span>
+                        >{pad(liveMinute ?? min)}</span>
                         <div className="tp-ampm-toggle">
-                            <button className={`tp-ampm-btn${ap === 'AM' ? ' tp-ampm-btn--active' : ''}`} onClick={() => setAp('AM')}>AM</button>
-                            <button className={`tp-ampm-btn${ap === 'PM' ? ' tp-ampm-btn--active' : ''}`} onClick={() => setAp('PM')}>PM</button>
+                            <button
+                                type="button"
+                                className={`tp-ampm-btn${ap === 'AM' ? ' tp-ampm-btn--active' : ''}`}
+                                onClick={() => { setAp('AM'); lastApRef.current = 'AM'; }}
+                            >AM</button>
+                            <button
+                                type="button"
+                                className={`tp-ampm-btn${ap === 'PM' ? ' tp-ampm-btn--active' : ''}`}
+                                onClick={() => { setAp('PM'); lastApRef.current = 'PM'; }}
+                            >PM</button>
                         </div>
                     </div>
 
@@ -290,13 +330,15 @@ export default function TimePicker({ value, onChange, className = '', placeholde
                             onHourChange={setHour}
                             onMinuteChange={setMin}
                             onModeSwitch={() => setMode('minute')}
+                            onLiveHourChange={setLiveHour}
+                            onLiveMinuteChange={setLiveMinute}
                         />
                     </div>
 
                     {/* actions */}
                     <div className="tp-actions">
-                        <button className="tp-btn tp-btn--cancel" onClick={closePicker}>CANCEL</button>
-                        <button className="tp-btn tp-btn--ok" onClick={handleOk}>OK</button>
+                        <button type="button" className="tp-btn tp-btn--cancel" onClick={closePicker}>CANCEL</button>
+                        <button type="button" className="tp-btn tp-btn--ok" onClick={handleOk}>OK</button>
                     </div>
                 </div>
             )}

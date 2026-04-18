@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
 import {
@@ -289,8 +289,10 @@ const Locations = () => {
 	const [masterScriptId, setMasterScriptId] = useState(null);
 	// Cast data for showing cast IDs
 	const [castMap, setCastMap] = useState({});
+	const [sceneNumberToId, setSceneNumberToId] = useState({});
 	// Breakdown synopsis map
 	const [synopsisMap, setSynopsisMap] = useState({});
+	const [episodeMap, setEpisodeMap] = useState({});
 	// Regroup mode state
 	const [isRegroupMode, setIsRegroupMode] = useState(false);
 	const [sceneMoves, setSceneMoves] = useState([]); // Track scene moves: [{ scene_id, from_location_id, to_location_id }]
@@ -477,11 +479,23 @@ const Locations = () => {
 
 						// Create mapping from scene_number to synopsis
 						const sceneToSynopsisMap = {};
+						const sceneToEpisodeMap = {};
+						const sceneNumToIdMap = {};
 						scenes.forEach((scene) => {
 							const sceneKey = String(scene.scene_number || scene.scene_id);
 							sceneToSynopsisMap[sceneKey] = scene.synopsis || "";
+							const epVal = scene.episode_number ?? scene["Episode Number"];
+							if (epVal !== undefined && epVal !== null && String(epVal).trim() !== "") {
+								sceneToEpisodeMap[sceneKey] = String(epVal).trim();
+							}
+							const sceneId = String(scene.id ?? scene.scene_id ?? "");
+							if (sceneId && sceneKey) {
+								sceneNumToIdMap[sceneKey] = sceneId;
+							}
 						});
 						setSynopsisMap(sceneToSynopsisMap);
+						setEpisodeMap(sceneToEpisodeMap);
+						setSceneNumberToId(sceneNumToIdMap);
 					}
 				}
 			} catch (error) {
@@ -715,9 +729,11 @@ const Locations = () => {
 
 		if (!locationScenes || !Array.isArray(locationScenes)) return [];
 
-		locationScenes.forEach((scene) => {
-			const sceneNumber = String(scene.scene_number || scene.scene_id);
-			const sceneCasts = castMap[sceneNumber] || [];
+	locationScenes.forEach((scene) => {
+			const sceneId = String(scene.scene_id ?? scene.id ?? "");
+			const sceneNumber = String(scene.scene_number ?? "");
+			const resolvedId = sceneId || sceneNumberToId[sceneNumber] || "";
+			const sceneCasts = castMap[resolvedId] || castMap[sceneNumber] || [];
 			sceneCasts.forEach((cast) => {
 				if (!castIds.has(cast.cast_id)) {
 					castIds.add(cast.cast_id);
@@ -735,9 +751,11 @@ const Locations = () => {
 	};
 
 	// Get cast IDs for a specific scene
-	const getCastForScene = (sceneNumber) => {
-		const sceneKey = String(sceneNumber);
-		const sceneCasts = castMap[sceneKey] || [];
+	const getCastForScene = (scene) => {
+		const sceneId = String(scene?.scene_id ?? scene?.id ?? "");
+		const sceneNumber = String(scene?.scene_number ?? "");
+		const resolvedId = sceneId || sceneNumberToId[sceneNumber] || "";
+		const sceneCasts = castMap[resolvedId] || castMap[sceneNumber] || [];
 		// Sort cast IDs in ascending order
 		const sortedCastIds = sceneCasts
 			.map(c => c.cast_id)
@@ -748,6 +766,8 @@ const Locations = () => {
 			});
 		return sortedCastIds.join(", ") || "N/A";
 	};
+
+	const hasEpisodeInSets = useMemo(() => Object.values(episodeMap).some(Boolean), [episodeMap]);
 
 	// Get synopsis for a specific scene from breakdown
 	const getSynopsisForScene = (sceneNumber) => {
@@ -1901,6 +1921,7 @@ const Locations = () => {
 																		<table className="loc-data-table">
 																			<thead>
 																				<tr>
+																					{hasEpisodeInSets && <th>Episode</th>}
 																					<th>Scene No</th>
 																					<th>Int./Ext.</th>
 																					<th>Set</th>
@@ -1918,12 +1939,13 @@ const Locations = () => {
 																						onDragEnd={handleDragEnd}
 																						className={`${isRegroupMode ? "loc-scene-draggable" : ""} ${draggedScene && String(draggedScene.scene_id) === String(scene.scene_id) ? "loc-scene-dragging" : ""}`}
 																					>
+																						{hasEpisodeInSets && <td>{episodeMap[String(scene.scene_number)] || "-"}</td>}
 																						<td>{scene.scene_number}</td>
 																						<td>{scene.int_ext}</td>
 																						<td>{location.location}</td>
 																						<td>{scene.time}</td>
 																						<td className="loc-synopsis-cell">{getSynopsisForScene(scene.scene_number)}</td>
-																						<td>{getCastForScene(scene.scene_number)}</td>
+																						<td>{getCastForScene(scene)}</td>
 																					</tr>
 																				))}
 																			</tbody>

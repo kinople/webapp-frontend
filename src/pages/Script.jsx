@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { getApiUrl } from "../utils/api";
+import { fetchWithAuth, getApiUrl } from "../utils/api";
 import "../css/Script.css";
 
 // Local assets
@@ -17,6 +17,8 @@ const Script = () => {
 	const [isGeneratingBreakdown, setIsGeneratingBreakdown] = useState(false);
 	const [uploadStatus, setUploadStatus] = useState("");
 	const [uploadedScripts, setUploadedScripts] = useState([]);
+	const [isDragging, setIsDragging] = useState(false);
+	const [dropError, setDropError] = useState("");
 
 	const fileInputRef = useRef(null);
 
@@ -31,6 +33,18 @@ const Script = () => {
 	const [breakdownMessage, setBreakdownMessage] = useState("");
 	const [activeDropdown, setActiveDropdown] = useState(null);
 	const [tabScrollIndex, setTabScrollIndex] = useState(0);
+	const [projectType, setProjectType] = useState("Film");
+	const [episodes, setEpisodes] = useState([]);
+	const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState("");
+	const [showEpisodeModal, setShowEpisodeModal] = useState(false);
+	const [newEpisodeNumber, setNewEpisodeNumber] = useState("");
+	const [newEpisodeName, setNewEpisodeName] = useState("");
+	const [isCreatingEpisode, setIsCreatingEpisode] = useState(false);
+	const [isDeletingEpisode, setIsDeletingEpisode] = useState(false);
+	const [episodeChoice, setEpisodeChoice] = useState("existing");
+	const [importEpisodeNumber, setImportEpisodeNumber] = useState("");
+	const [importEpisodeName, setImportEpisodeName] = useState("");
+	const [importExistingEpisode, setImportExistingEpisode] = useState("");
 
 	// Show more tabs when sidebar is collapsed
 	const VISIBLE_TABS = sidebarCollapsed ? 8 : 7;
@@ -50,7 +64,7 @@ const Script = () => {
 				throw new Error("Failed to fetch scripts");
 			}
 
-			var data = await response.json();
+			let data = await response.json();
 			console.log("scripts list ", data);
 			data = data.filter((s) => s.status !== "archived");
 			setScriptList(data);
@@ -61,9 +75,70 @@ const Script = () => {
 		}
 	};
 
+	const fetchProjectType = async () => {
+		try {
+			const response = await fetchWithAuth(getApiUrl(`/api/project-name/${id}`), {
+				method: "GET",
+				credentials: "include",
+				mode: "cors",
+			});
+			if (!response.ok) return;
+			const data = await response.json();
+			setProjectType(data.projectType || "Film");
+		} catch (error) {
+			console.error("Error fetching project type:", error);
+		}
+	};
+
 	useEffect(() => {
 		fetchScripts();
+		fetchProjectType();
 	}, []);
+
+	const fetchEpisodes = async () => {
+		try {
+			const response = await fetch(getApiUrl(`/api/projects/${id}/episodes`), {
+				method: "GET",
+				credentials: "include",
+				mode: "cors",
+			});
+			if (!response.ok) return [];
+			const data = await response.json();
+			const eps = data.episodes || [];
+			setEpisodes(eps);
+			if (!selectedEpisodeNumber && eps.length > 0) {
+				setSelectedEpisodeNumber(String(eps[0].ep_number));
+			}
+			return eps;
+		} catch (error) {
+			console.error("Error fetching episodes:", error);
+			return [];
+		}
+	};
+
+	const isEpisodicProject = (projectType || "").toLowerCase() === "episodic";
+	useEffect(() => {
+		if ((projectType || "").toLowerCase() === "episodic") {
+			fetchEpisodes();
+		}
+	}, [projectType]);
+
+	useEffect(() => {
+		if (isEpisodicProject && episodes.length > 0) {
+			setImportExistingEpisode((prev) => prev || String(episodes[0].ep_number));
+		}
+	}, [isEpisodicProject, episodes]);
+
+	const filteredScripts = useMemo(() => {
+		if (!isEpisodicProject) return script_list;
+		if (!selectedEpisodeNumber) return [];
+		return (script_list || []).filter((script) => String(script.episodeNumber || "") === String(selectedEpisodeNumber));
+	}, [isEpisodicProject, script_list, selectedEpisodeNumber]);
+
+	const selectedEpisode = useMemo(
+		() => (episodes || []).find((ep) => String(ep.ep_number) === String(selectedEpisodeNumber)),
+		[episodes, selectedEpisodeNumber]
+	);
 
 	// Close dropdown when clicking outside
 	useEffect(() => {
@@ -76,7 +151,7 @@ const Script = () => {
 		return () => document.removeEventListener("click", handleClickOutside);
 	}, []);
 
-	const uploadFile = async (file, fileName) => {
+	const uploadFile = async (file, fileName, episodeNumber = "") => {
 		if (!file) return;
 
 		try {
@@ -88,6 +163,9 @@ const Script = () => {
 			const formData = new FormData();
 			formData.append("scriptPdf", file);
 			formData.append("fileName", fileName);
+			if ((projectType || "").toLowerCase() === "episodic") {
+				formData.append("episodeNumber", String(episodeNumber || "").trim());
+			}
 
 			const response = await fetch(getApiUrl(`/api/${id}/upload-script`), {
 				method: "POST",
@@ -227,11 +305,12 @@ const Script = () => {
 
 	const handleFileChange = (event) => {
 		const file = event.target.files[0];
-		if (file && file.type === "application/pdf") {
+		if (file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))) {
 			setTempFile(file);
+			setDropError("");
 		} else if (file) {
-			setUploadStatus("Please select a valid PDF file.");
-			setTimeout(() => setUploadStatus(""), 3000);
+			setDropError("Please select a valid PDF file.");
+			setTimeout(() => setDropError(""), 3000);
 		}
 		if (fileInputRef.current) {
 			fileInputRef.current.value = null;
@@ -239,10 +318,118 @@ const Script = () => {
 	};
 
 	const handleImportClick = () => {
-		if (fileInputRef.current) {
-			fileInputRef.current.click();
+		if (isEpisodicProject) {
+			if (episodes.length === 0) {
+				setEpisodeChoice("new");
+			} else {
+				setEpisodeChoice("existing");
+			}
+			setImportExistingEpisode(String(selectedEpisodeNumber || episodes[0]?.ep_number || "").trim());
 		}
+		setDropError("");
+		setIsDragging(false);
 		setShowFileNameModal(true);
+	};
+
+	const handleDragOver = (event) => {
+		event.preventDefault();
+		if (!isProcessing) {
+			setIsDragging(true);
+		}
+	};
+
+	const handleDragLeave = (event) => {
+		event.preventDefault();
+		setIsDragging(false);
+	};
+
+	const handleDrop = (event) => {
+		event.preventDefault();
+		setIsDragging(false);
+		if (isProcessing) return;
+		const file = event.dataTransfer.files && event.dataTransfer.files[0];
+		if (file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))) {
+			setTempFile(file);
+			setDropError("");
+		} else if (file) {
+			setDropError("Please drop a valid PDF file.");
+			setTimeout(() => setDropError(""), 3000);
+		}
+	};
+
+	const handleCreateEpisode = async (e) => {
+		e.preventDefault();
+		const epNumber = String(newEpisodeNumber || "").trim();
+		const epName = String(newEpisodeName || "").trim();
+
+		if (!epNumber) {
+			setUploadStatus("Episode number is required.");
+			setTimeout(() => setUploadStatus(""), 3000);
+			return;
+		}
+
+		try {
+			setIsCreatingEpisode(true);
+			const response = await fetch(getApiUrl(`/api/projects/${id}/episodes`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				mode: "cors",
+				body: JSON.stringify({ ep_number: epNumber, ep_name: epName }),
+			});
+
+			if (!response.ok) {
+				const err = await response.json().catch(() => ({ message: "Failed to create episode" }));
+				throw new Error(err.message || "Failed to create episode");
+			}
+
+			await fetchEpisodes();
+			setSelectedEpisodeNumber(epNumber);
+			setShowEpisodeModal(false);
+			setNewEpisodeNumber("");
+			setNewEpisodeName("");
+		} catch (error) {
+			setUploadStatus(error.message || "Failed to create episode");
+			setTimeout(() => setUploadStatus(""), 3000);
+		} finally {
+			setIsCreatingEpisode(false);
+		}
+	};
+
+	const handleDeleteEpisode = async () => {
+		if (!selectedEpisodeNumber) {
+			setUploadStatus("Please select an episode first.");
+			setTimeout(() => setUploadStatus(""), 3000);
+			return;
+		}
+
+		if (!window.confirm(`Delete Episode ${selectedEpisodeNumber}? This is allowed only when no drafts exist.`)) {
+			return;
+		}
+
+		try {
+			setIsDeletingEpisode(true);
+			const response = await fetch(getApiUrl(`/api/projects/${id}/episodes/${encodeURIComponent(selectedEpisodeNumber)}`), {
+				method: "DELETE",
+				credentials: "include",
+				mode: "cors",
+			});
+
+			if (!response.ok) {
+				const err = await response.json().catch(() => ({ message: "Failed to delete episode" }));
+				throw new Error(err.message || "Failed to delete episode");
+			}
+
+			const refreshed = await fetchEpisodes();
+			if (!refreshed.some((ep) => String(ep.ep_number) === String(selectedEpisodeNumber))) {
+				setSelectedEpisodeNumber(refreshed.length > 0 ? String(refreshed[0].ep_number) : "");
+			}
+		} catch (error) {
+			setUploadStatus(error.message || "Failed to delete episode");
+			setTimeout(() => setUploadStatus(""), 3500);
+		} finally {
+			setIsDeletingEpisode(false);
+		}
 	};
 
 	const handleDeleteScript = async (scriptName) => {
@@ -332,7 +519,58 @@ const Script = () => {
 		e.preventDefault();
 		if (newFileName.trim() && tempFile) {
 			const sanitizedFileName = newFileName.trim().replace(/\s+/g, "-");
-			uploadFile(tempFile, sanitizedFileName);
+			if (!isEpisodicProject) {
+				uploadFile(tempFile, sanitizedFileName, "");
+				return;
+			}
+
+			if (episodeChoice === "existing") {
+				const chosenEpisode = String(importExistingEpisode || "").trim();
+				if (!chosenEpisode) {
+					setUploadStatus("Please select an episode.");
+					setTimeout(() => setUploadStatus(""), 3000);
+					return;
+				}
+				setSelectedEpisodeNumber(chosenEpisode);
+				uploadFile(tempFile, sanitizedFileName, chosenEpisode);
+				return;
+			}
+
+			const epNumber = String(importEpisodeNumber || "").trim();
+			const epName = String(importEpisodeName || "").trim();
+			if (!epNumber) {
+				setUploadStatus("Episode number is required.");
+				setTimeout(() => setUploadStatus(""), 3000);
+				return;
+			}
+
+			(async () => {
+				try {
+					setIsCreatingEpisode(true);
+					const response = await fetch(getApiUrl(`/api/projects/${id}/episodes`), {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						credentials: "include",
+						mode: "cors",
+						body: JSON.stringify({ ep_number: epNumber, ep_name: epName }),
+					});
+
+					if (!response.ok) {
+						const err = await response.json().catch(() => ({ message: "Failed to create episode" }));
+						throw new Error(err.message || "Failed to create episode");
+					}
+
+					await fetchEpisodes();
+					setSelectedEpisodeNumber(epNumber);
+					setImportExistingEpisode(epNumber);
+					uploadFile(tempFile, sanitizedFileName, epNumber);
+				} catch (error) {
+					setUploadStatus(error.message || "Failed to create episode");
+					setTimeout(() => setUploadStatus(""), 3000);
+				} finally {
+					setIsCreatingEpisode(false);
+				}
+			})();
 		}
 	};
 
@@ -344,6 +582,12 @@ const Script = () => {
 		setIsGeneratingBreakdown(false);
 		setProgress(0);
 		setBreakdownMessage("");
+		setIsDragging(false);
+		setDropError("");
+		setEpisodeChoice("existing");
+		setImportEpisodeNumber("");
+		setImportEpisodeName("");
+		setImportExistingEpisode("");
 	};
 
 	const handleViewBreakdown = () => {
@@ -362,9 +606,22 @@ const Script = () => {
 	const isProcessing = isUploading || isGeneratingBreakdown;
 
 	// Get visible tabs based on scroll index
-	const visibleScripts = script_list.slice(tabScrollIndex, tabScrollIndex + VISIBLE_TABS);
+	const visibleScripts = filteredScripts.slice(tabScrollIndex, tabScrollIndex + VISIBLE_TABS);
 	const canScrollLeft = tabScrollIndex > 0;
-	const canScrollRight = tabScrollIndex + VISIBLE_TABS < script_list.length;
+	const canScrollRight = tabScrollIndex + VISIBLE_TABS < filteredScripts.length;
+
+	useEffect(() => {
+		setTabScrollIndex(0);
+	}, [selectedEpisodeNumber]);
+
+	useEffect(() => {
+		if (!selectedScript) return;
+		const stillVisible = filteredScripts.some((s) => s.name === selectedScript);
+		if (!stillVisible) {
+			setSelectedScript(null);
+			setPdfUrl(null);
+		}
+	}, [filteredScripts, selectedScript]);
 
 	const handleTabScrollLeft = () => {
 		if (canScrollLeft) {
@@ -399,6 +656,26 @@ const Script = () => {
 			{/* Header */}
 			<div className="script-header">
 				<div className="script-header-left">
+					{isEpisodicProject && (
+						<div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 12 }}>
+							<select
+								className="script-model-select"
+								value={selectedEpisodeNumber}
+								onChange={(e) => setSelectedEpisodeNumber(e.target.value)}
+							>
+								{episodes.length === 0 ? (
+									<option value="">No episodes yet</option>
+								) : (
+									episodes.map((ep) => (
+										<option key={String(ep.ep_number)} value={String(ep.ep_number)}>
+											{`Ep ${ep.ep_number}${ep.ep_name ? ` - ${ep.ep_name}` : ""}`}
+										</option>
+									))
+								)}
+							</select>
+						</div>
+					)}
+
 					{/* Left Navigation Arrow */}
 					<button className="script-nav-button" onClick={handleTabScrollLeft} disabled={!canScrollLeft}>
 						<img src={leftArrowImg} alt="Previous" />
@@ -443,7 +720,7 @@ const Script = () => {
 								</div>
 							))
 						) : (
-							<span className="script-empty-tabs">No scripts uploaded yet</span>
+							<span className="script-empty-tabs">{isEpisodicProject ? "No drafts in this episode" : "No scripts uploaded yet"}</span>
 						)}
 					</div>
 
@@ -453,15 +730,78 @@ const Script = () => {
 					</button>
 				</div>
 
-				{/* Import New Draft Button */}
-				<button onClick={handleImportClick} className={`script-import-button ${isProcessing ? "disabled" : ""}`} disabled={isProcessing}>
-					<PlusIcon />
-					<span>{isUploading ? "Uploading..." : "Import New Draft"}</span>
-				</button>
+				{/* Right Actions */}
+				<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+					{isEpisodicProject && (
+						<button
+							type="button"
+							className="script-import-button"
+							onClick={handleDeleteEpisode}
+							disabled={isDeletingEpisode || !selectedEpisodeNumber || Number(selectedEpisode?.scripts_count || 0) > 0}
+							title={selectedEpisode?.scripts_count ? "Delete drafts in this episode first" : "Delete selected episode"}
+						>
+							<span>{isDeletingEpisode ? "Deleting..." : "Remove Episode"}</span>
+						</button>
+					)}
+					<button
+						onClick={handleImportClick}
+						className={`script-import-button ${isProcessing ? "disabled" : ""}`}
+						disabled={isProcessing}
+					>
+						<PlusIcon />
+						<span>{isUploading ? "Uploading..." : isEpisodicProject ? "Import Draft" : "Import New Draft"}</span>
+					</button>
+				</div>
 			</div>
 
 			{/* Hidden File Input */}
 			<input type="file" accept=".pdf" onChange={handleFileChange} className="script-hidden-input" ref={fileInputRef} disabled={isProcessing} />
+
+			{/* Create Episode Modal */}
+			{showEpisodeModal && (
+				<div className="script-modal-overlay">
+					<div className="script-modal">
+						<form onSubmit={handleCreateEpisode}>
+							<div className="script-modal-content">
+								<h3 className="script-modal-title">Create Episode</h3>
+								<input
+									type="text"
+									value={newEpisodeNumber}
+									onChange={(e) => setNewEpisodeNumber(e.target.value)}
+									placeholder="Episode Number (e.g. 1)"
+									className="script-filename-input"
+									autoFocus
+								/>
+								<input
+									type="text"
+									value={newEpisodeName}
+									onChange={(e) => setNewEpisodeName(e.target.value)}
+									placeholder="Episode Name (optional)"
+									className="script-filename-input"
+									style={{ marginTop: 10 }}
+								/>
+								<div className="script-modal-buttons">
+									<button
+										type="button"
+										onClick={() => {
+											setShowEpisodeModal(false);
+											setNewEpisodeNumber("");
+											setNewEpisodeName("");
+										}}
+										className="script-cancel-button"
+										disabled={isCreatingEpisode}
+									>
+										Cancel
+									</button>
+									<button type="submit" className="script-submit-button" disabled={isCreatingEpisode || !newEpisodeNumber.trim()}>
+										{isCreatingEpisode ? "Creating..." : "Create Episode"}
+									</button>
+								</div>
+							</div>
+						</form>
+					</div>
+				</div>
+			)}
 
 			{/* Modal */}
 			{showFileNameModal && (
@@ -489,6 +829,32 @@ const Script = () => {
 								<div className="script-modal-content">
 									<h3 className="script-modal-title">Enter Script Name</h3>
 									<div>
+										<div
+											className={`script-drop-zone${isDragging ? " dragging" : ""}${isProcessing ? " disabled" : ""}`}
+											onDragOver={handleDragOver}
+											onDragLeave={handleDragLeave}
+											onDrop={handleDrop}
+											onClick={() => {
+												if (!isProcessing && fileInputRef.current) {
+													fileInputRef.current.click();
+												}
+											}}
+											role="button"
+											tabIndex={0}
+											onKeyDown={(event) => {
+												if (event.key === "Enter" || event.key === " ") {
+													event.preventDefault();
+													if (!isProcessing && fileInputRef.current) {
+														fileInputRef.current.click();
+													}
+												}
+											}}
+										>
+											<div className="script-drop-zone-icon">PDF</div>
+											<div className="script-drop-zone-title">Drag & Drop your script here</div>
+											<div className="script-drop-zone-subtitle">or click to browse (.pdf only)</div>
+											{dropError && <div className="script-drop-zone-error">{dropError}</div>}
+										</div>
 										<input
 											type="text"
 											value={newFileName}
@@ -501,9 +867,82 @@ const Script = () => {
 										{tempFile && (
 											<div className="script-file-tag">
 												<span className="script-file-tag-name">{tempFile.name}</span>
-												<button type="button" className="script-file-tag-remove" onClick={() => setTempFile(null)}>
+												<button
+													type="button"
+													className="script-file-tag-remove"
+													onClick={() => {
+														setTempFile(null);
+														setDropError("");
+													}}
+												>
 													<XIcon />
 												</button>
+											</div>
+										)}
+
+										{isEpisodicProject && (
+											<div className="script-model-selection">
+												<label className="script-model-label">Episode Selection</label>
+												<div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 6 }}>
+													<label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+														<input
+															type="radio"
+															name="episodeChoice"
+															value="existing"
+															checked={episodeChoice === "existing"}
+															onChange={() => setEpisodeChoice("existing")}
+															disabled={isProcessing}
+														/>
+														Existing Episode
+													</label>
+													<label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+														<input
+															type="radio"
+															name="episodeChoice"
+															value="new"
+															checked={episodeChoice === "new"}
+															onChange={() => setEpisodeChoice("new")}
+															disabled={isProcessing}
+														/>
+														New Episode
+													</label>
+												</div>
+
+												{episodeChoice === "existing" ? (
+													<select
+														value={importExistingEpisode || ""}
+														onChange={(e) => setImportExistingEpisode(e.target.value)}
+														className="script-model-select"
+														style={{ marginTop: 8 }}
+														disabled={isProcessing}
+													>
+														<option value="">Select Episode...</option>
+														{episodes.map((ep) => (
+															<option key={String(ep.ep_number)} value={String(ep.ep_number)}>
+																{`Ep ${ep.ep_number}${ep.ep_name ? ` - ${ep.ep_name}` : ""}`}
+															</option>
+														))}
+													</select>
+												) : (
+													<div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+														<input
+															type="text"
+															value={importEpisodeNumber}
+															onChange={(e) => setImportEpisodeNumber(e.target.value)}
+															placeholder="Episode Number (e.g. 1)"
+															className="script-filename-input"
+															disabled={isProcessing}
+														/>
+														<input
+															type="text"
+															value={importEpisodeName}
+															onChange={(e) => setImportEpisodeName(e.target.value)}
+															placeholder="Episode Name (optional)"
+															className="script-filename-input"
+															disabled={isProcessing}
+														/>
+													</div>
+												)}
 											</div>
 										)}
 									</div>
@@ -532,8 +971,8 @@ const Script = () => {
 										</button>
 										<button
 											type="submit"
-											disabled={!newFileName.trim() || !tempFile || isProcessing}
-											className={`script-submit-button ${!newFileName.trim() || !tempFile || isProcessing ? "disabled" : ""}`}
+											disabled={!newFileName.trim() || !tempFile || isProcessing || isCreatingEpisode}
+											className={`script-submit-button ${!newFileName.trim() || !tempFile || isProcessing || isCreatingEpisode ? "disabled" : ""}`}
 										>
 											Upload
 										</button>
@@ -548,8 +987,12 @@ const Script = () => {
 			{/* Main Content Area */}
 			<div className="script-main-content">
 				<div className="script-content-viewer">
-					{script_list.length === 0 && !uploadStatus ? (
-						<p className="script-placeholder">Upload scripts to view them here</p>
+					{filteredScripts.length === 0 && !uploadStatus ? (
+						<p className="script-placeholder">
+							{isEpisodicProject && episodes.length === 0
+								? "Create an episode first, then import a draft into that episode"
+								: "Upload scripts to view them here"}
+						</p>
 					) : !pdfUrl ? (
 						<p className="script-placeholder">Select a script to view it here</p>
 					) : (

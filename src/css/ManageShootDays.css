@@ -6,19 +6,42 @@
 
 /* Page Layout */
 .msd-page-container {
+    --msd-viewport-height: 100vh;
+    --msd-panel-height: calc(var(--msd-viewport-height) - 60px);
+    --msd-editor-sticky-offset: 68px;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    min-height: var(--msd-viewport-height);
     background-color: #f7f8fa;
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+/* Hard-lock the document scroll when editor is active to prevent fractional pixel outer scrolling */
+html:has(.msd-editor-active),
+body:has(.msd-editor-active),
+#root:has(.msd-editor-active) {
+    overflow: hidden !important;
+}
+
+.msd-page-container.msd-editor-active {
+    /* Compensate for global zoom: 85% in global.css and subtract tiny fraction for subpixel rendering */
+    height: calc((100vh / 0.85) - 1px);
+    max-height: calc((100vh / 0.85) - 1px);
+    flex: 1;
+    overflow: hidden;
 }
 
 .msd-main-container {
     display: flex;
     flex: 1;
     gap: 0;
-    min-height: calc(100vh);
-    overflow-x: hidden;
+    min-height: calc(var(--msd-viewport-height) - 60px);
+    overflow: visible;
+}
+
+.msd-page-container.msd-editor-active .msd-main-container {
+    overflow: hidden;
+    min-height: 0;
 }
 
 /* Sidebar */
@@ -29,7 +52,7 @@
     border-right: 1px solid #e2e6ed;
     display: flex;
     flex-direction: column;
-    max-height: calc(100vh - 60px);
+    max-height: var(--msd-panel-height);
     overflow-y: auto;
 }
 
@@ -124,7 +147,7 @@
     padding: 24px;
     overflow-y: auto;
     background-color: #f7f8fa;
-    max-height: calc(100vh - 60px);
+    min-height: 0;
     position: relative;
 }
 
@@ -217,24 +240,31 @@
     background: rgba(15, 23, 36, 0.6);
     backdrop-filter: blur(4px);
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    padding-top: 2.5vh;
+    padding: 1vh 1vw;
     z-index: 1200;
 }
 
 .msd-pdf-modal {
+    --msd-pdf-chrome-height: 82px;
+    --msd-pdf-page-ratio: 0.7071;
     background: #fff;
-    border-radius: 14px;
-    width: min(1000px, 95vw);
-    max-height: 95vh;
+    border-radius: 12px;
+    height: min(99.4vh, 1700px);
+    width: min(
+        99vw,
+        calc((min(99.4vh, 1700px) - var(--msd-pdf-chrome-height)) * var(--msd-pdf-page-ratio) + 132px)
+    );
+    min-width: min(740px, 99vw);
     display: flex;
     flex-direction: column;
     box-shadow: 0 24px 70px rgba(15, 23, 36, 0.35);
+    overflow: hidden;
 }
 
 .msd-pdf-modal-header {
-    padding: 14px 18px;
+    padding: 10px 16px;
     border-bottom: 1px solid #e2e6ed;
     display: flex;
     align-items: center;
@@ -243,7 +273,7 @@
 
 .msd-pdf-modal-header h3 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1rem;
 }
 
 .msd-pdf-close {
@@ -258,14 +288,19 @@
 .msd-pdf-modal-body {
     padding: 0;
     flex: 1;
-    background: #f7f8fa;
+    background: #2f3136;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .msd-pdf-frame {
     width: 100%;
-    height: 95vh;
+    height: 100%;
+    min-height: 0;
     border: none;
-
+    background: #2f3136;
 }
 
 .msd-pdf-loading {
@@ -275,7 +310,7 @@
 }
 
 .msd-pdf-modal-actions {
-    padding: 12px 18px;
+    padding: 8px 16px;
     border-top: 1px solid #e2e6ed;
     display: flex;
     gap: 10px;
@@ -286,15 +321,21 @@
 /* Split View with Partition */
 .msd-split-view-container {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0;
     position: relative;
-    align-items: flex-start;
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .msd-left-column {
     flex: 1;
     min-width: 0;
+    overflow-y: auto;
+    height: 100%;
+    padding-right: 15px;
 }
 
 /* Resize Handle */
@@ -302,9 +343,9 @@
     width: 16px;
     cursor: ew-resize;
     position: sticky;
-    top: 0;
-    height: 100%;
-    min-height: calc(100vh - 60px);
+    top: var(--msd-editor-sticky-offset);
+    align-self: stretch;
+    min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -334,10 +375,7 @@
 .msd-right-column {
     width: 480px;
     min-width: 480px;
-    position: sticky;
-    top: 0;
-    height: fit-content;
-    max-height: calc(100vh - 60px);
+    height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 20px;
@@ -396,6 +434,20 @@
     font-weight: 500;
 }
 
+.msd-label--time span {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.msd-label--static-row {
+    display: block;
+}
+
+.msd-label--static-row span {
+    display: block;
+    margin-bottom: 6px;
+}
+
 .msd-input {
     width: 100%;
     padding: 10px 14px;
@@ -412,6 +464,23 @@
     outline: none;
     border-color: #ff6758;
     box-shadow: 0 0 0 3px rgba(255, 103, 88, 0.1);
+}
+
+.msd-static-value {
+    width: 100%;
+    margin-top: 6px;
+    padding: 10px 14px;
+    border: 1px solid #e2e6ed;
+    border-radius: 8px;
+    background-color: #f6f7f9;
+    font-size: 0.9rem;
+    font-family: 'Inter', sans-serif;
+    color: #0f1724;
+    font-weight: 400;
+    line-height: 1.4;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
 }
 
 .msd-textarea {
@@ -482,7 +551,7 @@
     font-size: 0.85rem;
     border: 1px solid #e2e6ed;
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .msd-table th,
@@ -573,7 +642,7 @@
 /* Department Grid */
 .msd-dept-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
     gap: 20px;
     align-items: stretch;
     /* Cards in same row have equal height */
@@ -582,11 +651,13 @@
 .msd-dept-box {
     display: flex;
     flex-direction: column;
+    min-width: 0;
     background: linear-gradient(135deg, #f8f9fb 0%, #fff 100%);
     border: 1px solid #e2e6ed;
     border-radius: 10px;
     padding: 20px;
     transition: all 0.2s ease;
+    overflow: visible;
 }
 
 .msd-dept-box:hover {
@@ -597,17 +668,17 @@
 .msd-dept-name {
     font-size: 1rem;
     font-weight: 700;
-    margin: 0 0 16px 0;
+    margin: 0;
     color: #0f1724;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #e6ecf8;
 }
 
 .msd-mini-table {
     width: 100%;
+    max-width: 100%;
     font-size: 0.85rem;
     border-collapse: collapse;
     margin-bottom: 10px;
+    table-layout: auto;
 }
 
 .msd-mini-table td,
@@ -615,7 +686,7 @@
     padding: 8px 4px;
     vertical-align: middle;
     overflow: visible;
-    text-overflow: ellipsis;
+    text-overflow: clip;
     white-space: nowrap;
 }
 
@@ -630,8 +701,83 @@
     border-bottom: 1px solid #f0f0f0;
 }
 
+.msd-mini-table th:nth-child(3),
+.msd-mini-table td:nth-child(3),
+.msd-mini-table th:nth-child(4),
+.msd-mini-table td:nth-child(4) {
+    text-align: center;
+}
+
+.msd-mini-table td:nth-child(3) .msd-calltime-cell,
+.msd-mini-table td:nth-child(3) .msd-calltime-locked {
+    margin-left: auto;
+    margin-right: auto;
+}
+
 .msd-mini-table tr:last-child td {
     border-bottom: none;
+}
+
+.msd-dept-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #e6ecf8;
+    margin-bottom: 10px;
+}
+
+.msd-dept-bulk-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 0 0 10px;
+    flex-wrap: wrap;
+}
+
+.msd-dept-bulk-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: nowrap;
+}
+
+.msd-dept-bulk-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.msd-dept-bulk-stack .msd-calltime-select,
+.msd-dept-bulk-stack .tp-wrapper {
+    width: 160px;
+}
+
+.msd-dept-bulk-stack .tp-wrapper .tp-trigger {
+    width: 100%;
+}
+
+
+.msd-dept-bulk-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    color: #5b5c61;
+    white-space: nowrap;
+}
+
+.msd-dept-bulk-row .msd-calltime-select {
+    padding: 4px 8px;
+    font-size: 0.78rem;
+    height: 32px;
+}
+
+.msd-dept-bulk-row .tp-wrapper .tp-trigger {
+    padding: 4px 8px;
+    min-height: 32px;
+    font-size: 0.78rem;
 }
 
 .msd-role-col {
@@ -847,13 +993,13 @@
     flex: 1;
     display: flex;
     align-items: center;
-
     justify-content: center;
     background: #f8f9fb;
     border-radius: 12px;
     border: 2px dashed #e2e6ed;
     padding: 20px;
     min-height: 100px;
+    overflow: hidden;
     transition: all 0.2s ease;
 }
 
@@ -863,9 +1009,11 @@
 }
 
 .msd-logo-preview {
-    max-height: 80px;
-    max-width: 100%;
+    width: 100%;
+    height: 80px;
+    max-width: 180px;
     object-fit: contain;
+    display: block;
 }
 
 /* Side-by-side logos layout */
@@ -893,13 +1041,145 @@
 
 .msd-logo-slot .msd-logo-preview-container {
     width: 100%;
-    min-height: 80px;
+    min-height: 112px;
     padding: 12px;
 }
 
 .msd-upload-btn-small {
     font-size: 11px !important;
     padding: 5px 10px !important;
+}
+
+.msd-logo-guidance {
+    padding: 0 12px 12px;
+    color: #717784;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.msd-logo-editor-modal {
+    width: min(920px, calc(100vw - 32px));
+    max-width: 920px;
+    background: var(--msd-surface);
+    border: 1px solid var(--msd-border);
+}
+
+.msd-logo-editor-title {
+    margin-bottom: 8px;
+}
+
+.msd-logo-editor-subtitle {
+    margin: 0 0 18px;
+    color: var(--msd-muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.msd-logo-editor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.9fr);
+    gap: 18px;
+}
+
+.msd-logo-editor-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.msd-logo-editor-panel-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #7a808c;
+}
+
+.msd-logo-editor-stage,
+.msd-logo-editor-preview-shell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: min(100%, 360px);
+    aspect-ratio: 2 / 1;
+    margin: 0 auto;
+    background:
+        linear-gradient(45deg, #eceef2 25%, transparent 25%, transparent 75%, #eceef2 75%, #eceef2),
+        linear-gradient(45deg, #eceef2 25%, transparent 25%, transparent 75%, #eceef2 75%, #eceef2);
+    background-position: 0 0, 12px 12px;
+    background-size: 24px 24px;
+    border: 1px solid var(--msd-border);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.msd-logo-editor-stage {
+    min-height: 220px;
+    cursor: grab;
+    touch-action: none;
+}
+
+.msd-logo-editor-stage.is-dragging {
+    cursor: grabbing;
+}
+
+.msd-logo-editor-image {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    user-select: none;
+    pointer-events: none;
+}
+
+.msd-logo-editor-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.msd-logo-editor-zoom-label {
+    display: grid;
+    grid-template-columns: auto minmax(140px, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    color: var(--msd-text);
+    font-size: 13px;
+    width: min(100%, 360px);
+}
+
+.msd-logo-editor-zoom-label input[type="range"] {
+    width: 100%;
+}
+
+.msd-logo-editor-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.msd-logo-editor-meta {
+    font-size: 12px;
+    color: var(--msd-muted);
+}
+
+.msd-logo-editor-empty {
+    color: var(--msd-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+}
+
+@media (max-width: 860px) {
+    .msd-logo-editor-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .msd-logo-editor-stage {
+        min-height: 180px;
+    }
 }
 
 /* Shoot Days Grid */
@@ -1001,7 +1281,7 @@
 .msd-editor-view {
     font-family: 'Inter', sans-serif;
     background: #f7f8fa;
-    height: 100vh;
+    height: var(--msd-viewport-height);
 }
 
 .msd-editor-nav {
@@ -1093,7 +1373,7 @@
 }
 
 /* Additional UI improvements */
-.msd-table button {
+.msd-table td > button {
     background: transparent;
     border: 1px solid #e2e6ed;
     color: #6b7280;
@@ -1106,7 +1386,7 @@
     justify-content: center;
 }
 
-.msd-table button:hover {
+.msd-table td > button:hover {
     background-color: #fff5f4;
     border-color: #ff6758;
     color: #ff6758;
@@ -1130,6 +1410,12 @@
 .msd-dashboard-container,
 .msd-editor-view {
     background: var(--msd-bg);
+}
+
+@supports (height: 100dvh) {
+    .msd-page-container {
+        --msd-viewport-height: 100dvh;
+    }
 }
 
 .msd-dashboard-container {
@@ -1255,23 +1541,29 @@
 }
 
 .msd-card-delete-btn,
-.msd-table button {
+.msd-table td > button {
     background: #efeff1;
     border-color: var(--msd-border);
     color: #4c4d51;
 }
 
 .msd-card-delete-btn:hover,
-.msd-table button:hover {
+.msd-table td > button:hover {
     background: var(--msd-accent-soft);
     border-color: #efb29f;
     color: #a34121;
 }
 
 .msd-editor-form-container {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     max-width: none;
     padding: 0;
+    height: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .msd-editor-nav {
@@ -1305,13 +1597,69 @@
 
 .msd-editor-actions {
     display: flex;
+    align-items: center;
     gap: 10px;
 }
 
+.msd-save-status {
+    min-width: 140px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--msd-muted);
+    white-space: nowrap;
+}
+
+.msd-save-status.is-saving {
+    color: var(--msd-text);
+}
+
+.msd-save-status.is-saved {
+    color: #0f8a4b;
+}
+
+.msd-save-status.is-error {
+    color: #b42318;
+}
+
+.msd-save-status-icon {
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 14px;
+    font-size: 0.78rem;
+    line-height: 1;
+}
+
+.msd-save-status.is-saving .msd-save-status-icon {
+    border: 2px solid rgba(76, 77, 81, 0.2);
+    border-top-color: #4c4d51;
+    border-radius: 999px;
+    animation: msd-save-status-spin 0.7s linear infinite;
+}
+
+@keyframes msd-save-status-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .msd-editor-content {
+    flex: 1;
+    min-height: 0;
     padding: 20px;
-    height: calc(100vh - 60px);
-    overflow-y: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .msd-preview-toggle-btn {
@@ -1338,11 +1686,27 @@
     border-color: var(--msd-border);
 }
 
+.msd-dept-header {
+    border-bottom-color: var(--msd-border);
+}
+
+.msd-dept-bulk-label,
+.msd-dept-bulk-hint {
+    color: var(--msd-muted);
+}
+
 .msd-input,
 .msd-td-input,
 .msd-textarea {
     background: #fff;
     color: var(--msd-text);
+}
+
+.msd-input-wrap {
+    resize: vertical;
+    min-height: 36px;
+    line-height: 1.3;
+    padding: 8px 10px;
 }
 
 .msd-input:focus,
@@ -1515,6 +1879,45 @@
     box-shadow: 0 0 0 2px rgba(255, 103, 88, 0.1);
 }
 
+.msd-td-display {
+    font-size: 0.85rem;
+    color: #0f1724;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.45;
+}
+
+.msd-td-display-center {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.msd-scene-setdesc-cell {
+    min-width: 0;
+}
+
+.msd-scene-setdesc-summary {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #0f1724;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.msd-scene-setdesc-description {
+    margin-top: 4px;
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: #374151;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
 /* Requirements Grid Layout */
 .msd-req-grid {
     display: grid;
@@ -1642,6 +2045,23 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    align-items: center;
+}
+
+.msd-calltime-locked {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: #f4f4f5;
+    border: 1px solid var(--msd-border);
+    color: var(--msd-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-align: center;
+    min-height: 32px;
+    margin: 0 auto;
 }
 
 .msd-calltime-select {
@@ -1656,6 +2076,17 @@
     cursor: pointer;
     transition: border-color 0.2s ease;
     appearance: auto;
+}
+
+.msd-calltime-cell .msd-calltime-select,
+.msd-calltime-cell .tp-wrapper {
+    width: 100%;
+    max-width: 120px;
+}
+
+/* Match cast list time picker width to crew list */
+.tp-wrapper.msd-cast-timepicker {
+    width: 130px;
 }
 
 .msd-calltime-select:focus {

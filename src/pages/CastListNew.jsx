@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
 import {
@@ -13,6 +13,7 @@ import {
 	PiFolderPlus,
 	PiLockSimple,
 	PiLockSimpleOpen,
+	PiPencilSimple,
 	PiArrowsOutCardinal,
 	PiArrowsInCardinal,
 	PiFilmSlateFill,
@@ -35,14 +36,45 @@ import "../css/CastListNew.css";
   - View Options / View Scenes buttons
 */
 
-const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm }) => {
+const emptyOptionForm = {
+	actorName: "",
+	media: "",
+	contact: "",
+	availableDates: [],
+	unavailableDates: [],
+	flexible: false,
+	details: "",
+	notes: "",
+};
+
+const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm, title, submitLabel }) => {
 	const [dateRangeStart, setDateRangeStart] = useState("");
 	const [dateRangeEnd, setDateRangeEnd] = useState("");
 	const [selectedDates, setSelectedDates] = useState(optionForm.availableDates || []);
+	const [selectedUnavailableDates, setSelectedUnavailableDates] = useState(optionForm.unavailableDates || []);
+	const [datePickerMode, setDatePickerMode] = useState(optionForm.flexible ? "flexible" : "fixed");
+	const [dateAddMode, setDateAddMode] = useState("available");
+
+	useEffect(() => {
+		setSelectedDates(optionForm.availableDates || []);
+	}, [optionForm.availableDates]);
+
+	useEffect(() => {
+		setSelectedUnavailableDates(optionForm.unavailableDates || []);
+	}, [optionForm.unavailableDates]);
+
+	useEffect(() => {
+		setDatePickerMode(optionForm.flexible ? "flexible" : "fixed");
+	}, [optionForm.flexible]);
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
-		await onSubmit({ ...optionForm, availableDates: selectedDates });
+		await onSubmit({
+			...optionForm,
+			flexible: datePickerMode === "flexible",
+			availableDates: datePickerMode === "flexible" ? [] : selectedDates,
+			unavailableDates: datePickerMode === "flexible" ? [] : selectedUnavailableDates,
+		});
 	};
 
 	const handleInputChange = useCallback(
@@ -74,15 +106,29 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 			currentDate.setDate(currentDate.getDate() + 1);
 		}
 
-		setSelectedDates((prev) => {
-			const newDates = [...prev];
-			rangeDates.forEach((date) => {
-				if (!newDates.includes(date)) {
-					newDates.push(date);
-				}
+		if (dateAddMode === "available") {
+			setSelectedDates((prev) => {
+				const newDates = [...prev];
+				rangeDates.forEach((date) => {
+					if (!newDates.includes(date)) {
+						newDates.push(date);
+					}
+				});
+				return newDates.sort();
 			});
-			return newDates.sort();
-		});
+			setSelectedUnavailableDates((prev) => prev.filter((date) => !rangeDates.includes(date)));
+		} else {
+			setSelectedUnavailableDates((prev) => {
+				const newDates = [...prev];
+				rangeDates.forEach((date) => {
+					if (!newDates.includes(date)) {
+						newDates.push(date);
+					}
+				});
+				return newDates.sort();
+			});
+			setSelectedDates((prev) => prev.filter((date) => !rangeDates.includes(date)));
+		}
 
 		setDateRangeStart("");
 		setDateRangeEnd("");
@@ -90,21 +136,37 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 
 	const handleCalendarDateClick = (date) => {
 		const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
-		setSelectedDates((prev) => {
+		if (datePickerMode === "flexible") return;
+		if (dateAddMode === "available") {
+			setSelectedDates((prev) => {
+				if (prev.includes(dateStr)) {
+					return prev.filter((d) => d !== dateStr);
+				}
+				return [...prev, dateStr].sort();
+			});
+			setSelectedUnavailableDates((prev) => prev.filter((d) => d !== dateStr));
+			return;
+		}
+		setSelectedUnavailableDates((prev) => {
 			if (prev.includes(dateStr)) {
 				return prev.filter((d) => d !== dateStr);
-			} else {
-				return [...prev, dateStr].sort();
 			}
+			return [...prev, dateStr].sort();
 		});
+		setSelectedDates((prev) => prev.filter((d) => d !== dateStr));
 	};
 
-	const removeDate = (dateToRemove) => {
-		setSelectedDates((prev) => prev.filter((d) => d !== dateToRemove));
+	const removeDate = (dateToRemove, mode = "available") => {
+		if (mode === "available") {
+			setSelectedDates((prev) => prev.filter((d) => d !== dateToRemove));
+			return;
+		}
+		setSelectedUnavailableDates((prev) => prev.filter((d) => d !== dateToRemove));
 	};
 
 	const clearAllDates = () => {
 		setSelectedDates([]);
+		setSelectedUnavailableDates([]);
 	};
 
 	const formatDisplayDate = (dateString) => {
@@ -119,9 +181,8 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 	const tileClassName = ({ date, view }) => {
 		if (view === "month") {
 			const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
-			if (selectedDates.includes(dateStr)) {
-				return "cln-calendar-selected";
-			}
+			if (selectedDates.includes(dateStr)) return "cln-calendar-available";
+			if (selectedUnavailableDates.includes(dateStr)) return "cln-calendar-unavailable";
 		}
 		return null;
 	};
@@ -129,7 +190,7 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 	return (
 		<div className="cln-modal-overlay">
 			<div className="cln-modal cln-modal-wide">
-				<h3 className="cln-modal-title">Add Actor Option</h3>
+				<h3 className="cln-modal-title">{title}</h3>
 				<form onSubmit={handleSubmit} className="cln-form">
 					<div className="cln-form-row">
 						<div className="cln-form-column">
@@ -189,6 +250,48 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 							<div className="cln-form-group">
 								<label className="cln-label">Available Dates:</label>
 								<div className="cln-date-picker-container">
+									<div className="cln-date-mode-selector">
+										<label className="cln-mode-option">
+											<input
+												type="radio"
+												checked={datePickerMode === "flexible"}
+												onChange={() => setDatePickerMode("flexible")}
+											/>
+											Flexible Dates
+										</label>
+										<label className="cln-mode-option">
+											<input
+												type="radio"
+												checked={datePickerMode === "fixed"}
+												onChange={() => setDatePickerMode("fixed")}
+											/>
+											Fixed Dates
+										</label>
+									</div>
+									{datePickerMode === "flexible" ? (
+										<div className="cln-flexible-info">
+											No dates are set for this option. It will be treated as flexible and available on any day.
+										</div>
+									) : (
+										<>
+											<div className="cln-date-mode-selector">
+												<label className="cln-mode-option">
+													<input
+														type="checkbox"
+														checked={dateAddMode === "available"}
+														onChange={() => setDateAddMode("available")}
+													/>
+													Mark Available (Green)
+												</label>
+												<label className="cln-mode-option">
+													<input
+														type="checkbox"
+														checked={dateAddMode === "unavailable"}
+														onChange={() => setDateAddMode("unavailable")}
+													/>
+													Mark Unavailable (Red)
+												</label>
+											</div>
 									<div className="cln-date-range-inputs">
 										<input
 											type="date"
@@ -213,28 +316,64 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 											Add Range
 										</button>
 									</div>
-									<div className="cln-calendar-wrapper">
-										<Calendar selectRange={false} onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
-									</div>
-									{selectedDates.length > 0 && (
-										<div className="cln-selected-dates">
-											<div className="cln-selected-dates-header">
-												<span>Selected Dates ({selectedDates.length}):</span>
+											<div className="cln-date-picker-summary">
+												<span>
+													Available: {selectedDates.length} | Unavailable: {selectedUnavailableDates.length}
+												</span>
 												<button type="button" onClick={clearAllDates} className="cln-clear-dates-btn">
 													Clear All
 												</button>
 											</div>
-											<div className="cln-dates-list">
-												{selectedDates.map((date) => (
-													<span key={date} className="cln-date-tag">
-														{formatDisplayDate(date)}
-														<button type="button" onClick={() => removeDate(date)} className="cln-remove-date-btn">
-															×
-														</button>
-													</span>
-												))}
-											</div>
-										</div>
+									<div className="cln-calendar-wrapper">
+										<Calendar selectRange={false} onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
+									</div>
+											{(selectedDates.length > 0 || selectedUnavailableDates.length > 0) && (
+												<div className="cln-selected-dates">
+													{selectedDates.length > 0 && (
+														<>
+															<div className="cln-selected-dates-header">
+																<span>Available Dates ({selectedDates.length}):</span>
+															</div>
+															<div className="cln-dates-list">
+																{selectedDates.map((date) => (
+																	<span key={`available-${date}`} className="cln-date-tag cln-date-tag-available">
+																		{formatDisplayDate(date)}
+																		<button
+																			type="button"
+																			onClick={() => removeDate(date, "available")}
+																			className="cln-remove-date-btn"
+																		>
+																			×
+																		</button>
+																	</span>
+																))}
+															</div>
+														</>
+													)}
+													{selectedUnavailableDates.length > 0 && (
+														<>
+															<div className="cln-selected-dates-header">
+																<span>Unavailable Dates ({selectedUnavailableDates.length}):</span>
+															</div>
+															<div className="cln-dates-list">
+																{selectedUnavailableDates.map((date) => (
+																	<span key={`unavailable-${date}`} className="cln-date-tag cln-date-tag-unavailable">
+																		{formatDisplayDate(date)}
+																		<button
+																			type="button"
+																			onClick={() => removeDate(date, "unavailable")}
+																			className="cln-remove-date-btn"
+																		>
+																			×
+																		</button>
+																	</span>
+																))}
+															</div>
+														</>
+													)}
+												</div>
+											)}
+										</>
 									)}
 								</div>
 							</div>
@@ -242,7 +381,7 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 					</div>
 					<div className="cln-modal-buttons">
 						<button type="submit" className="cln-submit-btn">
-							Add Option
+							{submitLabel}
 						</button>
 						<button type="button" onClick={onClose} className="cln-cancel-btn">
 							Cancel
@@ -294,7 +433,9 @@ const CastListNew = () => {
 	const [expandedScenes, setExpandedScenes] = useState(new Set());
 	const [showAddOptionModal, setShowAddOptionModal] = useState(false);
 	const [selectedCharacterIndex, setSelectedCharacterIndex] = useState(null);
-	const [optionForm, setOptionForm] = useState({ actorName: "", media: "", contact: "", availableDates: [], details: "", notes: "" });
+	const [optionForm, setOptionForm] = useState(emptyOptionForm);
+	const [editingOptionContext, setEditingOptionContext] = useState(null);
+	const [optionDetailsModal, setOptionDetailsModal] = useState(null);
 	const [selectedOptions, setSelectedOptions] = useState(new Set());
 	const [sceneChars, setSceneChars] = useState({});
 	const [scenes, setScenes] = useState([]);
@@ -428,9 +569,10 @@ const CastListNew = () => {
 		result.total = CharScenes.length;
 
 		scenes.forEach((scene) => {
-			// Support both JSON format (scene_number) and TSV format (Scene Number)
-			const sceneNumber = scene.scene_number || scene["Scene Number"];
-			if (CharScenes.includes(sceneNumber)) {
+			// Support JSON ids (scene.id / scene.scene_id) and scene numbers (scene_number / "Scene Number")
+			const sceneId = String(scene.id ?? scene.scene_id ?? "");
+			const sceneNumber = String(scene.scene_number || scene["Scene Number"] || "");
+			if (CharScenes.includes(sceneId) || CharScenes.includes(sceneNumber)) {
 				// Support both JSON format (int_ext) and TSV format (Int./Ext.)
 				const intExt = (scene.int_ext || scene["Int./Ext."] || "").toUpperCase();
 				if (intExt.includes("INT.") && intExt.includes("EXT.")) {
@@ -451,6 +593,16 @@ const CastListNew = () => {
 		return result;
 	}
 
+	const refreshCastList = useCallback(async () => {
+		const refreshedResponse = await fetch(getApiUrl(`/api/${id}/cast-list`));
+		if (!refreshedResponse.ok) {
+			throw new Error("Failed to refresh cast list");
+		}
+		const refreshed = await refreshedResponse.json();
+		setCastData(refreshed);
+		return refreshed;
+	}, [id]);
+
 	const addActorOption = async (idx, form) => {
 		setIsLoading(true);
 		try {
@@ -465,6 +617,8 @@ const CastListNew = () => {
 					media: form.media,
 					contact: form.contact,
 					availableDates: form.availableDates || [],
+					unavailableDates: form.unavailableDates || [],
+					flexible: !!form.flexible,
 					details: form.details,
 					notes: form.notes,
 				}),
@@ -473,13 +627,46 @@ const CastListNew = () => {
 				const text = await res.text().catch(() => null);
 				throw new Error(text || "Failed to add actor option");
 			}
-			const refreshed = await (await fetch(getApiUrl(`/api/${id}/cast-list`))).json();
+			const refreshed = await refreshCastList();
 			console.log("new castlist ", refreshed);
-			setCastData(refreshed);
 			setShowAddOptionModal(false);
-			setOptionForm({ actorName: "", media: "", contact: "", availableDates: [], details: "", notes: "" });
+			setOptionForm(emptyOptionForm);
 		} catch (e) {
 			setError(e.message);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	const updateActorOption = async (idx, optId, form) => {
+		setIsLoading(true);
+		try {
+			const member = castData.cast_list[idx];
+			const res = await fetch(getApiUrl(`/api/${id}/cast/${member.cast_id}/options/${optId}`), {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					actorName: form.actorName,
+					media: form.media,
+					contact: form.contact,
+					availableDates: form.availableDates || [],
+					unavailableDates: form.unavailableDates || [],
+					flexible: !!form.flexible,
+					details: form.details,
+					notes: form.notes,
+				}),
+			});
+			if (!res.ok) {
+				const text = await res.text().catch(() => null);
+				throw new Error(text || "Failed to update actor option");
+			}
+			await refreshCastList();
+			setShowAddOptionModal(false);
+			setEditingOptionContext(null);
+			setOptionForm(emptyOptionForm);
+		} catch (e) {
+			setError(e.message);
+			alert("Failed to update option: " + e.message);
 		} finally {
 			setIsLoading(false);
 		}
@@ -490,8 +677,7 @@ const CastListNew = () => {
 		try {
 			const member = castData.cast_list[idx];
 			await fetch(getApiUrl(`/api/${id}/cast/${member.cast_id}/options/${optId}`), { method: "DELETE" });
-			const refreshed = await (await fetch(getApiUrl(`/api/${id}/cast-list`))).json();
-			setCastData(refreshed);
+			await refreshCastList();
 		} catch (e) {
 			setError(e.message);
 		} finally {
@@ -522,8 +708,7 @@ const CastListNew = () => {
 				}
 
 				// Refresh cast data
-				const refreshed = await (await fetch(getApiUrl(`/api/${id}/cast-list`))).json();
-				setCastData(refreshed);
+				await refreshCastList();
 			} catch (e) {
 				setError(e.message);
 				alert("Failed to toggle lock: " + e.message);
@@ -531,8 +716,31 @@ const CastListNew = () => {
 				setIsLoading(false);
 			}
 		},
-		[castData, id],
+		[castData, id, refreshCastList],
 	);
+
+	const openAddOptionModal = useCallback((idx) => {
+		setSelectedCharacterIndex(idx);
+		setEditingOptionContext(null);
+		setOptionForm(emptyOptionForm);
+		setShowAddOptionModal(true);
+	}, []);
+
+	const openEditOptionModal = useCallback((idx, optId, opt) => {
+		setSelectedCharacterIndex(idx);
+		setEditingOptionContext({ idx, optId });
+		setOptionForm({
+			actorName: findFirstField(opt, ["actor_name", "actorName", "name"]) || "",
+			media: findFirstField(opt, ["media", "media_links", "links", "photos", "mediaLink", "mediaLinks"]) || "",
+			contact: findFirstField(opt, ["contact", "addr", "locationAddress", "location_address", "Address"]) || "",
+			availableDates: opt.available_dates || opt.availableDates || [],
+			unavailableDates: opt.unavailable_dates || opt.unavailableDates || [],
+			flexible: !!opt.flexible,
+			details: findFirstField(opt, ["details"]) || "",
+			notes: findFirstField(opt, ["notes"]) || "",
+		});
+		setShowAddOptionModal(true);
+	}, []);
 
 	const addCastGroup = async () => {
 		try {
@@ -631,6 +839,13 @@ const CastListNew = () => {
 		return String(val);
 	};
 
+	const hasEpisodeInScenes = useMemo(() => {
+		return (scenes || []).some((scene) => {
+			const episodeValue = scene?.episode_number ?? scene?.["Episode Number"];
+			return episodeValue !== undefined && episodeValue !== null && String(episodeValue).trim() !== "";
+		});
+	}, [scenes]);
+
 	const getData = (s, field) => {
 		var data = "";
 		const searchStr = String(s);
@@ -645,6 +860,7 @@ const CastListNew = () => {
 			if (sceneNumber === searchStr || sceneId === searchStr || arrayIndex === searchStr) {
 				// Map field names between TSV and JSON formats
 				const fieldMap = {
+					"Episode Number": scene.episode_number || scene["Episode Number"],
 					"Scene Number": scene.scene_number || scene["Scene Number"],
 					"Int./Ext.": scene.int_ext || scene["Int./Ext."],
 					Location: scene.location || scene["Location"], // Use set first
@@ -1211,18 +1427,7 @@ const CastListNew = () => {
 													<div className="cln-card-header-actions">
 														<button
 															className="cln-btn-add-option"
-															onClick={() => {
-																setSelectedCharacterIndex(idx);
-																setShowAddOptionModal(true);
-																setOptionForm({
-																	actorName: "",
-																	media: "",
-																	contact: "",
-																	availableDates: [],
-																	details: "",
-																	notes: "",
-																});
-															}}
+															onClick={() => openAddOptionModal(idx)}
 														>
 															<PiPlusBold />
 															Add Option
@@ -1449,6 +1654,9 @@ const CastListNew = () => {
 																				const notes = getOptionField(opt, ["notes"]);
 																				const dates =
 																					opt.available_dates || opt.availableDates || [];
+																				const unavailableDates =
+																					opt.unavailable_dates || opt.unavailableDates || [];
+																				const isFlexible = !!opt.flexible;
 																				const formatDate = (dateStr) => {
 																					const d = new Date(dateStr);
 																					return d.toLocaleDateString("en-US", {
@@ -1456,8 +1664,9 @@ const CastListNew = () => {
 																						day: "numeric",
 																					});
 																				};
-																				const datesDisplay =
-																					Array.isArray(dates) && dates.length > 0
+																				const datesDisplay = isFlexible
+																					? "Flexible"
+																					: Array.isArray(dates) && dates.length > 0
 																						? dates.length <= 3
 																							? dates.map(formatDate).join(", ")
 																							: `${dates
@@ -1466,15 +1675,24 @@ const CastListNew = () => {
 																									.join(", ")} +${
 																									dates.length - 2
 																								} more`
-																						: "-";
+																						: Array.isArray(unavailableDates) && unavailableDates.length > 0
+																							? `Unavailable: ${unavailableDates.length}`
+																							: "-";
 
 																				return (
 																					<tr
 																						key={optId}
-																						className={locked ? "cln-row-locked" : ""}
+																						className={`${locked ? "cln-row-locked" : ""} cln-data-row-clickable`}
+																						onClick={() => {
+																							setOptionDetailsModal({
+																								option: opt,
+																								isLocked: locked,
+																								characterName: member.character,
+																							});
+																						}}
 																					>
 																						{isSelectingMode.has(idx) && (
-																							<td style={{ width: 50 }}>
+																							<td style={{ width: 50 }} onClick={(e) => e.stopPropagation()}>
 																								<input
 																									type="checkbox"
 																									className="cln-select-checkbox"
@@ -1513,34 +1731,44 @@ const CastListNew = () => {
 																						>
 																							{datesDisplay}
 																						</td>
-																						<td>
-																							<button
-																								className={`cln-lock-btn ${
-																									locked ? "cln-locked" : ""
-																								} ${otherLocked ? "cln-disabled" : ""}`}
-																								onClick={() =>
-																									toggleLockOption(
-																										idx,
-																										optId,
-																										member.cast_id,
-																									)
-																								}
-																								disabled={otherLocked}
-																								title={
-																									locked
-																										? "Click to unlock"
-																										: otherLocked
-																											? "Another option is locked"
-																											: "Click to lock"
-																								}
-																							>
-																								{locked ? (
-																									<PiLockSimple />
-																								) : (
-																									<PiLockSimpleOpen />
-																								)}
-																								{locked ? "Locked" : "Lock"}
-																							</button>
+																						<td onClick={(e) => e.stopPropagation()}>
+																							<div className="cln-option-actions">
+																								<button
+																									className={`cln-lock-btn ${
+																										locked ? "cln-locked" : ""
+																									} ${otherLocked ? "cln-disabled" : ""}`}
+																									onClick={() =>
+																										toggleLockOption(
+																											idx,
+																											optId,
+																											member.cast_id,
+																										)
+																									}
+																									disabled={otherLocked}
+																									title={
+																										locked
+																											? "Click to unlock"
+																											: otherLocked
+																												? "Another option is locked"
+																												: "Click to lock"
+																									}
+																								>
+																									{locked ? (
+																										<PiLockSimple />
+																									) : (
+																										<PiLockSimpleOpen />
+																									)}
+																									{locked ? "Locked" : "Lock"}
+																								</button>
+																								<button
+																									className="cln-option-edit-btn"
+																									onClick={() => openEditOptionModal(idx, optId, opt)}
+																									title="Edit option"
+																								>
+																									<PiPencilSimple />
+																									Edit
+																								</button>
+																							</div>
 																						</td>
 																					</tr>
 																				);
@@ -1560,6 +1788,7 @@ const CastListNew = () => {
 																<table className="cln-data-table">
 																	<thead>
 																		<tr>
+																			{hasEpisodeInScenes && <th>Episode</th>}
 																			<th>Scene No</th>
 																			<th>Int./Ext.</th>
 																			<th>Location</th>
@@ -1570,6 +1799,7 @@ const CastListNew = () => {
 																	</thead>
 																	<tbody>
 																		{(member.scenes || []).map((s, i) => {
+																			const episodeNo = getData(s, "Episode Number");
 																			const sceneNo = getData(s, "Scene Number");
 																			const intExt = getData(s, "Int./Ext.");
 																			const location = getData(s, "Location");
@@ -1581,7 +1811,8 @@ const CastListNew = () => {
 
 																			return (
 																				<tr key={i}>
-																					<td>{sceneNo !== "N/A" ? sceneNo : i + 1}</td>
+																			{hasEpisodeInScenes && <td>{episodeNo !== "N/A" ? episodeNo : "-"}</td>}
+																			<td>{sceneNo !== "N/A" ? sceneNo : i + 1}</td>
 																					<td>{intExt}</td>
 																					<td>{location}</td>
 																					<td>{time}</td>
@@ -1639,13 +1870,143 @@ const CastListNew = () => {
 				</div>
 			)}
 
+			{/* Option Details Modal */}
+			{optionDetailsModal && (
+				<div className="cln-modal-overlay" onClick={() => setOptionDetailsModal(null)}>
+					<div className="cln-option-details-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="cln-option-modal-header">
+							<div className="cln-option-modal-title-row">
+								{optionDetailsModal.isLocked && <span className="cln-locked-badge">Locked</span>}
+								<h3 className="cln-option-modal-title">
+									{findFirstField(optionDetailsModal.option, ["actor_name", "actorName", "name"]) || "Actor Option"}
+								</h3>
+							</div>
+							<div className="cln-option-modal-subtitle">
+								Character: {optionDetailsModal.characterName || "Not specified"}
+							</div>
+							<button className="cln-option-modal-close" onClick={() => setOptionDetailsModal(null)}>
+								<PiX />
+							</button>
+						</div>
+
+						<div className="cln-option-modal-content">
+							<div className="cln-option-modal-section">
+								<div className="cln-option-modal-label">Contact</div>
+								<div className="cln-option-modal-value">
+									{findFirstField(optionDetailsModal.option, ["contact", "addr", "locationAddress", "location_address", "Address"]) ||
+										"Not specified"}
+								</div>
+							</div>
+
+							<div className="cln-option-modal-section">
+								<div className="cln-option-modal-label">Media</div>
+								<div className="cln-option-modal-value">
+									{findFirstField(optionDetailsModal.option, ["media", "media_links", "links", "photos", "mediaLink", "mediaLinks"]) ||
+										"No media"}
+								</div>
+							</div>
+
+							<div className="cln-option-modal-section">
+								<div className="cln-option-modal-label">Details</div>
+								<div className="cln-option-modal-value cln-option-modal-long-text">
+									{findFirstField(optionDetailsModal.option, ["details"]) || "No details"}
+								</div>
+							</div>
+
+							<div className="cln-option-modal-section">
+								<div className="cln-option-modal-label">Notes</div>
+								<div className="cln-option-modal-value cln-option-modal-long-text">
+									{findFirstField(optionDetailsModal.option, ["notes"]) || "No notes"}
+								</div>
+							</div>
+
+							<div className="cln-option-modal-section cln-option-modal-dates-section">
+								<div className="cln-option-modal-label">
+									Available Dates ({(optionDetailsModal.option.available_dates || optionDetailsModal.option.availableDates || []).length})
+								</div>
+								<div className="cln-option-modal-dates-container">
+									{(() => {
+										if (optionDetailsModal.option.flexible) {
+											return <span className="cln-option-modal-no-dates">Flexible dates</span>;
+										}
+										const dates = optionDetailsModal.option.available_dates || optionDetailsModal.option.availableDates || [];
+										if (dates.length === 0) {
+											return <span className="cln-option-modal-no-dates">No available dates specified</span>;
+										}
+										return (
+											<div className="cln-option-modal-dates-list">
+												{dates.map((d) => (
+													<span key={d} className="cln-option-modal-date-tag">
+														{new Date(d).toLocaleDateString("en-US", {
+															weekday: "short",
+															month: "short",
+															day: "numeric",
+															year: "numeric",
+														})}
+													</span>
+												))}
+											</div>
+										);
+									})()}
+								</div>
+							</div>
+
+							<div className="cln-option-modal-section cln-option-modal-dates-section">
+								<div className="cln-option-modal-label">
+									Unavailable Dates (
+									{(optionDetailsModal.option.unavailable_dates || optionDetailsModal.option.unavailableDates || []).length})
+								</div>
+								<div className="cln-option-modal-dates-container">
+									{(() => {
+										const dates = optionDetailsModal.option.unavailable_dates || optionDetailsModal.option.unavailableDates || [];
+										if (dates.length === 0) {
+											return <span className="cln-option-modal-no-dates">No unavailable dates specified</span>;
+										}
+										return (
+											<div className="cln-option-modal-dates-list">
+												{dates.map((d) => (
+													<span key={d} className="cln-option-modal-date-tag cln-option-modal-date-tag-unavailable">
+														{new Date(d).toLocaleDateString("en-US", {
+															weekday: "short",
+															month: "short",
+															day: "numeric",
+															year: "numeric",
+														})}
+													</span>
+												))}
+											</div>
+										);
+									})()}
+								</div>
+							</div>
+						</div>
+
+						<div className="cln-option-modal-footer">
+							<button className="cln-option-modal-close-btn" onClick={() => setOptionDetailsModal(null)}>
+								Close
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Add Option Modal */}
 			{showAddOptionModal && (
 				<AddActorOptionModal
-					onClose={() => setShowAddOptionModal(false)}
-					onSubmit={(form) => addActorOption(selectedCharacterIndex, form)}
+					onClose={() => {
+						setShowAddOptionModal(false);
+						setEditingOptionContext(null);
+						setOptionForm(emptyOptionForm);
+					}}
+					onSubmit={(form) =>
+						editingOptionContext
+							? updateActorOption(editingOptionContext.idx, editingOptionContext.optId, form)
+							: addActorOption(selectedCharacterIndex, form)
+					}
 					optionForm={optionForm}
 					setOptionForm={setOptionForm}
+					title={editingOptionContext ? "Edit Actor Option" : "Add Actor Option"}
+					submitLabel={editingOptionContext ? "Save Changes" : "Add Option"}
 				/>
 			)}
 

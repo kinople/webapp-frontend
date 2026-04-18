@@ -1,5 +1,5 @@
 import React from "react";
-import { HashRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { HashRouter as Router, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import ProjectHeader from "./components/ProjectHeader";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -31,6 +31,11 @@ import ProjectLayout from "./components/ProjectLayout";
 import UserSettings from "./pages/UserSettings";
 import ProjectSettingsDashboard from "./pages/ProjectSettingsDashboard";
 import DOOD from "./components/DOOD";
+
+function LegacyCallSheetsRedirect() {
+	const { user, id } = useParams();
+	return <Navigate to={`/${user}/${id}/call-sheets`} replace />;
+}
 
 function AppContent() {
 	const location = useLocation();
@@ -171,10 +176,18 @@ function AppContent() {
 						}
 					/>
 					<Route
-						path="manage-shoot-days"
+						path="call-sheets/day/:dayId"
 						element={
 							<ProtectedRoute>
 								<ManageShootDays />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="manage-shoot-days"
+						element={
+							<ProtectedRoute>
+								<LegacyCallSheetsRedirect />
 							</ProtectedRoute>
 						}
 					/>

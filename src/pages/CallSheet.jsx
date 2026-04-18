@@ -13,6 +13,7 @@ const formatScheduleData = (schedulePayload) => {
 
         groupedByDate[dateKey] = dayScenes.map((scene) => ({
             'Date': day?.date || '',
+            'Episode Number': scene?.episode_number || '',
             'Scene Number': scene?.scene_number || scene?.scene_id || '',
             'INT/EXT': scene?.int_ext || scene?.ie || '',
             'Day/Night': scene?.day_night || '',
@@ -27,7 +28,7 @@ const formatScheduleData = (schedulePayload) => {
     return groupedByDate;
 };
 
-const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedData }) => {
+const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedData, isEpisodic }) => {
     const { user, id } = useParams();
     const [shootTimings, setShootTimings] = useState({
         shiftStart: '8:00 AM',
@@ -175,6 +176,7 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
             <table style={styles.scheduleTable}>
                 <thead>
                     <tr>
+                        {isEpisodic && <th>Ep</th>}
                         <th>Scene No.</th>
                         <th>Int./Ext.<br />Day/Night</th>
                         <th>Location<br />Synopsis</th>
@@ -186,6 +188,7 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
                 <tbody>
                     {dayData.map((scene, index) => (
                         <tr key={index}>
+                            {isEpisodic && <td>{scene['Episode Number']}</td>}
                             <td>{scene['Scene Number']}</td>
                             <td>{scene['INT/EXT']}<br />{scene['Day/Night']}</td>
                             <td>
@@ -343,6 +346,7 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
             <table style={styles.scheduleTable}>
                 <thead>
                     <tr>
+                        {isEpisodic && <th>Ep</th>}
                         <th>Scene No.</th>
                         <th>Int./Ext.<br />Day/Night</th>
                         <th>Location<br />Synopsis</th>
@@ -354,6 +358,7 @@ const CallSheetForm = ({ dayData, dayNumber, totalDays, scheduleName, groupedDat
                 <tbody>
                     {nextDayScenes.map((scene, index) => (
                         <tr key={index}>
+                            {isEpisodic && <td>{scene['Episode Number']}</td>}
                             <td>{scene['Scene Number']}</td>
                             <td>{scene['INT/EXT']}<br />{scene['Day/Night']}</td>
                             <td>
@@ -377,6 +382,11 @@ const CallSheet = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedDay, setSelectedDay] = useState(null);
+
+    const isEpisodic = Object.values(groupedData).some((scenes) =>
+        Array.isArray(scenes) &&
+        scenes.some((scene) => String(scene?.['Episode Number'] ?? '').trim() !== '')
+    );
 
     useEffect(() => {
         const fetchScheduleData = async () => {
@@ -433,6 +443,7 @@ const CallSheet = () => {
                                 totalDays={Object.keys(groupedData).length}
                                 scheduleName={scheduleName}
                                 groupedData={groupedData}
+                                isEpisodic={isEpisodic}
                             />
                         )}
                     </div>

@@ -46,7 +46,7 @@ const Sidebar = () => {
 		{ label: "Cast List", icon: PiUsersThree, path: `/${user}/${id}/cast-list` },
 		{ label: "Sets", icon: PiMapPinLine, path: `/${user}/${id}/locations` },
 		{ label: "Scheduling", icon: PiCalendarDots, path: `/${user}/${id}/scheduling/1` },
-		{ label: "Call Sheets", icon: PiUsersThree, path: `/${user}/${id}/manage-shoot-days` },
+		{ label: "Call Sheets", icon: PiUsersThree, path: `/${user}/${id}/call-sheets` },
 	];
 
 	useEffect(() => {
@@ -168,8 +168,16 @@ const Sidebar = () => {
 			return true;
 		}
 
-		// Call Sheets (manage-shoot-days)
-		if (itemPath === `/${user}/${id}/manage-shoot-days` && (currentPath === itemPath || currentPath.startsWith(`${itemPath}/`))) {
+		// Call Sheets
+		if (
+			itemPath === `/${user}/${id}/call-sheets` &&
+			(
+				currentPath === itemPath ||
+				currentPath.startsWith(`${itemPath}/`) ||
+				currentPath === `/${user}/${id}/manage-shoot-days` ||
+				currentPath.startsWith(`/${user}/${id}/manage-shoot-days/`)
+			)
+		) {
 			return true;
 		}
 

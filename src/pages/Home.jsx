@@ -61,6 +61,11 @@ const Home = () => {
 	const totalResults = displayProjects.length;
 	const totalPages = Math.ceil(totalResults / resultsPerPage) || 1;
 
+	const isEpisodicProject = (project) =>
+		String(project?.type || project?.projectType || "")
+			.trim()
+			.toLowerCase() === "episodic";
+
 	return (
 		<div className={`home-page${navbarCollapsed ? " navbar-collapsed" : ""}`}>
 			<div className="home-main-content">
@@ -98,10 +103,10 @@ const Home = () => {
 											<PiFolder className="home-stat-icon" />
 											<span className="home-stat-text">{project.scripts} Scripts</span>
 										</div>
-										{(project.type === "Episodic" || project.projectType === "Episodic") && (
+										{isEpisodicProject(project) && (
 											<div className="home-stat-item">
 												<PiMonitorPlay className="home-stat-icon" />
-												<span className="home-stat-text">{project.episodes || 12} Episodes</span>
+												<span className="home-stat-text">{Number(project.episodes || 0)} Episodes</span>
 											</div>
 										)}
 									</div>

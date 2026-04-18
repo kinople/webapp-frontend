@@ -275,10 +275,10 @@ export default function CrewList() {
 						<div className="cl-header-actions">
 							<button
 								className="cl-action-btn"
-								onClick={() => navigate(`/${user}/${id}/manage-shoot-days`)}
+								onClick={() => navigate(`/${user}/${id}/call-sheets`)}
 								style={{ backgroundColor: '#2d72d9', color: 'white', marginRight: '10px' }}
 							>
-								<PiFilmSlate /> Manage Shoot Days
+								<PiFilmSlate /> Call Sheets
 							</button>
 							<button
 								className="cl-action-btn cl-expand-all-btn"

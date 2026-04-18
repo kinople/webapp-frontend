@@ -32,7 +32,14 @@ function formatPageEights(pageEights) {
 	return pageEights;
 }
 
-const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, characterNameToIdMap }) => {
+function formatSceneDisplay(sceneNumber, episodeNumber) {
+	const scene = String(sceneNumber ?? "").trim();
+	const episode = String(episodeNumber ?? "").trim();
+	if (!scene) return "";
+	return episode ? `Ep${episode}-${scene}` : scene;
+}
+
+const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, characterNameToIdMap, isEpisodic }) => {
 	const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: scene.id, disabled: !isEditing });
 
 	const style = {
@@ -44,6 +51,7 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 
 	return (
 		<tr ref={setNodeRef} style={style} className="sched-data-row" {...attributes} {...listeners}>
+			{isEpisodic && <td className="sched-data-cell">{scene.episode_number || "-"}</td>}
 			<td className="sched-data-cell">{scene.scene_number}</td>
 
 			<td className="sched-data-cell">{scene.int_ext || "N/A"}</td>
@@ -105,7 +113,7 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 	);
 };
 
-const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHours, setScheduleDays, characterNameToIdMap }) => {
+const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHours, setScheduleDays, characterNameToIdMap, isEpisodic }) => {
 	const { setNodeRef } = useDroppable({
 		id: day.id,
 	});
@@ -142,6 +150,7 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 					<table className="sched-table">
 						<thead className="sched-thead">
 							<tr className="sched-header-row">
+								{isEpisodic && <th className="sched-header-cell">Ep</th>}
 								<th className="sched-header-cell">Scene</th>
 
 								<th className="sched-header-cell">Int./Ext.</th>
@@ -163,6 +172,7 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 									sceneHours={sceneHours}
 									setSceneHours={setSceneHours}
 									characterNameToIdMap={characterNameToIdMap}
+									isEpisodic={isEpisodic}
 								/>
 							))}
 						</tbody>
@@ -174,7 +184,7 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 };
 
 // Draggable scene card for unscheduled scenes
-const UnscheduledSceneCard = ({ scene, isEditing, characterNameToIdMap }) => {
+const UnscheduledSceneCard = ({ scene, isEditing, characterNameToIdMap, isEpisodic }) => {
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
 		id: scene.id,
 		disabled: !isEditing,
@@ -190,6 +200,7 @@ const UnscheduledSceneCard = ({ scene, isEditing, characterNameToIdMap }) => {
 
 	return (
 		<tr ref={setNodeRef} style={style} className="sched-data-row sched-unscheduled-drag-row" {...attributes} {...listeners}>
+			{isEpisodic && <td className="sched-data-cell">{scene.episode_number || "-"}</td>}
 			<td className="sched-data-cell sched-unscheduled-scene-number">{scene.scene_number}</td>
 			<td className="sched-data-cell">{scene.int_ext || "N/A"}</td>
 			<td className="sched-data-cell sched-location-synopsis-column">
@@ -227,7 +238,7 @@ const CalendarSceneBlock = ({ scene, isEditing }) => {
 		>
 			<b>
 				<div>
-					{scene.scene_number}
+					{formatSceneDisplay(scene.scene_number, scene.episode_number)}
 					{"   "}
 					{scene.int_ext && scene.int_ext} {"      "}
 					{scene.location_name || "N/A"}
@@ -335,6 +346,7 @@ const ManageSchedules = () => {
 	const [originalScheduleDays, setOriginalScheduleDays] = useState([]);
 	const [isEditing, setIsEditing] = useState(false);
 	const [scenes, setScenes] = useState([]);
+	const isEpisodic = useMemo(() => scenes.some((s) => s.episode_number || s["Episode Number"]), [scenes]);
 	const [scheduleMode, setScheduleMode] = useState("scenes");
 	const [maxHours, setMaxHours] = useState({ hours: "", minutes: "" });
 	const [maxPageEights, setMaxPageEights] = useState({ pages: "", eighths: "" });
@@ -2163,7 +2175,7 @@ const ManageSchedules = () => {
 	};
 
 	// Panel to display unscheduled scenes with drag-drop support
-	const UnscheduledScenesPanel = ({ unscheduledScenesWithIds, isEditing, characterNameToIdMap }) => {
+	const UnscheduledScenesPanel = ({ unscheduledScenesWithIds, isEditing, characterNameToIdMap, isEpisodic }) => {
 		const { setNodeRef } = useDroppable({
 			id: "unscheduled",
 		});
@@ -2188,6 +2200,7 @@ const ManageSchedules = () => {
 								<table className="sched-table">
 									<thead className="sched-thead">
 										<tr className="sched-header-row">
+											{isEpisodic && <th className="sched-header-cell">Ep</th>}
 											<th className="sched-header-cell">Scene</th>
 											<th className="sched-header-cell">Int./Ext.</th>
 											<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
@@ -2202,6 +2215,7 @@ const ManageSchedules = () => {
 												scene={scene}
 												isEditing={isEditing}
 												characterNameToIdMap={characterNameToIdMap}
+												isEpisodic={isEpisodic}
 											/>
 										))}
 									</tbody>
@@ -2230,6 +2244,7 @@ const ManageSchedules = () => {
 					scenes: day.scenes.map((scene) => ({
 						scene_id: scene.scene_id,
 						scene_number: scene.scene_number,
+						episode_number: scene.episode_number,
 						location_name: scene.location_name,
 						character_names: scene.character_names,
 						character_ids: scene.character_ids,
@@ -2281,6 +2296,7 @@ const ManageSchedules = () => {
 					scenes: day.scenes.map((scene) => ({
 						scene_id: scene.scene_id,
 						scene_number: scene.scene_number,
+						episode_number: scene.episode_number,
 						location_name: scene.location_name,
 						character_names: scene.character_names,
 						character_ids: scene.character_ids,
@@ -2753,6 +2769,7 @@ const ManageSchedules = () => {
 			id: `unsched-${scene.id}`,
 			scene_id: scene.id,
 			scene_number: scene.scene_number,
+			episode_number: scene.episode_number,
 			int_ext: scene.int_ext,
 			time_of_day: scene.time,
 			page_eighths: scene.page_eighths,
@@ -2842,6 +2859,11 @@ const ManageSchedules = () => {
 								newScene.id = String(scheduledScene.scene_id ?? breakdownScene.id);
 								newScene.scene_id = scheduledScene.scene_id;
 								newScene.scene_number = scheduledScene.scene_number || breakdownScene.scene_number;
+								newScene.episode_number =
+									scheduledScene.episode_number ||
+									breakdownScene.episode_number ||
+									breakdownScene["Episode Number"] ||
+									"";
 								newScene.int_ext = breakdownScene.int_ext;
 								newScene.time_of_day = breakdownScene.time;
 								newScene.page_eighths = breakdownScene.page_eighths;
@@ -2864,6 +2886,7 @@ const ManageSchedules = () => {
 									newScene.id = String(scheduledScene.scene_id);
 									newScene.scene_id = scheduledScene.scene_id;
 									newScene.scene_number = scheduledScene.scene_number || fullScene["Scene Number"];
+									newScene.episode_number = scheduledScene.episode_number || fullScene["Episode Number"] || "";
 									newScene.int_ext = fullScene["Int./Ext."];
 									newScene.time_of_day = fullScene["Time of Day"] || fullScene["Time"];
 									newScene.page_eighths = fullScene["Page Eighths"] || fullScene["Pgs"];
@@ -2906,6 +2929,7 @@ const ManageSchedules = () => {
 					date: day.date,
 					scenes: day.scenes.map((scene, index) => ({
 						...scene,
+								episode_number: scene.episode_number || "",
 						id: scene.scene_id ? String(scene.scene_id) : `${day.date}-${index}-${scene.scene_number}`,
 					})),
 				}));
@@ -2979,6 +3003,7 @@ const ManageSchedules = () => {
 					id: maxId + 1,
 					scene_id: String(unscheduledScene.scene_id),
 					scene_number: unscheduledScene.scene_number,
+					episode_number: unscheduledScene.episode_number,
 					int_ext: unscheduledScene.int_ext,
 					time_of_day: unscheduledScene.time_of_day,
 					page_eighths: unscheduledScene.page_eighths,
@@ -4251,6 +4276,7 @@ const ManageSchedules = () => {
 								unscheduledScenesWithIds={unscheduledScenesWithIds}
 								isEditing={isEditing}
 								characterNameToIdMap={characterNameToIdMap}
+								isEpisodic={isEpisodic}
 							/>
 							<div className="sched-schedule-content">
 								{scheduleDays.map((day) => {
@@ -4264,6 +4290,7 @@ const ManageSchedules = () => {
 											setSceneHours={setSceneHours}
 											setScheduleDays={setScheduleDays}
 											characterNameToIdMap={characterNameToIdMap}
+											isEpisodic={isEpisodic}
 										/>
 									);
 								})}
@@ -4276,6 +4303,7 @@ const ManageSchedules = () => {
 							<table className="sched-table">
 								<thead className="sched-thead">
 									<tr className="sched-header-row">
+										{isEpisodic && <th className="sched-header-cell">Ep</th>}
 										<th className="sched-header-cell">Scene</th>
 
 										<th className="sched-header-cell">Int./Ext.</th>
@@ -4290,6 +4318,7 @@ const ManageSchedules = () => {
 								<tbody>
 									{scenes.map((scene, index) => (
 										<tr key={index} className="sched-data-row">
+											{isEpisodic && <td className="sched-data-cell">{scene["Episode Number"] || scene.episode_number || "-"}</td>}
 											<td className="sched-data-cell">{scene["Scene Number"] || scene["Scene No."] || ""}</td>
 
 											<td className="sched-data-cell">{scene["Int./Ext."]}</td>
