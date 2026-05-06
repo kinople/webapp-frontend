@@ -196,7 +196,7 @@ export default function CrewList() {
 	}
 
 	function handleAddCrew(idx) {
-			const newCrew = { name: "", role: "", project_id: id };
+		const newCrew = { name: "", role: "", project_id: id };
 		setDepartments((prev) =>
 			prev.map((d, i) => (i === idx ? { ...d, crew: [...d.crew, newCrew] } : d))
 		);
@@ -297,7 +297,7 @@ export default function CrewList() {
 								disabled={departments.length === 0}
 							>
 								<PiCaretUp />
-								Compress All
+								Collapse all
 							</button>
 						</div>
 					</div>

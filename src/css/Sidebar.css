@@ -13,7 +13,7 @@
 	z-index: 100;
 	display: flex;
 	flex-direction: column;
-	padding: 7px 0 12px 0;
+	padding: 7px 12px 12px 12px;
 	box-sizing: border-box;
 	transition: width 0.3s ease;
 }
@@ -36,7 +36,9 @@
 	display: flex;
 	align-items: center;
 	gap: 11.5px;
-	padding: 0 8px 10px 8px;
+	padding-bottom: 12px;
+	margin-bottom: 16px;
+	border-bottom: 2px solid #ebebed;
 }
 
 .sidebar-logo-icon {
@@ -56,7 +58,7 @@
 }
 
 .sidebar-toggle {
-	width: 28.75px;
+	width: 32.75px;
 	height: 28.75px;
 	transform: rotate(180deg) scaleY(-1);
 	cursor: pointer;
@@ -88,20 +90,20 @@
 
 .sidebar-container.collapsed .sidebar-toggle {
 	margin-left: 0;
-	width: 24px;
+	width: 28px;
 	height: 24px;
 }
 
 /* Project Name Button */
 .sidebar-project-wrapper {
-	padding: 10px 8px 10px 8px;
+	padding-bottom: 14px;
+	margin-bottom: 14px;
 	border-bottom: 2px solid #ebebed;
-	border-top: 2px solid #ebebed;
 }
 
 .sidebar-project-button {
-	width: 100%;
-	height: 42px;
+	width: auto;
+	height: 30px;
 	background-color: transparent;
 	border: 1.078px solid #ca2212;
 	border-radius: 6.469px;
@@ -129,7 +131,7 @@
 .sidebar-project-name {
 	font-family: "Arial", sans-serif;
 	font-size: 15.094px;
-	font-weight: 700;
+	font-weight: 400;
 	color: #4a4a4a;
 	line-height: normal;
 	white-space: nowrap;
@@ -142,9 +144,10 @@
 .sidebar-workspace-selector {
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: 12px;
 	cursor: pointer;
-	padding: 15px 10px 10px 14px;
+	margin-bottom: 10px;
+	padding-left: 0px;
 }
 
 .sidebar-workspace-badge {
@@ -170,15 +173,16 @@
 	display: flex;
 	align-items: center;
 	gap: 3.308px;
-	flex: 1;
+	width: 100%;
 }
 
 .sidebar-workspace-name {
 	font-family: "Inter", sans-serif;
-	font-size: 16px;
+	font-size: 13.231px;
 	font-weight: 500;
-	line-height: 21px;
+	line-height: 21.5px;
 	color: black;
+	width: 100%;
 }
 
 .sidebar-workspace-caret {
@@ -193,16 +197,13 @@
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
-	padding: 0 7px 10px 7px;
-	margin-bottom: 10px;
-	border-bottom: 2px solid #ebebed;
 }
 
 .sidebar-menu-item {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 10px 7px;
+	padding: 10px 10px 10px 0;
 	cursor: pointer;
 	transition: background-color 0.2s;
 	border-radius: 6px;
@@ -232,14 +233,12 @@
 .sidebar-back-button {
 	display: flex;
 	align-items: center;
-	gap: 9px;
-	padding: 8px 5px;
+	gap: 8px;
+	padding: 10px 0;
 	cursor: pointer;
 	transition: all 0.2s;
 	text-decoration: none;
-	margin-bottom: 16px;
-	border-bottom: 1px solid #ebebed;
-	padding-bottom: 12px;
+	margin-bottom: 14px;
 }
 
 .sidebar-back-button:hover {
@@ -247,29 +246,32 @@
 }
 
 .sidebar-back-button .sidebar-nav-icon {
-	color: #666;
+	color: #444;
 }
 
 .sidebar-back-button .sidebar-nav-text {
-	color: #666;
-	font-size: 14px;
+	color: #444;
+	font-size: 16px;
 }
 
 /* Main Navigation */
 .sidebar-main-nav {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
-	padding-left: 10px;
+	gap: 4px;
 }
 
 .sidebar-nav-item {
 	display: flex;
 	align-items: center;
-	gap: 9px;
-	padding: 8px 5px;
+	gap: 10px;
+	width: 100%;
+	padding: 10px;
+	box-sizing: border-box;
+	border: 1px solid transparent;
 	cursor: pointer;
-	transition: all 0.2s;
+	transition: background-color 0.2s;
+	border-radius: 6px;
 	text-decoration: none;
 }
 
@@ -280,8 +282,6 @@
 .sidebar-nav-item.active {
 	background: linear-gradient(to bottom, #ff6657, #ff4b39 91.25%);
 	border: 1px solid #ca2212;
-	margin-left: 0;
-    
 	box-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.15), inset 0px 2px 0px 0px #ee1500;
 }
 
@@ -311,11 +311,10 @@
 /* Collapsed Navigation */
 .sidebar-container.collapsed .sidebar-nav-item {
 	justify-content: center;
-	padding: 8px;
+	padding: 10px 0;
 }
-
-.sidebar-container.collapsed .sidebar-main-nav {
-	padding: 0 4px;
+.sidebar-container.collapsed .sidebar-nav-item.active {
+	padding: 10px 0;
 }
 
 /* Spacer */
@@ -328,10 +327,10 @@
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 10px 6px;
+	padding: 10px 10px 10px 0;
 	cursor: pointer;
 	transition: background-color 0.2s;
-
+	margin-top: 14px;
 	padding-top: 14px;
 	border-top: 2px solid #ebebed;
 }

@@ -8,6 +8,8 @@ import { PiMagnifyingGlass, PiSlidersHorizontal } from "react-icons/pi";
 import { FaFileExcel, FaPlus, FaTrash, FaCamera } from "react-icons/fa";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
+import CustomDropdown from "../components/CustomDropdown";
+import EmptyState from "../components/EmptyState";
 
 /*
   ScriptBreakdown page - final variant:
@@ -97,7 +99,7 @@ const getExcelColumnLabel = (columnNumber) => {
 };
 
 /* ---------- TagInput (CSV in/out) used only inside scene editor ---------- */
-function TagInput({ value = "", onChange }) {
+function TagInput({ value = "", onChange, placeholder = "Add tag and press Enter" }) {
 	const [tags, setTags] = useState(() => {
 		if (!value) return [];
 		return value
@@ -150,7 +152,7 @@ function TagInput({ value = "", onChange }) {
 			))}
 			<input
 				value={input}
-				placeholder="Add tag and press Enter"
+				placeholder={placeholder}
 				onChange={(e) => setInput(e.target.value)}
 				onKeyDown={handleKey}
 				className="sbn-tag-input"
@@ -704,9 +706,38 @@ const ScriptBreakdownNew = () => {
 		return options;
 	}, [getSceneIdentity, isEpisodicProject, sceneBreakdowns]);
 
+	const getSceneOptionsForEpisodeExcluding = useCallback(
+		(episodeNumber, excludedScenes) => {
+			const excluded = (excludedScenes || [])
+				.filter(Boolean)
+				.map((s) => getSceneIdentity(s))
+				.filter((id) => id.sceneNumber);
+
+			const isExcluded = (candidateIdentity) => {
+				return excluded.some((ex) => {
+					if (candidateIdentity.sceneNumber !== ex.sceneNumber) return false;
+					// In episodic mode, exclude only if episode matches too (when present).
+					if (isEpisodicProject && ex.episodeNumber) {
+						return candidateIdentity.episodeNumber === ex.episodeNumber;
+					}
+					return true;
+				});
+			};
+
+			return getSceneOptionsForEpisode(episodeNumber).filter((opt) => {
+				const candidateIdentity = {
+					sceneNumber: String(opt.value ?? "").trim(),
+					episodeNumber: String(episodeNumber ?? "").trim(),
+				};
+				return !isExcluded(candidateIdentity);
+			});
+		},
+		[getSceneIdentity, getSceneOptionsForEpisode, isEpisodicProject],
+	);
+
 	const mergeInsertSceneOptions = useMemo(() => {
-		return getSceneOptionsForEpisode(mergeSceneForm.insert_episode_number);
-	}, [getSceneOptionsForEpisode, mergeSceneForm.insert_episode_number]);
+		return getSceneOptionsForEpisodeExcluding(mergeSceneForm.insert_episode_number, selectedScenesToMerge);
+	}, [getSceneOptionsForEpisodeExcluding, mergeSceneForm.insert_episode_number, selectedScenesToMerge]);
 
 	const getAbsoluteInsertPosition = useCallback((position) => {
 		if (position <= 0) return 0;
@@ -982,12 +1013,16 @@ const ScriptBreakdownNew = () => {
 					if (activeScripts.length > 0) {
 						setSelectedGeneratedScript(activeScripts[0]);
 					}
+				} else {
+					setIsLoading(false);
 				}
 			} else {
 				console.error("Failed to fetch scripts");
+				setIsLoading(false);
 			}
 		} catch (e) {
 			console.error("Error fetching scripts", e);
+			setIsLoading(false);
 		}
 	};
 
@@ -1246,7 +1281,7 @@ const ScriptBreakdownNew = () => {
 		if (!sceneData) return null;
 		// Convert array fields to comma-separated strings
 		const arrayToString = (arr) => {
-			if (!arr || !Array.isArray(arr) || arr.length === 0) return "N/A";
+			if (!arr || !Array.isArray(arr) || arr.length === 0) return "";
 			return arr.join(", ");
 		};
 		const result = {
@@ -1634,8 +1669,8 @@ const ScriptBreakdownNew = () => {
 			if (isSelected) {
 				return prev.filter((selected) =>
 					!((selected.id && scene.id && selected.id === scene.id) ||
-					(selected.scene_number === scene.scene_number &&
-						String(selected.episode_number || "") === String(scene.episode_number || "")))
+						(selected.scene_number === scene.scene_number &&
+							String(selected.episode_number || "") === String(scene.episode_number || "")))
 				);
 			}
 
@@ -2938,6 +2973,9 @@ const ScriptBreakdownNew = () => {
 						const isProps = propsKeys.includes(key);
 						const isCharacters = key.toLowerCase() === "characters";
 						const isSet = key.toLowerCase() === "set";
+						const isLocation = key.toLowerCase() === "location";
+						const isTime = key.toLowerCase() === "time";
+						const isIntExt = key === "Int./Ext.";
 						const isPageEighths = key === "Page Eighths";
 						const pageEighthParts = isPageEighths ? getPageEighthParts(value) : null;
 						return (
@@ -2987,6 +3025,50 @@ const ScriptBreakdownNew = () => {
 											</option>
 										))}
 									</select>
+								) : isTime ? (
+									<select
+										className="sbn-form-select"
+										value={value || ""}
+										onChange={(e) => {
+											setEditingScene({ ...editingScene, [key]: e.target.value });
+										}}
+									>
+										<option value="">Select Time...</option>
+										<option value="DAY">DAY</option>
+										<option value="NIGHT">NIGHT</option>
+										<option value="DAWN">DAWN</option>
+										<option value="DUSK">DUSK</option>
+										<option value="MORNING">MORNING</option>
+										<option value="AFTERNOON">AFTERNOON</option>
+										<option value="EVENING">EVENING</option>
+										<option value="CONTINUOUS">CONTINUOUS</option>
+										<option value="LATER">LATER</option>
+										<option value="MOMENTS LATER">MOMENTS LATER</option>
+									</select>
+								) : isIntExt ? (
+									<select
+										className="sbn-form-select"
+										value={value || ""}
+										onChange={(e) => {
+											setEditingScene({ ...editingScene, [key]: e.target.value });
+										}}
+									>
+										<option value="">Select...</option>
+										<option value="INT.">INT.</option>
+										<option value="EXT.">EXT.</option>
+										<option value="INT./EXT.">INT./EXT.</option>
+									</select>
+								) : isLocation ? (
+									<input
+										type="text"
+										list="sbn-location-options"
+										className="sbn-field-input"
+										value={value || ""}
+										onChange={(e) => {
+											setEditingScene({ ...editingScene, [key]: e.target.value });
+										}}
+										placeholder="Select or type a location..."
+									/>
 								) : isPageEighths ? (
 									<MixedFractionPageEighthsInput
 										value={parsePageEighthsValue(value)}
@@ -3051,8 +3133,8 @@ const ScriptBreakdownNew = () => {
 								<div className="sbn-images-gallery">
 									{referenceImages.map((image, idx) => (
 										<div key={image.id} className="sbn-image-item">
-																<img
-																	src={getApiUrl(`/api/${id}/reference-image/serve/${editingSceneIndex}/${image.id}${getReferenceSceneQuery(editingSceneIndex)}`)}
+											<img
+												src={getApiUrl(`/api/${id}/reference-image/serve/${editingSceneIndex}/${image.id}${getReferenceSceneQuery(editingSceneIndex)}`)}
 												alt={image.filename}
 												className="sbn-image-thumbnail"
 												onClick={() => {
@@ -3231,36 +3313,36 @@ const ScriptBreakdownNew = () => {
 												<span className="sbn-row-number">{rIdx + 1}</span>
 											</td>
 										)}
-								{removeSceneMode && (
-									<td className="sbn-data-cell sbn-remove-cell">
-										<input
-											type="checkbox"
-											className="sbn-remove-checkbox"
-											checked={selectedScenesToRemove.some((scene) => {
-												const sceneData = getSceneDataByIdentity(row);
-												if (sceneData?.id && scene.id) return sceneData.id === scene.id;
-												return scene.scene_number === row["Scene Number"];
-											})}
-										onChange={(e) => {
-											e.stopPropagation();
-											const sceneNum = row["Scene Number"];
-											const sceneData = getSceneDataByIdentity(row);
-											if (sceneData) {
-												handleSelectSceneToRemove(sceneData);
-											} else {
-												handleSelectSceneToRemove({
-													scene_number: sceneNum,
-													location: row["Location"],
-													synopsis: row["Synopsis"],
-													episode_number: row["Episode Number"] || "",
-												});
-												}
-											}}
-											onClick={(e) => e.stopPropagation()}
-											aria-label={`Select scene ${row["Scene Number"]} for removal`}
-										/>
-									</td>
-								)}
+										{removeSceneMode && (
+											<td className="sbn-data-cell sbn-remove-cell">
+												<input
+													type="checkbox"
+													className="sbn-remove-checkbox"
+													checked={selectedScenesToRemove.some((scene) => {
+														const sceneData = getSceneDataByIdentity(row);
+														if (sceneData?.id && scene.id) return sceneData.id === scene.id;
+														return scene.scene_number === row["Scene Number"];
+													})}
+													onChange={(e) => {
+														e.stopPropagation();
+														const sceneNum = row["Scene Number"];
+														const sceneData = getSceneDataByIdentity(row);
+														if (sceneData) {
+															handleSelectSceneToRemove(sceneData);
+														} else {
+															handleSelectSceneToRemove({
+																scene_number: sceneNum,
+																location: row["Location"],
+																synopsis: row["Synopsis"],
+																episode_number: row["Episode Number"] || "",
+															});
+														}
+													}}
+													onClick={(e) => e.stopPropagation()}
+													aria-label={`Select scene ${row["Scene Number"]} for removal`}
+												/>
+											</td>
+										)}
 										{splitSceneMode && (
 											<td className="sbn-data-cell sbn-split-cell">
 												<button
@@ -3581,10 +3663,10 @@ const ScriptBreakdownNew = () => {
 							×
 						</button>
 						<div className="sbn-image-preview-container">
-								<img
-									src={getApiUrl(
-										`/api/${id}/reference-image/serve/${editingSceneIndex}/${referenceImages[previewImageIndex].id}${getReferenceSceneQuery(editingSceneIndex)}`
-									)}
+							<img
+								src={getApiUrl(
+									`/api/${id}/reference-image/serve/${editingSceneIndex}/${referenceImages[previewImageIndex].id}${getReferenceSceneQuery(editingSceneIndex)}`
+								)}
 								alt={referenceImages[previewImageIndex].filename}
 								className="sbn-image-preview"
 							/>
@@ -3756,21 +3838,21 @@ const ScriptBreakdownNew = () => {
 													</select>
 												</div>
 											)}
-										</div>
-										<div className="sbn-form-group sbn-form-group-full">
-											<label className="sbn-form-label">
-												Insert Scene <span className="sbn-required">*</span>
-											</label>
-											<select
-												value={splitSceneForm1.insert_scene_number || ""}
-												onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, insert_scene_number: e.target.value })}
-												className="sbn-form-select"
-											>
-												<option value="">Select Scene...</option>
-												{getSceneOptionsForEpisode(splitSceneForm1.insert_episode_number).map((opt) => (
-													<option key={opt.value} value={opt.value}>{opt.label}</option>
-												))}
-											</select>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Insert Scene <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm1.insert_scene_number || ""}
+													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, insert_scene_number: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="">Select Scene...</option>
+													{getSceneOptionsForEpisodeExcluding(splitSceneForm1.insert_episode_number, [selectedSceneToSplit]).map((opt) => (
+														<option key={opt.value} value={opt.value}>{opt.label}</option>
+													))}
+												</select>
+											</div>
 										</div>
 										<div className="sbn-form-divider">
 											<span>Scene Details</span>
@@ -3835,7 +3917,7 @@ const ScriptBreakdownNew = () => {
 												/>
 											</div>
 											<div className="sbn-form-group">
-												<label className="sbn-form-label">Set</label>
+												<label className="sbn-form-label">Set <span className="sbn-required">*</span></label>
 												<select
 													value={splitSceneForm1.set}
 													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, set: e.target.value })}
@@ -3916,81 +3998,67 @@ const ScriptBreakdownNew = () => {
 										<div className="sbn-form-row">
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Action Props</label>
-												<input
-													type="text"
-													value={splitSceneForm1.action_props}
-													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, action_props: e.target.value })}
-													placeholder="e.g., Gun, Phone..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm1.action_props}
+											onChange={(csv) => setSplitSceneForm1({ ...splitSceneForm1, action_props: csv })}
+											placeholder="e.g., Gun, Phone..."
+										/>
 											</div>
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Other Props</label>
-												<input
-													type="text"
-													value={splitSceneForm1.other_props}
-													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, other_props: e.target.value })}
-													placeholder="e.g., Book, Lamp..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm1.other_props}
+											onChange={(csv) => setSplitSceneForm1({ ...splitSceneForm1, other_props: csv })}
+											placeholder="e.g., Book, Lamp..."
+										/>
 											</div>
 										</div>
 
 										<div className="sbn-form-row">
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Picture Vehicles</label>
-												<input
-													type="text"
-													value={splitSceneForm1.picture_vehicles}
-													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, picture_vehicles: e.target.value })}
-													placeholder="e.g., Police Car, Taxi..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm1.picture_vehicles}
+											onChange={(csv) => setSplitSceneForm1({ ...splitSceneForm1, picture_vehicles: csv })}
+											placeholder="e.g., Police Car, Taxi..."
+										/>
 											</div>
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Animals</label>
-												<input
-													type="text"
-													value={splitSceneForm1.animals}
-													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, animals: e.target.value })}
-													placeholder="e.g., Dog, Horse..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm1.animals}
+											onChange={(csv) => setSplitSceneForm1({ ...splitSceneForm1, animals: csv })}
+											placeholder="e.g., Dog, Horse..."
+										/>
 											</div>
 										</div>
 
 										<div className="sbn-form-row">
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Extras</label>
-												<input
-													type="text"
-													value={splitSceneForm1.extras}
-													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, extras: e.target.value })}
-													placeholder="e.g., Crowd, Waiters..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm1.extras}
+											onChange={(csv) => setSplitSceneForm1({ ...splitSceneForm1, extras: csv })}
+											placeholder="e.g., Crowd, Waiters..."
+										/>
 											</div>
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Wardrobe</label>
-												<input
-													type="text"
-													value={splitSceneForm1.wardrobe}
-													onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, wardrobe: e.target.value })}
-													placeholder="e.g., Wedding Dress, Suit..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm1.wardrobe}
+											onChange={(csv) => setSplitSceneForm1({ ...splitSceneForm1, wardrobe: csv })}
+											placeholder="e.g., Wedding Dress, Suit..."
+										/>
 											</div>
 										</div>
 
 										<div className="sbn-form-group sbn-form-group-full">
 											<label className="sbn-form-label">Set Dressing</label>
-											<input
-												type="text"
-												value={splitSceneForm1.set_dressing}
-												onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, set_dressing: e.target.value })}
-												placeholder="e.g., Christmas Decorations, Office Furniture..."
-												className="sbn-form-input"
-											/>
+											<TagInput
+											value={splitSceneForm1.set_dressing}
+											onChange={(csv) => setSplitSceneForm1({ ...splitSceneForm1, set_dressing: csv })}
+											placeholder="e.g., Christmas Decorations, Office Furniture..."
+										/>
 										</div>
 
 										{/* Custom Fields for Scene 1 */}
@@ -3998,13 +4066,13 @@ const ScriptBreakdownNew = () => {
 											customFields.map((fieldKey) => (
 												<div key={fieldKey} className="sbn-form-group sbn-form-group-full">
 													<label className="sbn-form-label">{snakeCaseToTitleCase(fieldKey)}</label>
-													<input
-														type="text"
-														value={splitSceneForm1[fieldKey] || ""}
-														onChange={(e) => setSplitSceneForm1({ ...splitSceneForm1, [fieldKey]: e.target.value })}
-														placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
-														className="sbn-form-input"
-													/>
+													<TagInput
+																value={splitSceneForm1[fieldKey] || ""}
+																onChange={(csv) =>
+																	setSplitSceneForm1({ ...splitSceneForm1, [fieldKey]: csv })
+																}
+																placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
+															/>
 												</div>
 											))}
 									</div>
@@ -4063,21 +4131,21 @@ const ScriptBreakdownNew = () => {
 													</select>
 												</div>
 											)}
-										</div>
-										<div className="sbn-form-group sbn-form-group-full">
-											<label className="sbn-form-label">
-												Insert Scene <span className="sbn-required">*</span>
-											</label>
-											<select
-												value={splitSceneForm2.insert_scene_number || ""}
-												onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, insert_scene_number: e.target.value })}
-												className="sbn-form-select"
-											>
-												<option value="">Select Scene...</option>
-												{getSceneOptionsForEpisode(splitSceneForm2.insert_episode_number).map((opt) => (
-													<option key={opt.value} value={opt.value}>{opt.label}</option>
-												))}
-											</select>
+											<div className="sbn-form-group">
+												<label className="sbn-form-label">
+													Insert Scene <span className="sbn-required">*</span>
+												</label>
+												<select
+													value={splitSceneForm2.insert_scene_number || ""}
+													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, insert_scene_number: e.target.value })}
+													className="sbn-form-select"
+												>
+													<option value="">Select Scene...</option>
+													{getSceneOptionsForEpisodeExcluding(splitSceneForm2.insert_episode_number, [selectedSceneToSplit]).map((opt) => (
+														<option key={opt.value} value={opt.value}>{opt.label}</option>
+													))}
+												</select>
+											</div>
 										</div>
 										<div className="sbn-form-divider">
 											<span>Scene Details</span>
@@ -4142,7 +4210,7 @@ const ScriptBreakdownNew = () => {
 												/>
 											</div>
 											<div className="sbn-form-group">
-												<label className="sbn-form-label">Set</label>
+												<label className="sbn-form-label">Set <span className="sbn-required">*</span></label>
 												<select
 													value={splitSceneForm2.set}
 													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, set: e.target.value })}
@@ -4223,81 +4291,67 @@ const ScriptBreakdownNew = () => {
 										<div className="sbn-form-row">
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Action Props</label>
-												<input
-													type="text"
-													value={splitSceneForm2.action_props}
-													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, action_props: e.target.value })}
-													placeholder="e.g., Gun, Phone..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm2.action_props}
+											onChange={(csv) => setSplitSceneForm2({ ...splitSceneForm2, action_props: csv })}
+											placeholder="e.g., Gun, Phone..."
+										/>
 											</div>
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Other Props</label>
-												<input
-													type="text"
-													value={splitSceneForm2.other_props}
-													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, other_props: e.target.value })}
-													placeholder="e.g., Book, Lamp..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm2.other_props}
+											onChange={(csv) => setSplitSceneForm2({ ...splitSceneForm2, other_props: csv })}
+											placeholder="e.g., Book, Lamp..."
+										/>
 											</div>
 										</div>
 
 										<div className="sbn-form-row">
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Picture Vehicles</label>
-												<input
-													type="text"
-													value={splitSceneForm2.picture_vehicles}
-													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, picture_vehicles: e.target.value })}
-													placeholder="e.g., Police Car, Taxi..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm2.picture_vehicles}
+											onChange={(csv) => setSplitSceneForm2({ ...splitSceneForm2, picture_vehicles: csv })}
+											placeholder="e.g., Police Car, Taxi..."
+										/>
 											</div>
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Animals</label>
-												<input
-													type="text"
-													value={splitSceneForm2.animals}
-													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, animals: e.target.value })}
-													placeholder="e.g., Dog, Horse..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm2.animals}
+											onChange={(csv) => setSplitSceneForm2({ ...splitSceneForm2, animals: csv })}
+											placeholder="e.g., Dog, Horse..."
+										/>
 											</div>
 										</div>
 
 										<div className="sbn-form-row">
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Extras</label>
-												<input
-													type="text"
-													value={splitSceneForm2.extras}
-													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, extras: e.target.value })}
-													placeholder="e.g., Crowd, Waiters..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm2.extras}
+											onChange={(csv) => setSplitSceneForm2({ ...splitSceneForm2, extras: csv })}
+											placeholder="e.g., Crowd, Waiters..."
+										/>
 											</div>
 											<div className="sbn-form-group">
 												<label className="sbn-form-label">Wardrobe</label>
-												<input
-													type="text"
-													value={splitSceneForm2.wardrobe}
-													onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, wardrobe: e.target.value })}
-													placeholder="e.g., Wedding Dress, Suit..."
-													className="sbn-form-input"
-												/>
+												<TagInput
+											value={splitSceneForm2.wardrobe}
+											onChange={(csv) => setSplitSceneForm2({ ...splitSceneForm2, wardrobe: csv })}
+											placeholder="e.g., Wedding Dress, Suit..."
+										/>
 											</div>
 										</div>
 
 										<div className="sbn-form-group sbn-form-group-full">
 											<label className="sbn-form-label">Set Dressing</label>
-											<input
-												type="text"
-												value={splitSceneForm2.set_dressing}
-												onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, set_dressing: e.target.value })}
-												placeholder="e.g., Christmas Decorations, Office Furniture..."
-												className="sbn-form-input"
-											/>
+											<TagInput
+											value={splitSceneForm2.set_dressing}
+											onChange={(csv) => setSplitSceneForm2({ ...splitSceneForm2, set_dressing: csv })}
+											placeholder="e.g., Christmas Decorations, Office Furniture..."
+										/>
 										</div>
 
 										{/* Custom Fields for Scene 2 */}
@@ -4305,13 +4359,13 @@ const ScriptBreakdownNew = () => {
 											customFields.map((fieldKey) => (
 												<div key={fieldKey} className="sbn-form-group sbn-form-group-full">
 													<label className="sbn-form-label">{snakeCaseToTitleCase(fieldKey)}</label>
-													<input
-														type="text"
-														value={splitSceneForm2[fieldKey] || ""}
-														onChange={(e) => setSplitSceneForm2({ ...splitSceneForm2, [fieldKey]: e.target.value })}
-														placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
-														className="sbn-form-input"
-													/>
+													<TagInput
+																value={splitSceneForm2[fieldKey] || ""}
+																onChange={(csv) =>
+																	setSplitSceneForm2({ ...splitSceneForm2, [fieldKey]: csv })
+																}
+																placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
+															/>
 												</div>
 											))}
 									</div>
@@ -4394,21 +4448,21 @@ const ScriptBreakdownNew = () => {
 											</select>
 										</div>
 									)}
-								</div>
-								<div className="sbn-form-group sbn-form-group-full">
-									<label className="sbn-form-label">
-										Insert Scene <span className="sbn-required">*</span>
-									</label>
-									<select
-										value={mergeSceneForm.insert_scene_number || ""}
-										onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, insert_scene_number: e.target.value })}
-										className="sbn-form-select"
-									>
-										<option value="">Select Scene...</option>
-										{mergeInsertSceneOptions.map((opt) => (
-											<option key={opt.value} value={opt.value}>{opt.label}</option>
-										))}
-									</select>
+									<div className="sbn-form-group">
+										<label className="sbn-form-label">
+											Insert Scene <span className="sbn-required">*</span>
+										</label>
+										<select
+											value={mergeSceneForm.insert_scene_number || ""}
+											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, insert_scene_number: e.target.value })}
+											className="sbn-form-select"
+										>
+											<option value="">Select Scene...</option>
+											{mergeInsertSceneOptions.map((opt) => (
+												<option key={opt.value} value={opt.value}>{opt.label}</option>
+											))}
+										</select>
+									</div>
 								</div>
 								<div className="sbn-form-divider">
 									<span>Scene Details</span>
@@ -4475,7 +4529,7 @@ const ScriptBreakdownNew = () => {
 										/>
 									</div>
 									<div className="sbn-form-group">
-										<label className="sbn-form-label">Set</label>
+										<label className="sbn-form-label">Set <span className="sbn-required">*</span></label>
 										<select
 											value={mergeSceneForm.set}
 											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, set: e.target.value })}
@@ -4557,22 +4611,18 @@ const ScriptBreakdownNew = () => {
 								<div className="sbn-form-row">
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Action Props</label>
-										<input
-											type="text"
+										<TagInput
 											value={mergeSceneForm.action_props}
-											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, action_props: e.target.value })}
+											onChange={(csv) => setMergeSceneForm({ ...mergeSceneForm, action_props: csv })}
 											placeholder="e.g., Gun, Phone..."
-											className="sbn-form-input"
 										/>
 									</div>
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Other Props</label>
-										<input
-											type="text"
+										<TagInput
 											value={mergeSceneForm.other_props}
-											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, other_props: e.target.value })}
+											onChange={(csv) => setMergeSceneForm({ ...mergeSceneForm, other_props: csv })}
 											placeholder="e.g., Book, Lamp..."
-											className="sbn-form-input"
 										/>
 									</div>
 								</div>
@@ -4580,22 +4630,18 @@ const ScriptBreakdownNew = () => {
 								<div className="sbn-form-row">
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Picture Vehicles</label>
-										<input
-											type="text"
+										<TagInput
 											value={mergeSceneForm.picture_vehicles}
-											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, picture_vehicles: e.target.value })}
+											onChange={(csv) => setMergeSceneForm({ ...mergeSceneForm, picture_vehicles: csv })}
 											placeholder="e.g., Police Car, Taxi..."
-											className="sbn-form-input"
 										/>
 									</div>
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Animals</label>
-										<input
-											type="text"
+										<TagInput
 											value={mergeSceneForm.animals}
-											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, animals: e.target.value })}
+											onChange={(csv) => setMergeSceneForm({ ...mergeSceneForm, animals: csv })}
 											placeholder="e.g., Dog, Horse..."
-											className="sbn-form-input"
 										/>
 									</div>
 								</div>
@@ -4603,35 +4649,29 @@ const ScriptBreakdownNew = () => {
 								<div className="sbn-form-row">
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Extras</label>
-										<input
-											type="text"
+										<TagInput
 											value={mergeSceneForm.extras}
-											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, extras: e.target.value })}
+											onChange={(csv) => setMergeSceneForm({ ...mergeSceneForm, extras: csv })}
 											placeholder="e.g., Crowd, Waiters..."
-											className="sbn-form-input"
 										/>
 									</div>
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Wardrobe</label>
-										<input
-											type="text"
+										<TagInput
 											value={mergeSceneForm.wardrobe}
-											onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, wardrobe: e.target.value })}
+											onChange={(csv) => setMergeSceneForm({ ...mergeSceneForm, wardrobe: csv })}
 											placeholder="e.g., Wedding Dress, Suit..."
-											className="sbn-form-input"
 										/>
 									</div>
 								</div>
 
 								<div className="sbn-form-group sbn-form-group-full">
 									<label className="sbn-form-label">Set Dressing</label>
-									<input
-										type="text"
-										value={mergeSceneForm.set_dressing}
-										onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, set_dressing: e.target.value })}
-										placeholder="e.g., Christmas Decorations, Office Furniture..."
-										className="sbn-form-input"
-									/>
+									<TagInput
+											value={mergeSceneForm.set_dressing}
+											onChange={(csv) => setMergeSceneForm({ ...mergeSceneForm, set_dressing: csv })}
+											placeholder="e.g., Christmas Decorations, Office Furniture..."
+										/>
 								</div>
 
 								{/* Custom Fields */}
@@ -4639,13 +4679,13 @@ const ScriptBreakdownNew = () => {
 									customFields.map((fieldKey) => (
 										<div key={fieldKey} className="sbn-form-group sbn-form-group-full">
 											<label className="sbn-form-label">{snakeCaseToTitleCase(fieldKey)}</label>
-											<input
-												type="text"
-												value={mergeSceneForm[fieldKey] || ""}
-												onChange={(e) => setMergeSceneForm({ ...mergeSceneForm, [fieldKey]: e.target.value })}
-												placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
-												className="sbn-form-input"
-											/>
+											<TagInput
+																value={mergeSceneForm[fieldKey] || ""}
+																onChange={(csv) =>
+																	setMergeSceneForm({ ...mergeSceneForm, [fieldKey]: csv })
+																}
+																placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
+															/>
 										</div>
 									))}
 							</div>
@@ -4836,22 +4876,18 @@ const ScriptBreakdownNew = () => {
 								<div className="sbn-form-row">
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Action Props</label>
-										<input
-											type="text"
+										<TagInput
 											value={newSceneForm.action_props}
-											onChange={(e) => setNewSceneForm({ ...newSceneForm, action_props: e.target.value })}
+											onChange={(csv) => setNewSceneForm({ ...newSceneForm, action_props: csv })}
 											placeholder="e.g., Gun, Phone..."
-											className="sbn-form-input"
 										/>
 									</div>
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Other Props</label>
-										<input
-											type="text"
+										<TagInput
 											value={newSceneForm.other_props}
-											onChange={(e) => setNewSceneForm({ ...newSceneForm, other_props: e.target.value })}
+											onChange={(csv) => setNewSceneForm({ ...newSceneForm, other_props: csv })}
 											placeholder="e.g., Book, Lamp..."
-											className="sbn-form-input"
 										/>
 									</div>
 								</div>
@@ -4859,22 +4895,18 @@ const ScriptBreakdownNew = () => {
 								<div className="sbn-form-row">
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Picture Vehicles</label>
-										<input
-											type="text"
+										<TagInput
 											value={newSceneForm.picture_vehicles}
-											onChange={(e) => setNewSceneForm({ ...newSceneForm, picture_vehicles: e.target.value })}
+											onChange={(csv) => setNewSceneForm({ ...newSceneForm, picture_vehicles: csv })}
 											placeholder="e.g., Police Car, Taxi..."
-											className="sbn-form-input"
 										/>
 									</div>
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Animals</label>
-										<input
-											type="text"
+										<TagInput
 											value={newSceneForm.animals}
-											onChange={(e) => setNewSceneForm({ ...newSceneForm, animals: e.target.value })}
+											onChange={(csv) => setNewSceneForm({ ...newSceneForm, animals: csv })}
 											placeholder="e.g., Dog, Horse..."
-											className="sbn-form-input"
 										/>
 									</div>
 								</div>
@@ -4882,35 +4914,29 @@ const ScriptBreakdownNew = () => {
 								<div className="sbn-form-row">
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Extras</label>
-										<input
-											type="text"
+										<TagInput
 											value={newSceneForm.extras}
-											onChange={(e) => setNewSceneForm({ ...newSceneForm, extras: e.target.value })}
+											onChange={(csv) => setNewSceneForm({ ...newSceneForm, extras: csv })}
 											placeholder="e.g., Crowd, Waiters..."
-											className="sbn-form-input"
 										/>
 									</div>
 									<div className="sbn-form-group">
 										<label className="sbn-form-label">Wardrobe</label>
-										<input
-											type="text"
+										<TagInput
 											value={newSceneForm.wardrobe}
-											onChange={(e) => setNewSceneForm({ ...newSceneForm, wardrobe: e.target.value })}
+											onChange={(csv) => setNewSceneForm({ ...newSceneForm, wardrobe: csv })}
 											placeholder="e.g., Wedding Dress, Suit..."
-											className="sbn-form-input"
 										/>
 									</div>
 								</div>
 
 								<div className="sbn-form-group sbn-form-group-full">
 									<label className="sbn-form-label">Set Dressing</label>
-									<input
-										type="text"
-										value={newSceneForm.set_dressing}
-										onChange={(e) => setNewSceneForm({ ...newSceneForm, set_dressing: e.target.value })}
-										placeholder="e.g., Christmas Decorations, Office Furniture..."
-										className="sbn-form-input"
-									/>
+									<TagInput
+											value={newSceneForm.set_dressing}
+											onChange={(csv) => setNewSceneForm({ ...newSceneForm, set_dressing: csv })}
+											placeholder="e.g., Christmas Decorations, Office Furniture..."
+										/>
 								</div>
 
 								{/* Custom Fields */}
@@ -4932,14 +4958,12 @@ const ScriptBreakdownNew = () => {
 													<>
 														<div className="sbn-form-group">
 															<label className="sbn-form-label">{snakeCaseToTitleCase(fieldKey)}</label>
-															<input
-																type="text"
+															<TagInput
 																value={newSceneForm[fieldKey] || ""}
-																onChange={(e) =>
-																	setNewSceneForm({ ...newSceneForm, [fieldKey]: e.target.value })
+																onChange={(csv) =>
+																	setNewSceneForm({ ...newSceneForm, [fieldKey]: csv })
 																}
 																placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
-																className="sbn-form-input"
 															/>
 														</div>
 														{customFields[index + 1] && (
@@ -4947,19 +4971,17 @@ const ScriptBreakdownNew = () => {
 																<label className="sbn-form-label">
 																	{snakeCaseToTitleCase(customFields[index + 1])}
 																</label>
-																<input
-																	type="text"
+																<TagInput
 																	value={newSceneForm[customFields[index + 1]] || ""}
-																	onChange={(e) =>
+																	onChange={(csv) =>
 																		setNewSceneForm({
 																			...newSceneForm,
-																			[customFields[index + 1]]: e.target.value,
+																			[customFields[index + 1]]: csv,
 																		})
 																	}
 																	placeholder={`e.g., ${snakeCaseToTitleCase(
 																		customFields[index + 1],
 																	)} items...`}
-																	className="sbn-form-input"
 																/>
 															</div>
 														)}
@@ -4967,13 +4989,13 @@ const ScriptBreakdownNew = () => {
 												) : index % 2 !== 0 ? null : (
 													<>
 														<label className="sbn-form-label">{snakeCaseToTitleCase(fieldKey)}</label>
-														<input
-															type="text"
-															value={newSceneForm[fieldKey] || ""}
-															onChange={(e) => setNewSceneForm({ ...newSceneForm, [fieldKey]: e.target.value })}
-															placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
-															className="sbn-form-input"
-														/>
+														<TagInput
+																value={newSceneForm[fieldKey] || ""}
+																onChange={(csv) =>
+																	setNewSceneForm({ ...newSceneForm, [fieldKey]: csv })
+																}
+																placeholder={`e.g., ${snakeCaseToTitleCase(fieldKey)} items...`}
+															/>
 													</>
 												)}
 											</div>
@@ -5070,49 +5092,37 @@ const ScriptBreakdownNew = () => {
 									{generatedScripts.length > 0 ? (
 										hasEpisodeGrouping ? (
 											<div style={{ display: "flex", gap: "8px" }}>
-												<select
-													className="sbn-script-dropdown"
+												<CustomDropdown
 													value={selectedGeneratedEpisode}
 													onChange={(e) => setSelectedGeneratedEpisode(e.target.value)}
-												>
-													{generatedEpisodeOptions.map((episode) => (
-														<option key={episode.key} value={episode.key}>
-															{episode.label}
-														</option>
-													))}
-												</select>
-												<select
-													className="sbn-script-dropdown"
+													options={generatedEpisodeOptions.map((episode) => ({ value: episode.key, label: episode.label }))}
+												/>
+												<CustomDropdown
 													value={selectedGeneratedScript?.id || ""}
 													onChange={(e) => {
 														const scriptId = parseInt(e.target.value, 10);
 														const script = generatedScriptsForSelectedEpisode.find((s) => s.id === scriptId);
 														if (script) setSelectedGeneratedScript(script);
 													}}
-												>
-													{generatedScriptsForSelectedEpisode.map((script) => (
-														<option key={script.id} value={script.id}>
-															{getGeneratedDraftLabel(script)}
-														</option>
-													))}
-												</select>
+													options={generatedScriptsForSelectedEpisode.map((script) => ({
+														value: script.id,
+														label: getGeneratedDraftLabel(script)
+													}))}
+												/>
 											</div>
 										) : (
-											<select
-												className="sbn-script-dropdown"
+											<CustomDropdown
 												value={selectedGeneratedScript?.id || ""}
 												onChange={(e) => {
 													const scriptId = parseInt(e.target.value, 10);
 													const script = generatedScripts.find((s) => s.id === scriptId);
 													if (script) setSelectedGeneratedScript(script);
 												}}
-											>
-												{generatedScripts.map((script) => (
-													<option key={script.id} value={script.id}>
-														{getGeneratedScriptLabel(script)}
-													</option>
-												))}
-											</select>
+												options={generatedScripts.map((script) => ({
+													value: script.id,
+													label: getGeneratedScriptLabel(script)
+												}))}
+											/>
 										)
 									) : (
 										<span className="sbn-no-scripts-msg">No other scripts available</span>
@@ -5149,7 +5159,7 @@ const ScriptBreakdownNew = () => {
 										<PiSlidersHorizontal className="sbn-filter-icon" />
 										<span>{selectedSearchField === "ALL_FIELDS" ? "Filter" : selectedSearchField}</span>
 									</button>
-									{showSearchFilterMenu && (
+									<div className={`sbn-filter-menu-wrapper ${showSearchFilterMenu ? "open" : ""}`}>
 										<div className="sbn-filter-menu">
 											{searchFieldOptions.map((option) => (
 												<button
@@ -5165,7 +5175,7 @@ const ScriptBreakdownNew = () => {
 												</button>
 											))}
 										</div>
-									)}
+									</div>
 								</div>
 							</div>
 							<div className="sbn-toolbar-right">
@@ -5175,10 +5185,7 @@ const ScriptBreakdownNew = () => {
 									</span>
 									<span>Export to Excel</span>
 								</button>
-								<button className="sbn-sync-btn">
-									<span className="sbn-sync-symbol">⟳</span>
-									<span>Sync Latest Scripts</span>
-								</button>
+
 							</div>
 						</div>
 
@@ -5276,9 +5283,7 @@ const ScriptBreakdownNew = () => {
 								)}
 							</div>
 						) : scriptBreakdown.length === 0 ? (
-							<div className="sbn-empty-container">
-								<div className="sbn-message">No breakdown data available</div>
-							</div>
+							<EmptyState title="No Data Available" subtitle="Upload a script to view breakdowns." className="sbn-empty-state-override" />
 						) : (
 							renderTableContent()
 						)}

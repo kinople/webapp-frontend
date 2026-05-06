@@ -1055,23 +1055,6 @@ const CastListNew = () => {
                                                 <PiScissors />
                                                 Split Character
                                             </button>
-
-                                            {/* Expand/Collapse All Buttons */}
-                                            <div className="cln-header-divider-vertical"></div>
-                                            <button className="cln-btn-secondary" onClick={() => setCollapsedCards(new Set())}>
-                                                <PiArrowsOutCardinal />
-                                                Expand All
-                                            </button>
-                                            <button
-                                                className="cln-btn-secondary"
-                                                onClick={() => {
-                                                    const allIndices = new Set(castData.cast_list.map((_, i) => i));
-                                                    setCollapsedCards(allIndices);
-                                                }}
-                                            >
-                                                <PiArrowsInCardinal />
-                                                Compress All
-                                            </button>
                                         </>
                                     ) : characterSelectionMode === "remove" ? (
                                         <>
@@ -1126,6 +1109,23 @@ const CastListNew = () => {
                                             </button>
                                         </>
                                     ) : null}
+
+                                    {/* Expand/Collapse All Buttons - always visible */}
+                                    <div className="cln-header-divider-vertical"></div>
+                                    <button className="cln-btn-secondary" onClick={() => setCollapsedCards(new Set())}>
+                                        <PiArrowsOutCardinal />
+                                        Expand All
+                                    </button>
+                                    <button
+                                        className="cln-btn-secondary"
+                                        onClick={() => {
+                                            const allIndices = new Set(castData.cast_list.map((_, i) => i));
+                                            setCollapsedCards(allIndices);
+                                        }}
+                                    >
+                                        <PiArrowsInCardinal />
+                                        Collapse all
+                                    </button>
                                 </div>
 
                                 <div className="cln-header-divider"></div>
@@ -1572,8 +1572,8 @@ const CastListNew = () => {
                                                                                                 <td>
                                                                                                     <button
                                                                                                         className={`cln-lock-btn ${locked
-                                                                                                                ? "cln-locked"
-                                                                                                                : ""
+                                                                                                            ? "cln-locked"
+                                                                                                            : ""
                                                                                                             } ${otherLocked ? "cln-disabled" : ""}`}
                                                                                                         onClick={() =>
                                                                                                             toggleLockOption(

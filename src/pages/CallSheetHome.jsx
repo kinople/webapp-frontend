@@ -5,6 +5,7 @@ import LogoEditorModal from '../components/LogoEditorModal';
 import '../css/ManageShootDays.css';
 import { fetchWithAuth, getApiUrl } from '../utils/api';
 import { getToken } from '../utils/auth';
+import EmptyState from '../components/EmptyState';
 
 const CallSheetHome = () => {
     const navigate = useNavigate();
@@ -98,6 +99,92 @@ const CallSheetHome = () => {
 
         return breakdownScenes.find((scene) => String(scene.scene_number || '').trim() === sceneNum) || null;
     }, [breakdownScenes]);
+
+    const computeRequirementsFromScenes = useCallback((scenesToProcess, existingReqs = []) => {
+        const categoriesToCheck = [
+            { name: 'Action Props', keys: ['action_props'] },
+            { name: 'Other Props', keys: ['other_props'] },
+            { name: 'Picture Vehicles', keys: ['picture_vehicles'] },
+            { name: 'Animals', keys: ['animals'] },
+            { name: 'Extras', keys: ['extras'] },
+            { name: 'Wardrobe', keys: ['wardrobe'] },
+            { name: 'Set Dressing', keys: ['set_dressing'] }
+        ];
+
+        const parseRequirementItems = (content) => {
+            if (!content) return [];
+            return content
+                .split(/[\n,]/)
+                .map(item => item.trim())
+                .filter(Boolean);
+        };
+
+        const mergeRequirementItems = (existingItems, incomingItems) => {
+            const seen = new Set(existingItems.map(item => item.trim().toLowerCase()).filter(Boolean));
+            const merged = [...existingItems];
+
+            incomingItems.forEach(item => {
+                const normalizedItem = item.trim().toLowerCase();
+                if (!normalizedItem || seen.has(normalizedItem)) return;
+                seen.add(normalizedItem);
+                merged.push(item);
+            });
+
+            return merged;
+        };
+
+        const newReqs = [...(existingReqs || [])];
+
+        categoriesToCheck.forEach(cat => {
+            const items = new Set();
+
+            (scenesToProcess || []).forEach(scene => {
+                const match = findBreakdownScene(scene.scene_number, scene.episode_number || '');
+                if (!match) return;
+
+                cat.keys.forEach(key => {
+                    const val = match[key];
+                    if (!val) return;
+
+                    if (typeof val === 'string') {
+                        val.split(',').forEach(v => {
+                            const clean = v.trim();
+                            if (clean) items.add(clean);
+                        });
+                        return;
+                    }
+
+                    if (Array.isArray(val)) {
+                        val.forEach(v => {
+                            if (typeof v === 'string' && v.trim()) items.add(v.trim());
+                        });
+                    }
+                });
+            });
+
+            if (items.size === 0) return;
+
+            const incomingItems = Array.from(items);
+            const existingIdx = newReqs.findIndex(r => r.category === cat.name);
+
+            if (existingIdx >= 0) {
+                const existingItems = parseRequirementItems(newReqs[existingIdx].content);
+                const mergedItems = mergeRequirementItems(existingItems, incomingItems);
+                newReqs[existingIdx].content = mergedItems.join('\n');
+                newReqs[existingIdx].isAuto = true;
+                return;
+            }
+
+            newReqs.push({
+                id: crypto.randomUUID(),
+                category: cat.name,
+                content: incomingItems.join('\n'),
+                isAuto: true
+            });
+        });
+
+        return newReqs;
+    }, [findBreakdownScene]);
 
     const loadData = useCallback(async () => {
         setIsLoading(true);
@@ -339,14 +426,21 @@ const CallSheetHome = () => {
                         );
                     });
 
+                    const updatedReqs = computeRequirementsFromScenes(updatedScenes, []);
+
                     newDay.scenes = updatedScenes;
                     newDay.characters = updatedCharacters;
+                    newDay.daily_requirements = updatedReqs;
 
-                    await fetch(getApiUrl(`/api/shoot-days/${newDay.id}?project_id=${id}`), {
+                    const updateRes = await fetch(getApiUrl(`/api/shoot-days/${newDay.id}?project_id=${id}`), {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(newDay)
                     });
+
+                    if (!updateRes.ok) {
+                        throw new Error('Failed to import schedule data into shoot day');
+                    }
                 }
             }
 
@@ -358,7 +452,7 @@ const CallSheetHome = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [addCharactersForScene, castList, createData, findBreakdownScene, id, navigate, scheduleHasDate, schedules, user]);
+    }, [addCharactersForScene, castList, computeRequirementsFromScenes, createData, findBreakdownScene, id, navigate, scheduleHasDate, schedules, user]);
 
     const handleDeleteDay = useCallback(async (event, dayId) => {
         event.stopPropagation();
@@ -445,6 +539,13 @@ const CallSheetHome = () => {
                         <div className="msd-empty-state">
                             <p>Loading call sheets...</p>
                         </div>
+                    ) : breakdownScenes.length === 0 && shootDays.length === 0 ? (
+                        <EmptyState 
+                            title="No Data Available" 
+                            subtitle="Upload a script to create call sheets." 
+                            className="msd-call-sheet-empty-wrapper"
+                            cardClassName="msd-call-sheet-empty-card"
+                        />
                     ) : (
                         <div className="msd-day-cards-grid">
                             <div className="msd-day-card add-card" onClick={handleCreateDayClick}>

@@ -252,10 +252,8 @@ body:has(.msd-editor-active),
     background: #fff;
     border-radius: 12px;
     height: min(99.4vh, 1700px);
-    width: min(
-        99vw,
-        calc((min(99.4vh, 1700px) - var(--msd-pdf-chrome-height)) * var(--msd-pdf-page-ratio) + 132px)
-    );
+    width: min(99vw,
+            calc((min(99.4vh, 1700px) - var(--msd-pdf-chrome-height)) * var(--msd-pdf-page-ratio) + 132px));
     min-width: min(740px, 99vw);
     display: flex;
     flex-direction: column;
@@ -799,6 +797,22 @@ body:has(.msd-editor-active),
     border-radius: 16px;
     border: 1px solid #e2e6ed;
     gap: 20px;
+}
+
+/* Overrides for EmptyState component inside Call Sheets */
+.msd-call-sheet-empty-wrapper {
+    padding: 0;
+    min-height: 220px;
+    /* Matches msd-preset-card min-height */
+}
+
+.msd-call-sheet-empty-card {
+    max-width: 100% !important;
+    border-radius: 16px !important;
+    border-color: #e2e6ed !important;
+    box-shadow: 0 4px 12px rgba(15, 23, 36, 0.04) !important;
+    padding: 48px 40px !important;
+    min-height: 220px !important;
 }
 
 .msd-empty-state button {
@@ -1373,7 +1387,7 @@ body:has(.msd-editor-active),
 }
 
 /* Additional UI improvements */
-.msd-table td > button {
+.msd-table td>button {
     background: transparent;
     border: 1px solid #e2e6ed;
     color: #6b7280;
@@ -1386,7 +1400,7 @@ body:has(.msd-editor-active),
     justify-content: center;
 }
 
-.msd-table td > button:hover {
+.msd-table td>button:hover {
     background-color: #fff5f4;
     border-color: #ff6758;
     color: #ff6758;
@@ -1541,14 +1555,14 @@ body:has(.msd-editor-active),
 }
 
 .msd-card-delete-btn,
-.msd-table td > button {
+.msd-table td>button {
     background: #efeff1;
     border-color: var(--msd-border);
     color: #4c4d51;
 }
 
 .msd-card-delete-btn:hover,
-.msd-table td > button:hover {
+.msd-table td>button:hover {
     background: var(--msd-accent-soft);
     border-color: #efb29f;
     color: #a34121;

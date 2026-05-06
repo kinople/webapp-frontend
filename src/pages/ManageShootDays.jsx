@@ -949,6 +949,7 @@ const ManageShootDays = () => {
             department_notes: day.department_notes || {},
             crew_calls: day.crew_calls || {},
             crew_call_bulk: day.crew_call_bulk || {},
+            daily_requirements: day.daily_requirements || [],
             advanced_schedule: ensureIds(day.advanced_schedule)
         };
 
@@ -1614,10 +1615,13 @@ const ManageShootDays = () => {
                 addedCount
             } = mergeImportedScenesIntoDay(formData.scenes, formData.characters, foundScenes);
 
+            const updatedReqs = computeRequirementsFromScenes(updatedScenes, formData.daily_requirements);
+
             setFormData(prev => ({
                 ...prev,
                 scenes: updatedScenes,
-                characters: updatedCharacters
+                characters: updatedCharacters,
+                daily_requirements: updatedReqs
             }));
 
             alert(`Imported ${foundScenes.length} schedule scenes. Added ${addedCount} new scene(s) and refreshed ${refreshedCount} existing scene(s).`);
@@ -2196,7 +2200,7 @@ const ManageShootDays = () => {
     );
 
     // --- Requirements Logic ---
-    const updateRequirementsFromScenes = () => {
+    const computeRequirementsFromScenes = (scenesToProcess, existingReqs = []) => {
         // Categories to aggregate from breakdown
         const categoriesToCheck = [
             { name: 'Action Props', keys: ['action_props'] },
@@ -2230,13 +2234,13 @@ const ManageShootDays = () => {
             return merged;
         };
 
-        let newReqs = [...(formData.daily_requirements || [])];
+        let newReqs = [...(existingReqs || [])];
 
         categoriesToCheck.forEach(cat => {
             const items = new Set();
 
             // Iterate over current scenes to find breakdown matches
-            formData.scenes.forEach(scene => {
+            (scenesToProcess || []).forEach(scene => {
                 const match = findBreakdownScene(scene.scene_number, scene.episode_number || '');
                 if (match) {
                     cat.keys.forEach(key => {
@@ -2278,6 +2282,11 @@ const ManageShootDays = () => {
             }
         });
 
+        return newReqs;
+    };
+
+    const updateRequirementsFromScenes = () => {
+        const newReqs = computeRequirementsFromScenes(formData.scenes, formData.daily_requirements);
         setFormData({ ...formData, daily_requirements: newReqs });
         alert("Requirements synced from scheduled scenes!");
     };
@@ -3146,9 +3155,13 @@ const ManageShootDays = () => {
                 if (foundScenes.length > 0) {
                     const { scenes: updatedScenes, characters: updatedCharacters } = mergeImportedScenesIntoDay([], [], foundScenes);
 
+                    // Compute requirements
+                    const updatedReqs = computeRequirementsFromScenes(updatedScenes, []);
+
                     // Update the new day object
                     newDay.scenes = updatedScenes;
                     newDay.characters = updatedCharacters;
+                    newDay.daily_requirements = updatedReqs;
 
                     // Save immediately
                     await fetch(getApiUrl(`/api/shoot-days/${newDay.id}?project_id=${id}`), {

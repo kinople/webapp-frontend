@@ -15,10 +15,12 @@
 	display: flex;
 	zoom: 1.1;
 	flex-direction: column;
-	height: 100%;
+	height: 100vh;
+	overflow: hidden;
 	background-color: #f3f4f7;
 	font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 	color: #323232;
+	box-sizing: border-box;
 }
 
 /* Main Content */
@@ -26,21 +28,30 @@
 	display: flex;
 	flex-direction: column;
 	flex-grow: 1;
+	min-height: 0;
 	padding: 12px 16px;
+	overflow: hidden;
+	box-sizing: border-box;
 }
 
 .loc-content-area {
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
+	flex: 1;
+	min-height: 0;
 	padding: 0;
+	overflow: hidden;
 }
 
 /* Page Header */
 .loc-page-header {
 	display: flex;
 	flex-direction: column;
+	flex: 0 0 auto;
 	gap: 12px;
+	background: #f3f4f7;
+	z-index: 5;
 }
 
 .loc-title {
@@ -216,6 +227,30 @@
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding-right: 6px;
+	padding-bottom: 16px;
+	scrollbar-gutter: stable;
+}
+
+.loc-cards-container::-webkit-scrollbar {
+	width: 8px;
+}
+
+.loc-cards-container::-webkit-scrollbar-track {
+	background: rgba(208, 208, 208, 0.35);
+	border-radius: 4px;
+}
+
+.loc-cards-container::-webkit-scrollbar-thumb {
+	background: rgba(150, 150, 150, 0.6);
+	border-radius: 4px;
+}
+
+.loc-cards-container::-webkit-scrollbar-thumb:hover {
+	background: rgba(120, 120, 120, 0.75);
 }
 
 /* Location Card */
@@ -224,6 +259,7 @@
 	border-radius: 12px;
 	box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.15);
 	overflow: hidden;
+	flex: 0 0 auto;
 }
 
 /* Card Header */
@@ -630,35 +666,36 @@
 
 /* Column widths */
 .loc-col-sno {
-	width: 50px;
+	width: 70px;
 }
 
 .loc-col-name {
-	width: 120px;
+	width: 140px;
 }
 
 .loc-col-address {
-	width: 100px;
+	width: 110px;
 }
 
 .loc-col-notes {
-	width: 80px;
+	width: 90px;
 }
 
 .loc-col-media {
-	width: 70px;
+	width: 80px;
 }
 
 .loc-col-pin {
-	width: 70px;
+	width: 80px;
 }
 
 .loc-col-dates {
-	width: 80px;
+	width: 90px;
 }
 
 .loc-col-lock {
 	flex: 1;
+	min-width: 150px;
 }
 
 /* Table Content Area */
@@ -760,6 +797,35 @@
 
 .loc-row-locked:hover {
 	background: linear-gradient(90deg, rgba(255, 103, 88, 0.12) 0%, rgba(255, 103, 88, 0.06) 100%);
+}
+
+.loc-option-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: nowrap;
+}
+
+.loc-option-edit-btn {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	padding: 4px 8px;
+	border-radius: 4px;
+	border: 1px solid #cfd7e3;
+	background: #fff;
+	cursor: pointer;
+	font-size: 10px;
+	font-weight: 500;
+	color: #475569;
+	transition: all 0.15s ease;
+	white-space: nowrap;
+}
+
+.loc-option-edit-btn:hover {
+	background: #f8fafc;
+	border-color: #94a3b8;
+	color: #1e293b;
 }
 
 /* Lock Button */
@@ -1011,6 +1077,30 @@
 	gap: 12px;
 }
 
+.loc-date-mode-selector {
+	display: flex;
+	gap: 16px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.loc-mode-option {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	color: #323232;
+}
+
+.loc-flexible-info {
+	padding: 12px;
+	border: 1px dashed #d8e1f0;
+	border-radius: 8px;
+	background: #f8fafc;
+	font-size: 13px;
+	color: #64748b;
+}
+
 .loc-date-range-inputs {
 	display: flex;
 	gap: 8px;
@@ -1059,6 +1149,16 @@
 	cursor: not-allowed;
 }
 
+.loc-date-picker-summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	font-size: 13px;
+	font-weight: 600;
+	color: #0f1724;
+}
+
 /* Calendar Wrapper */
 .loc-calendar-wrapper {
 	border: 1px solid #e6ecf8;
@@ -1082,7 +1182,13 @@
 }
 
 .loc-calendar-wrapper .loc-calendar-selected {
-	background: #ff6758 !important;
+	background: #22c55e !important;
+	color: #fff !important;
+	border-radius: 4px;
+}
+
+.loc-calendar-wrapper .loc-calendar-unavailable {
+	background: #ef4444 !important;
 	color: #fff !important;
 	border-radius: 4px;
 }
@@ -1139,6 +1245,18 @@
 	border-radius: 6px;
 	font-size: 12px;
 	color: #323232;
+}
+
+.loc-date-tag-available {
+	background: #ecfdf5;
+	border-color: #86efac;
+	color: #166534;
+}
+
+.loc-date-tag-unavailable {
+	background: #fef2f2;
+	border-color: #fca5a5;
+	color: #b91c1c;
 }
 
 .loc-remove-date-btn {
@@ -1704,6 +1822,46 @@
 	flex: 1;
 }
 
+.loc-option-modal-summary {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+	margin-bottom: 20px;
+}
+
+.loc-option-modal-stat {
+	padding: 14px 16px;
+	border-radius: 14px;
+	background: linear-gradient(180deg, #f8fafc 0%, #eef4ff 100%);
+	border: 1px solid #dbe5f4;
+}
+
+.loc-option-modal-stat-label {
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.6px;
+	text-transform: uppercase;
+	color: #64748b;
+	margin-bottom: 6px;
+}
+
+.loc-option-modal-stat-value {
+	font-size: 18px;
+	font-weight: 700;
+	color: #0f1724;
+}
+
+.loc-option-modal-stat-value.is-flexible {
+	color: #0f766e;
+}
+
+.loc-option-modal-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+}
+
 .loc-option-modal-section {
 	margin-bottom: 20px;
 }
@@ -1773,11 +1931,31 @@
 .loc-option-modal-date-tag {
 	display: inline-block;
 	padding: 6px 12px;
-	background: linear-gradient(180deg, #ff6758 0%, #e55a4d 100%);
 	color: white;
 	border-radius: 16px;
 	font-size: 13px;
 	font-weight: 500;
+}
+
+.loc-option-modal-date-tag.is-available {
+	background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+}
+
+.loc-option-modal-date-tag.is-unavailable {
+	background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+}
+
+.loc-option-modal-flexible-pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 8px 14px;
+	border-radius: 999px;
+	background: linear-gradient(180deg, #ccfbf1 0%, #99f6e4 100%);
+	border: 1px solid #5eead4;
+	color: #115e59;
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.2px;
 }
 
 .loc-option-modal-no-dates {
@@ -1809,6 +1987,13 @@
 .loc-option-modal-close-btn:hover {
 	background: linear-gradient(180deg, #1f2937 0%, #374151 100%);
 	transform: translateY(-1px);
+}
+
+@media (max-width: 720px) {
+	.loc-option-modal-summary,
+	.loc-option-modal-grid {
+		grid-template-columns: 1fr;
+	}
 }
 
 /* Add Location Group Modal */
@@ -2168,36 +2353,58 @@
 }
 
 .loc-scenes-drop-zone {
-	min-height: 60px;
+	min-height: 80px;
 	border-radius: 6px;
-	transition: all 0.2s ease;
+	transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+	position: relative;
 }
 
-.loc-scenes-drop-zone.loc-drop-active {
-	border: 2px dashed #d1d5db;
-	background: #f9fafb;
+/* Empty set landing zone in regroup mode */
+.loc-regroup-empty-zone {
+	min-height: 80px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #9ca3af;
+	font-size: 13px;
+	font-style: italic;
+	border-radius: 6px;
 }
 
-.loc-scenes-drop-zone.loc-drop-target {
-	border: 2px dashed #3b82f6;
-	background: #eff6ff;
+/* Droppable zone – any element with loc-drop-active (regroup mode idle) */
+.loc-drop-active {
+	border: 2px dashed #c7d2fe;
+	border-radius: 6px;
+	background: rgba(238, 242, 255, 0.4);
+	transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* Droppable zone – highlighted when cursor is over it */
+.loc-drop-target {
+	border: 2px dashed #3b82f6 !important;
+	background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
+	box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.12);
 }
 
 .loc-drop-placeholder {
-	padding: 20px;
+	padding: 24px 20px;
 	text-align: center;
 	color: #9ca3af;
 	font-size: 13px;
 	font-style: italic;
+	border: 2px dashed #e5e7eb;
+	border-radius: 6px;
+	margin: 8px;
 }
 
+/* Draggable row – dnd-kit version */
 .loc-scene-draggable {
 	cursor: grab;
-	transition: all 0.15s ease;
+	transition: background 0.12s ease, opacity 0.12s ease;
 }
 
 .loc-scene-draggable:hover {
-	background: #f3f4f6;
+	background: #f0f9ff !important;
 }
 
 .loc-scene-draggable:active {
@@ -2205,17 +2412,48 @@
 }
 
 .loc-scene-dragging {
-	opacity: 0.5;
-	background: #e0e7ff;
+	opacity: 0.35 !important;
+	background: #e0e7ff !important;
 }
 
-/* Visual feedback for draggable rows */
+/* Drag handle indicator */
 .loc-scene-draggable td:first-child::before {
-	content: "⋮⋮";
+	content: "⠿";
 	color: #9ca3af;
-	font-size: 10px;
-	margin-right: 6px;
-	letter-spacing: 1px;
+	font-size: 14px;
+	margin-right: 8px;
+	opacity: 0.6;
+	vertical-align: middle;
+}
+
+/* DragOverlay – actual scene row clone */
+.loc-drag-overlay-table {
+	background: #fff;
+	border-radius: 8px;
+	box-shadow: 0 12px 32px rgba(59, 130, 246, 0.22), 0 4px 12px rgba(0, 0, 0, 0.14);
+	border: 2px solid #3b82f6;
+	cursor: grabbing;
+	min-width: 500px;
+	animation: overlayAppear 0.1s ease-out;
+	table-layout: auto;
+}
+
+.loc-drag-overlay-row-tr td {
+	padding: 10px 12px;
+	font-size: 13px;
+	color: #0f1724;
+	white-space: nowrap;
+	border-bottom: none;
+}
+
+.loc-drag-overlay-row-tr td:first-child {
+	font-weight: 700;
+	color: #1e40af;
+}
+
+@keyframes overlayAppear {
+	from { opacity: 0; transform: scale(0.97) rotate(-0.5deg); }
+	to   { opacity: 1; transform: scale(1) rotate(0deg); }
 }
 
 /* Disabled button styling */

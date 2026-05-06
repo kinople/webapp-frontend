@@ -1,0 +1,105 @@
+.custom-dropdown-container {
+	position: relative;
+	min-width: 200px;
+}
+
+.custom-dropdown-btn {
+	width: 100%;
+	height: 37px;
+	padding: 6px 12px;
+	border-radius: 5.648px;
+	border: 0.941px solid #d1d5db;
+	background: #fff;
+	font-family: "Inter", sans-serif;
+	font-size: 13.179px;
+	font-weight: 500;
+	color: #0f1724;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.custom-dropdown-btn:hover {
+	border-color: #ff6758;
+}
+
+.custom-dropdown-btn:focus, .custom-dropdown-btn.open {
+	outline: none;
+	border-color: #ff6758;
+	box-shadow: 0 0 0 2px rgba(255, 103, 88, 0.15);
+	color: #ff6758;
+}
+
+.custom-dropdown-btn:disabled {
+	background: #f9fafb;
+	color: #9ca3af;
+	cursor: not-allowed;
+	border-color: #e5e7eb;
+}
+
+.custom-dropdown-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+	color: #9ca3af;
+}
+
+.custom-dropdown-btn:focus .custom-dropdown-icon, .custom-dropdown-btn.open .custom-dropdown-icon {
+	color: #ff6758;
+}
+
+.custom-dropdown-icon.open {
+	transform: rotate(180deg);
+}
+
+.custom-dropdown-menu-wrapper {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	width: 100%;
+	z-index: 50;
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transform: translateY(-8px);
+	transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-dropdown-menu-wrapper.open {
+	opacity: 1;
+	visibility: visible;
+	pointer-events: auto;
+	transform: translateY(0);
+}
+
+.custom-dropdown-menu {
+	overflow-y: auto;
+	max-height: 300px;
+	background: #fff;
+	border-radius: 8px;
+	box-shadow: 0 4px 20px rgba(15, 23, 36, 0.12);
+	border: 1px solid #e2e6ed;
+}
+
+.custom-dropdown-item {
+	padding: 8px 12px;
+	font-family: "Inter", sans-serif;
+	font-size: 13px;
+	color: #374151;
+	cursor: pointer;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+
+.custom-dropdown-item:hover {
+	background: #fff1ef;
+	color: #ff6758;
+}
+
+.custom-dropdown-item.selected {
+	background: rgba(255, 103, 88, 0.08);
+	color: #ff6758;
+	font-weight: 600;
+}

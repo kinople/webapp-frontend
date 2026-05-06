@@ -82,6 +82,10 @@ const UserSettings = () => {
 						</div>
 					</div>
 					<div className="user-settings-form-group">
+						<label className="user-settings-label">Username</label>
+						<input type="text" value={userData?.username || ""} readOnly className="user-settings-input" />
+					</div>
+					<div className="user-settings-form-group">
 						<label className="user-settings-label">Email</label>
 						<input type="text" value={userData?.email || ""} readOnly className="user-settings-input" />
 					</div>

@@ -41,6 +41,11 @@
 	flex-direction: column;
 	gap: 15px;
 	padding: 0;
+	flex: 1;
+}
+
+.sbn-empty-state-override {
+	flex: 1;
 }
 
 /* Top Bar with Tabs */
@@ -143,6 +148,8 @@
 	border-color: #ff6758;
 	box-shadow: 0 0 0 2px rgba(255, 103, 88, 0.15);
 }
+
+
 
 .sbn-no-scripts-msg {
 	font-family: "Inter", sans-serif;
@@ -259,11 +266,26 @@
 	background: rgba(255, 103, 88, 0.08);
 }
 
-.sbn-filter-menu {
+.sbn-filter-menu-wrapper {
 	position: absolute;
 	top: calc(100% + 8px);
 	left: 0;
 	z-index: 20;
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transform: translateY(-8px);
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sbn-filter-menu-wrapper.open {
+	opacity: 1;
+	visibility: visible;
+	pointer-events: auto;
+	transform: translateY(0);
+}
+
+.sbn-filter-menu {
 	min-width: 220px;
 	max-height: 320px;
 	overflow-y: auto;
@@ -1150,6 +1172,8 @@
 
 /* TagInput Styles */
 .sbn-tag-wrap {
+	width: 100%;
+	box-sizing: border-box;
 	display: flex;
 	align-items: center;
 	gap: 8px;

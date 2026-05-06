@@ -4,18 +4,29 @@ import { getApiUrl } from "../utils/api";
 import "../css/SignUp.css";
 
 function SignUp() {
+	const [firstName, setFirstName] = useState("");
+	const [lastName, setLastName] = useState("");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
 	const navigate = useNavigate();
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
-		setLoading(true);
 		setError("");
 
+		if (password !== confirmPassword) {
+			setError("Passwords do not match. Please try again.");
+			return;
+		}
+
+		setLoading(true);
+
 		try {
+			const username = `${firstName.trim()},${lastName.trim()}`;
+
 			const response = await fetch(getApiUrl("/api/signup"), {
 				method: "POST",
 				mode: "cors",
@@ -24,6 +35,7 @@ function SignUp() {
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify({
+					username,
 					email,
 					password,
 				}),
@@ -52,11 +64,33 @@ function SignUp() {
 		<div className="signup-container">
 			<form className="signup-form" onSubmit={handleSubmit}>
 				{error && <div className="signup-error">{error}</div>}
+				<div className="signup-name-row">
+					<input
+						className="signup-input"
+						type="text"
+						name="firstName"
+						placeholder="First Name"
+						value={firstName}
+						onChange={(e) => setFirstName(e.target.value)}
+						disabled={loading}
+						required
+					/>
+					<input
+						className="signup-input"
+						type="text"
+						name="lastName"
+						placeholder="Last Name"
+						value={lastName}
+						onChange={(e) => setLastName(e.target.value)}
+						disabled={loading}
+						required
+					/>
+				</div>
 				<input
 					className="signup-input"
 					type="email"
 					name="email"
-					placeholder="Email Address"
+					placeholder="Email ID"
 					value={email}
 					onChange={(e) => setEmail(e.target.value)}
 					disabled={loading}
@@ -66,9 +100,19 @@ function SignUp() {
 					className="signup-input"
 					type="password"
 					name="password"
-					placeholder="Password"
+					placeholder="Create Password"
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}
+					disabled={loading}
+					required
+				/>
+				<input
+					className="signup-input"
+					type="password"
+					name="confirmPassword"
+					placeholder="Confirm Password"
+					value={confirmPassword}
+					onChange={(e) => setConfirmPassword(e.target.value)}
 					disabled={loading}
 					required
 				/>

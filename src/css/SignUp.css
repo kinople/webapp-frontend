@@ -63,6 +63,13 @@
 	gap: 40px;
 }
 
+.signup-name-row {
+	display: flex;
+	flex-direction: row;
+	gap: 16px;
+	width: 100%;
+}
+
 .signup-field {
 	display: flex;
 	flex-direction: column;

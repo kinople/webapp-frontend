@@ -19,6 +19,7 @@ import { useSelector } from "react-redux";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { FaFileExcel } from "react-icons/fa";
+import EmptyState from "../components/EmptyState";
 
 function formatPageEights(pageEights) {
 	if (!pageEights) return "N/A";
@@ -1184,7 +1185,6 @@ const ManageSchedules = () => {
 										value={maxScenes}
 										onChange={(e) => setMaxScenes(e.target.value)}
 										className="sched-page-input"
-										placeholder="5"
 										min="1"
 										style={{ marginLeft: "10px", width: "80px" }}
 									/>
@@ -1199,7 +1199,6 @@ const ManageSchedules = () => {
 										value={maxPageEights.pages}
 										onChange={(e) => setMaxPageEights({ ...maxPageEights, pages: e.target.value })}
 										className="sched-page-input"
-										placeholder="2"
 										min="0"
 										style={{ marginLeft: "10px", width: "60px" }}
 									/>
@@ -1208,7 +1207,6 @@ const ManageSchedules = () => {
 										value={maxPageEights.eighths}
 										onChange={(e) => setMaxPageEights({ ...maxPageEights, eighths: e.target.value })}
 										className="sched-page-input"
-										placeholder="3"
 										min="0"
 										max="7"
 										style={{ marginLeft: "5px", width: "60px" }}
@@ -4387,9 +4385,7 @@ const ManageSchedules = () => {
 						</div>
 					)}
 					{!scheduleData?.schedule && scenes.length === 0 && (
-						<div className="sched-empty-section">
-							<div className="sched-empty-message">Generate rough schedule</div>
-						</div>
+						<EmptyState title="No Data Available" subtitle="Upload a script to create schedules." />
 					)}
 				</div>
 

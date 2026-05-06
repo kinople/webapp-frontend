@@ -12,6 +12,7 @@ const ProjectDashboard = () => {
 	const [loading, setLoading] = useState(true);
 	const [episodeDrafts, setEpisodeDrafts] = useState([]);
 	const [latestDraft, setLatestDraft] = useState(null);
+	const [episodesExpanded, setEpisodesExpanded] = useState(false);
 	const dispatch = useDispatch();
 
 	useEffect(() => {
@@ -79,6 +80,8 @@ const ProjectDashboard = () => {
 	const totalScheduleScenes = (metrics?.schedules?.scheduled_scenes || 0) + (metrics?.schedules?.unscheduled_scenes || 0);
 	const scenesScheduledPercent = totalScheduleScenes > 0 ? Math.round((metrics.schedules.scheduled_scenes / totalScheduleScenes) * 100) : 0;
 	const isEpisodicProject = (metrics?.project_type || "") === "episodic";
+	const hasMoreEpisodes = episodeDrafts.length > 5;
+	const visibleEpisodes = episodesExpanded ? episodeDrafts : episodeDrafts.slice(0, 5);
 
 	// Check if no scripts are available
 	const hasNoScripts = !metrics?.scripts?.total || metrics.scripts.total === 0;
@@ -130,20 +133,65 @@ return (
 							{episodeDrafts.length === 0 ? (
 								<div style={{ color: '#888', fontSize: 15, padding: '8px 0' }}>No episodes found</div>
 							) : (
-								episodeDrafts.map(ep => (
-									<div key={ep.ep_number} className="proj-dash-episode-item">
-										<div className="proj-dash-episode-row">
-											<span className="proj-dash-episode-label">Ep{ep.ep_number}</span>
-											<span className="proj-dash-episode-count">{ep.drafts} draft{ep.drafts === 1 ? '' : 's'}</span>
+								<>
+									{episodeDrafts.slice(0, 5).map(ep => (
+										<div key={ep.ep_number} className="proj-dash-episode-item">
+											<div className="proj-dash-episode-row">
+												<span className="proj-dash-episode-label">Ep{ep.ep_number}</span>
+												<span className="proj-dash-episode-count">{ep.drafts} draft{ep.drafts === 1 ? '' : 's'}</span>
+											</div>
+											<div className="proj-dash-episode-meta">
+												<span>Latest:</span>
+												<strong>{ep.latest_draft_name || "No drafts yet"}</strong>
+											</div>
 										</div>
-										<div className="proj-dash-episode-meta">
-											<span>Latest:</span>
-											<strong>{ep.latest_draft_name || "No drafts yet"}</strong>
+									))}
+									{hasMoreEpisodes && (
+										<div className={`proj-dash-episode-list-expandable ${episodesExpanded ? 'expanded' : ''}`}>
+											<div className="proj-dash-episode-list-inner">
+												{episodeDrafts.slice(5).map(ep => (
+													<div key={ep.ep_number} className="proj-dash-episode-item">
+														<div className="proj-dash-episode-row">
+															<span className="proj-dash-episode-label">Ep{ep.ep_number}</span>
+															<span className="proj-dash-episode-count">{ep.drafts} draft{ep.drafts === 1 ? '' : 's'}</span>
+														</div>
+														<div className="proj-dash-episode-meta">
+															<span>Latest:</span>
+															<strong>{ep.latest_draft_name || "No drafts yet"}</strong>
+														</div>
+													</div>
+												))}
+											</div>
 										</div>
-									</div>
-								))
+									)}
+								</>
 							)}
 						</div>
+						{hasMoreEpisodes && (
+							<button
+								type="button"
+								className="proj-dash-episode-toggle"
+								onClick={() => setEpisodesExpanded(v => !v)}
+								aria-label={episodesExpanded ? "Collapse episodes list" : "Expand episodes list"}
+							>
+								<span className="proj-dash-episode-toggle-text">
+									{episodesExpanded ? "Show less" : `Show all (${episodeDrafts.length})`}
+								</span>
+								<svg
+									className={`proj-dash-episode-toggle-icon ${episodesExpanded ? "expanded" : ""}`}
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+								>
+									<polyline points="6 9 12 15 18 9" />
+								</svg>
+							</button>
+						)}
 						<div className="proj-dash-episode-latest">
 							<span className="proj-dash-episode-latest-label">Latest Draft</span>
 							<span className="proj-dash-episode-latest-value">

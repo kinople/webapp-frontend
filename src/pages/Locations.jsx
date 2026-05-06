@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { DndContext, DragOverlay, MeasuringStrategy, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
+
 import { useParams } from "react-router-dom";
 import { getApiUrl } from "../utils/api";
 import {
@@ -21,20 +23,42 @@ import {
 	PiX,
 	PiShuffle,
 	PiCheck,
+	PiPencilSimple,
 } from "react-icons/pi";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import "../css/Locations.css";
+import EmptyState from "../components/EmptyState";
 
 // Create a memoized modal component
-const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm }) => {
+const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm, isEditing }) => {
 	const [dateRangeStart, setDateRangeStart] = useState("");
 	const [dateRangeEnd, setDateRangeEnd] = useState("");
 	const [selectedDates, setSelectedDates] = useState(optionForm.availableDates || []);
+	const [selectedUnavailableDates, setSelectedUnavailableDates] = useState(optionForm.unavailableDates || []);
+	const [datePickerMode, setDatePickerMode] = useState(optionForm.flexible ? "flexible" : "fixed");
+	const [dateAddMode, setDateAddMode] = useState("available");
+
+	useEffect(() => {
+		setSelectedDates(optionForm.availableDates || []);
+	}, [optionForm.availableDates]);
+
+	useEffect(() => {
+		setSelectedUnavailableDates(optionForm.unavailableDates || []);
+	}, [optionForm.unavailableDates]);
+
+	useEffect(() => {
+		setDatePickerMode(optionForm.flexible ? "flexible" : "fixed");
+	}, [optionForm.flexible]);
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
-		await onSubmit({ ...optionForm, availableDates: selectedDates });
+		await onSubmit({
+			...optionForm,
+			flexible: datePickerMode === "flexible",
+			availableDates: datePickerMode === "flexible" ? [] : selectedDates,
+			unavailableDates: datePickerMode === "flexible" ? [] : selectedUnavailableDates,
+		});
 	};
 
 	const handleInputChange = useCallback(
@@ -66,15 +90,29 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 			currentDate.setDate(currentDate.getDate() + 1);
 		}
 
-		setSelectedDates((prev) => {
-			const newDates = [...prev];
-			rangeDates.forEach((date) => {
-				if (!newDates.includes(date)) {
-					newDates.push(date);
-				}
+		if (dateAddMode === "available") {
+			setSelectedDates((prev) => {
+				const newDates = [...prev];
+				rangeDates.forEach((date) => {
+					if (!newDates.includes(date)) {
+						newDates.push(date);
+					}
+				});
+				return newDates.sort();
 			});
-			return newDates.sort();
-		});
+			setSelectedUnavailableDates((prev) => prev.filter((date) => !rangeDates.includes(date)));
+		} else {
+			setSelectedUnavailableDates((prev) => {
+				const newDates = [...prev];
+				rangeDates.forEach((date) => {
+					if (!newDates.includes(date)) {
+						newDates.push(date);
+					}
+				});
+				return newDates.sort();
+			});
+			setSelectedDates((prev) => prev.filter((date) => !rangeDates.includes(date)));
+		}
 
 		setDateRangeStart("");
 		setDateRangeEnd("");
@@ -82,21 +120,38 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 
 	const handleCalendarDateClick = (date) => {
 		const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
-		setSelectedDates((prev) => {
-			if (prev.includes(dateStr)) {
-				return prev.filter((d) => d !== dateStr);
-			} else {
+		if (datePickerMode === "flexible") return;
+
+		if (dateAddMode === "available") {
+			setSelectedDates((prev) => {
+				if (prev.includes(dateStr)) {
+					return prev.filter((d) => d !== dateStr);
+				}
 				return [...prev, dateStr].sort();
-			}
-		});
+			});
+			setSelectedUnavailableDates((prev) => prev.filter((d) => d !== dateStr));
+		} else {
+			setSelectedUnavailableDates((prev) => {
+				if (prev.includes(dateStr)) {
+					return prev.filter((d) => d !== dateStr);
+				}
+				return [...prev, dateStr].sort();
+			});
+			setSelectedDates((prev) => prev.filter((d) => d !== dateStr));
+		}
 	};
 
-	const removeDate = (dateToRemove) => {
-		setSelectedDates((prev) => prev.filter((d) => d !== dateToRemove));
+	const removeDate = (dateToRemove, mode = "available") => {
+		if (mode === "available") {
+			setSelectedDates((prev) => prev.filter((d) => d !== dateToRemove));
+			return;
+		}
+		setSelectedUnavailableDates((prev) => prev.filter((d) => d !== dateToRemove));
 	};
 
 	const clearAllDates = () => {
 		setSelectedDates([]);
+		setSelectedUnavailableDates([]);
 	};
 
 	const formatDisplayDate = (dateString) => {
@@ -111,6 +166,9 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 	const tileClassName = ({ date, view }) => {
 		if (view === "month") {
 			const dateStr = date.toLocaleDateString("en-CA").split("T")[0];
+			if (selectedUnavailableDates.includes(dateStr)) {
+				return "loc-calendar-unavailable";
+			}
 			if (selectedDates.includes(dateStr)) {
 				return "loc-calendar-selected";
 			}
@@ -121,7 +179,7 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 	return (
 		<div className="loc-modal-overlay">
 			<div className="loc-modal loc-modal-wide">
-				<h3 className="loc-modal-title">Add Set Option</h3>
+				<h3 className="loc-modal-title">{isEditing ? "Edit Set Option" : "Add Set Option"}</h3>
 				<form onSubmit={handleSubmit} className="loc-form">
 					<div className="loc-form-row">
 						<div className="loc-form-column">
@@ -179,52 +237,126 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 							<div className="loc-form-group">
 								<label className="loc-label">Available Dates:</label>
 								<div className="loc-date-picker-container">
-									<div className="loc-date-range-inputs">
-										<input
-											type="date"
-											value={dateRangeStart}
-											onChange={(e) => setDateRangeStart(e.target.value)}
-											className="loc-date-input"
-										/>
-										<span className="loc-date-separator">to</span>
-										<input
-											type="date"
-											value={dateRangeEnd}
-											min={dateRangeStart}
-											onChange={(e) => setDateRangeEnd(e.target.value)}
-											className="loc-date-input"
-										/>
-										<button
-											type="button"
-											onClick={addDateRange}
-											className="loc-add-range-btn"
-											disabled={!dateRangeStart || !dateRangeEnd}
-										>
-											Add Range
-										</button>
+									<div className="loc-date-mode-selector">
+										<label className="loc-mode-option">
+											<input
+												type="radio"
+												checked={datePickerMode === "flexible"}
+												onChange={() => setDatePickerMode("flexible")}
+											/>
+											Flexible Dates
+										</label>
+										<label className="loc-mode-option">
+											<input
+												type="radio"
+												checked={datePickerMode === "fixed"}
+												onChange={() => setDatePickerMode("fixed")}
+											/>
+											Fixed Dates
+										</label>
 									</div>
-									<div className="loc-calendar-wrapper">
-										<Calendar selectRange={false} onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
-									</div>
-									{selectedDates.length > 0 && (
-										<div className="loc-selected-dates">
-											<div className="loc-selected-dates-header">
-												<span>Selected Dates ({selectedDates.length}):</span>
+									{datePickerMode === "flexible" ? (
+										<div className="loc-flexible-info">
+											No dates are set for this option. It will be treated as flexible and available on any day.
+										</div>
+									) : (
+										<>
+											<div className="loc-date-mode-selector">
+												<label className="loc-mode-option">
+													<input
+														type="checkbox"
+														checked={dateAddMode === "available"}
+														onChange={() => setDateAddMode("available")}
+													/>
+													Mark Available (Green)
+												</label>
+												<label className="loc-mode-option">
+													<input
+														type="checkbox"
+														checked={dateAddMode === "unavailable"}
+														onChange={() => setDateAddMode("unavailable")}
+													/>
+													Mark Unavailable (Red)
+												</label>
+											</div>
+											<div className="loc-date-range-inputs">
+												<input
+													type="date"
+													value={dateRangeStart}
+													onChange={(e) => setDateRangeStart(e.target.value)}
+													className="loc-date-input"
+												/>
+												<span className="loc-date-separator">to</span>
+												<input
+													type="date"
+													value={dateRangeEnd}
+													min={dateRangeStart}
+													onChange={(e) => setDateRangeEnd(e.target.value)}
+													className="loc-date-input"
+												/>
+												<button
+													type="button"
+													onClick={addDateRange}
+													className="loc-add-range-btn"
+													disabled={!dateRangeStart || !dateRangeEnd}
+												>
+													Add Range
+												</button>
+											</div>
+											<div className="loc-date-picker-summary">
+												<span>
+													Available: {selectedDates.length} | Unavailable: {selectedUnavailableDates.length}
+												</span>
 												<button type="button" onClick={clearAllDates} className="loc-clear-dates-btn">
 													Clear All
 												</button>
 											</div>
-											<div className="loc-dates-list">
-												{selectedDates.map((date) => (
-													<span key={date} className="loc-date-tag">
-														{formatDisplayDate(date)}
-														<button type="button" onClick={() => removeDate(date)} className="loc-remove-date-btn">
-															×
-														</button>
-													</span>
-												))}
+											<div className="loc-calendar-wrapper">
+												<Calendar selectRange={false} onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
 											</div>
-										</div>
+											{(selectedDates.length > 0 || selectedUnavailableDates.length > 0) && (
+												<div className="loc-selected-dates">
+													{selectedDates.length > 0 && (
+														<>
+															<div className="loc-selected-dates-header">
+																<span>Available Dates ({selectedDates.length}):</span>
+															</div>
+															<div className="loc-dates-list">
+																{selectedDates.map((date) => (
+																	<span key={`available-${date}`} className="loc-date-tag loc-date-tag-available">
+																		{formatDisplayDate(date)}
+																		<button type="button" onClick={() => removeDate(date, "available")} className="loc-remove-date-btn">
+																			×
+																		</button>
+																	</span>
+																))}
+															</div>
+														</>
+													)}
+													{selectedUnavailableDates.length > 0 && (
+														<>
+															<div className="loc-selected-dates-header">
+																<span>Unavailable Dates ({selectedUnavailableDates.length}):</span>
+															</div>
+															<div className="loc-dates-list">
+																{selectedUnavailableDates.map((date) => (
+																	<span key={`unavailable-${date}`} className="loc-date-tag loc-date-tag-unavailable">
+																		{formatDisplayDate(date)}
+																		<button
+																			type="button"
+																			onClick={() => removeDate(date, "unavailable")}
+																			className="loc-remove-date-btn"
+																		>
+																			×
+																		</button>
+																	</span>
+																))}
+															</div>
+														</>
+													)}
+												</div>
+											)}
+										</>
 									)}
 								</div>
 							</div>
@@ -232,7 +364,7 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 					</div>
 					<div className="loc-modal-buttons">
 						<button type="submit" className="loc-submit-btn">
-							Add Option
+							{isEditing ? "Save Changes" : "Add Option"}
 						</button>
 						<button type="button" onClick={onClose} className="loc-cancel-btn">
 							Cancel
@@ -244,6 +376,66 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 	);
 });
 
+// --- Regroup Mode: Draggable scene row using @dnd-kit/core useDraggable ---
+// Rows are drag-only (not droppable) so DroppableSetZone is the sole collision target.
+const DraggableSceneRow = ({ scene, locationId, hasEpisode, episodeMap, getLocationForScene, getSynopsisForScene, getCastForScene }) => {
+	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+		id: `${locationId}::${scene.scene_id}`,
+	});
+
+	return (
+		<tr
+			ref={setNodeRef}
+			style={{ opacity: isDragging ? 0.25 : 1, cursor: "grab", userSelect: "none" }}
+			className={`loc-scene-draggable${isDragging ? " loc-scene-dragging" : ""}`}
+			{...attributes}
+			{...listeners}
+		>
+			{hasEpisode && <td>{episodeMap[String(scene.scene_number)] || "–"}</td>}
+			<td>{scene.scene_number}</td>
+			<td>{scene.int_ext}</td>
+			<td>{getLocationForScene(scene)}</td>
+			<td>{scene.time}</td>
+			<td className="loc-synopsis-cell">{getSynopsisForScene(scene.scene_number)}</td>
+			<td>{getCastForScene(scene)}</td>
+		</tr>
+	);
+};
+
+// --- Regroup Mode: Custom live collision detector ---
+// Bypasses dnd-kit rect cache so scroll position is ALWAYS accurate.
+const livePointerWithin = ({ droppableContainers, pointerCoordinates }) => {
+	if (!pointerCoordinates) return [];
+	const { x, y } = pointerCoordinates;
+	const matches = [];
+	for (const container of droppableContainers) {
+		const el = container.node?.current;
+		if (!el) continue;
+		const rect = el.getBoundingClientRect(); // always live – never cached
+		if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+			matches.push({ id: container.id });
+		}
+	}
+	return matches;
+};
+
+// --- Regroup Mode: Droppable zone for each set ---
+const DroppableSetZone = ({ locationId, isRegroupMode, extraClass = "", children }) => {
+	const { setNodeRef, isOver } = useDroppable({ id: String(locationId) });
+	return (
+		<div
+			ref={setNodeRef}
+			className={[
+				extraClass,
+				isRegroupMode ? "loc-drop-active" : "",
+				isOver ? "loc-drop-target" : "",
+			].filter(Boolean).join(" ")}
+		>
+			{children}
+		</div>
+	);
+};
+
 const Locations = () => {
 	const { user, id } = useParams();
 	const [locationData, setLocationData] = useState(null);
@@ -252,12 +444,15 @@ const Locations = () => {
 	const [expandedOptions, setExpandedOptions] = useState(new Set());
 	const [expandedScenes, setExpandedScenes] = useState(new Set());
 	const [showAddOptionModal, setShowAddOptionModal] = useState(false);
+	const [editingOptionContext, setEditingOptionContext] = useState(null);
 	const [selectedLocationIndex, setSelectedLocationIndex] = useState(null);
 	const [optionForm, setOptionForm] = useState({
 		locationName: "",
 		address: "",
 		notes: "",
 		availableDates: [],
+		unavailableDates: [],
+		flexible: false,
 		media: "",
 		locationPinLink: "",
 	});
@@ -282,6 +477,9 @@ const Locations = () => {
 	const [scenesForSet1, setScenesForSet1] = useState(new Set());
 	const [scenesForSet2, setScenesForSet2] = useState(new Set());
 	const [splitLocationScenes, setSplitLocationScenes] = useState([]);
+	const totalSplitScenes = splitLocationScenes.length;
+	const assignedSplitScenes = scenesForSet1.size + scenesForSet2.size;
+	const hasUnassignedSplitScenes = totalSplitScenes > 0 && assignedSplitScenes < totalSplitScenes;
 	// Scene selection for new location
 	const [allScenes, setAllScenes] = useState([]);
 	const [selectedSceneIds, setSelectedSceneIds] = useState(new Set());
@@ -293,11 +491,16 @@ const Locations = () => {
 	// Breakdown synopsis map
 	const [synopsisMap, setSynopsisMap] = useState({});
 	const [episodeMap, setEpisodeMap] = useState({});
+	const [sceneLocationMap, setSceneLocationMap] = useState({});
 	// Regroup mode state
 	const [isRegroupMode, setIsRegroupMode] = useState(false);
 	const [sceneMoves, setSceneMoves] = useState([]); // Track scene moves: [{ scene_id, from_location_id, to_location_id }]
-	const [draggedScene, setDraggedScene] = useState(null); // Currently dragged scene
-	const [dragSourceLocationId, setDragSourceLocationId] = useState(null); // Source location of dragged scene
+	const [activeId, setActiveId] = useState(null); // Currently dragged dnd-kit id ("locationId::sceneId")
+
+	// dnd-kit sensors (smooth pointer-based drag, no jitter)
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+	);
 
 	// Memoize the option form setter to prevent unnecessary re-renders
 	const memoizedSetOptionForm = useCallback((updater) => {
@@ -308,24 +511,31 @@ const Locations = () => {
 	const handleFormSubmit = useCallback(
 		async (formData) => {
 			try {
-				await addLocationOption(selectedLocationIndex, formData);
+				if (editingOptionContext) {
+					await updateLocationOption(editingOptionContext.locationIndex, editingOptionContext.optionId, formData);
+				} else {
+					await addLocationOption(selectedLocationIndex, formData);
+				}
 			} catch (error) {
 				console.error("Error submitting form:", error);
 				setError(error.message);
 			}
 		},
-		[selectedLocationIndex]
+		[selectedLocationIndex, editingOptionContext]
 	);
 
 	// Memoize the modal close handler
 	const handleModalClose = useCallback(() => {
 		setShowAddOptionModal(false);
 		setSelectedLocationIndex(null);
+		setEditingOptionContext(null);
 		setOptionForm({
 			locationName: "",
 			address: "",
 			notes: "",
 			availableDates: [],
+			unavailableDates: [],
+			flexible: false,
 			media: "",
 			locationPinLink: "",
 		});
@@ -398,6 +608,10 @@ const Locations = () => {
 			try {
 				setIsLoading(true);
 				const response = await fetch(getApiUrl(`/api/${id}/locations`));
+				if (response.status === 404) {
+					setLocationData({ locations: [] });
+					return;
+				}
 				if (!response.ok) {
 					throw new Error("Failed to fetch locations");
 				}
@@ -480,10 +694,15 @@ const Locations = () => {
 						// Create mapping from scene_number to synopsis
 						const sceneToSynopsisMap = {};
 						const sceneToEpisodeMap = {};
+						const sceneToLocationMap = {};
 						const sceneNumToIdMap = {};
 						scenes.forEach((scene) => {
 							const sceneKey = String(scene.scene_number || scene.scene_id);
 							sceneToSynopsisMap[sceneKey] = scene.synopsis || "";
+							const locVal = String(scene.location || "").trim();
+							if (locVal) {
+								sceneToLocationMap[sceneKey] = locVal;
+							}
 							const epVal = scene.episode_number ?? scene["Episode Number"];
 							if (epVal !== undefined && epVal !== null && String(epVal).trim() !== "") {
 								sceneToEpisodeMap[sceneKey] = String(epVal).trim();
@@ -495,6 +714,7 @@ const Locations = () => {
 						});
 						setSynopsisMap(sceneToSynopsisMap);
 						setEpisodeMap(sceneToEpisodeMap);
+						setSceneLocationMap(sceneToLocationMap);
 						setSceneNumberToId(sceneNumToIdMap);
 					}
 				}
@@ -532,6 +752,8 @@ const Locations = () => {
 				address: "",
 				notes: "",
 				availableDates: [],
+				unavailableDates: [],
+				flexible: false,
 				media: "",
 				locationPinLink: "",
 			});
@@ -550,6 +772,53 @@ const Locations = () => {
 		} catch (error) {
 			console.error("Error adding location option:", error);
 			setError(error.message);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	const updateLocationOption = async (locationIndex, optionId, formData) => {
+		try {
+			setIsLoading(true);
+			const location = locationData.locations[locationIndex];
+			const response = await fetch(getApiUrl(`/api/${id}/location/${location.location_id}/options/${optionId}`), {
+				method: "PUT",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(formData),
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to update location option");
+			}
+
+			// Reset form and close modal
+			setOptionForm({
+				locationName: "",
+				address: "",
+				notes: "",
+				availableDates: [],
+				unavailableDates: [],
+				flexible: false,
+				media: "",
+				locationPinLink: "",
+			});
+			setShowAddOptionModal(false);
+			setEditingOptionContext(null);
+
+			// Refresh the locations data
+			const refreshResponse = await fetch(getApiUrl(`/api/${id}/locations`));
+			if (!refreshResponse.ok) {
+				throw new Error("Failed to refresh locations");
+			}
+			const jsonData = await refreshResponse.json();
+			setLocationData(jsonData);
+
+		} catch (error) {
+			console.error("Error updating location option:", error);
+			setError(error.message);
+			alert("Failed to update option: " + error.message);
 		} finally {
 			setIsLoading(false);
 		}
@@ -729,7 +998,7 @@ const Locations = () => {
 
 		if (!locationScenes || !Array.isArray(locationScenes)) return [];
 
-	locationScenes.forEach((scene) => {
+		locationScenes.forEach((scene) => {
 			const sceneId = String(scene.scene_id ?? scene.id ?? "");
 			const sceneNumber = String(scene.scene_number ?? "");
 			const resolvedId = sceneId || sceneNumberToId[sceneNumber] || "";
@@ -767,12 +1036,38 @@ const Locations = () => {
 		return sortedCastIds.join(", ") || "N/A";
 	};
 
+	const openEditOptionModal = useCallback((locationIndex, optionId, opt) => {
+		setSelectedLocationIndex(locationIndex);
+		setEditingOptionContext({ locationIndex, optionId });
+		setOptionForm({
+			locationName: opt.locationName || opt.location_name || "",
+			address: opt.address || "",
+			notes: opt.notes || "",
+			availableDates: opt.available_dates || opt.availableDates || [],
+			unavailableDates: opt.unavailable_dates || opt.unavailableDates || [],
+			flexible: !!opt.flexible,
+			media: opt.media || "",
+			locationPinLink: opt.location_pin_link || opt.locationPinLink || "",
+		});
+		setShowAddOptionModal(true);
+	}, []);
+
 	const hasEpisodeInSets = useMemo(() => Object.values(episodeMap).some(Boolean), [episodeMap]);
 
 	// Get synopsis for a specific scene from breakdown
 	const getSynopsisForScene = (sceneNumber) => {
 		const sceneKey = String(sceneNumber);
 		return synopsisMap[sceneKey] || "-";
+	};
+
+	const getLocationForScene = (scene) => {
+		const directLocation = String(scene?.location || "").trim();
+		if (directLocation) return directLocation;
+
+		const sceneKey = String(scene?.scene_number || scene?.scene_id || "");
+		if (!sceneKey) return "-";
+
+		return sceneLocationMap[sceneKey] || "-";
 	};
 
 	// Analyze scenes to get Int/Ext counts (similar to CastListNew)
@@ -1036,8 +1331,8 @@ const Locations = () => {
 				return;
 			}
 
-			const totalScenes = splitLocationScenes.length;
-			const assignedScenes = scenesForSet1.size + scenesForSet2.size;
+			const totalScenes = totalSplitScenes;
+			const assignedScenes = assignedSplitScenes;
 
 			if (assignedScenes === 0) {
 				alert("Please assign at least one scene to one of the new sets");
@@ -1045,10 +1340,8 @@ const Locations = () => {
 			}
 
 			if (assignedScenes < totalScenes) {
-				const unassigned = totalScenes - assignedScenes;
-				if (!window.confirm(`${unassigned} scene(s) are not assigned to either set. They will remain unassigned. Continue?`)) {
-					return;
-				}
+				alert("Please assign every scene to one of the two new sets before splitting.");
+				return;
 			}
 
 			const idx = Array.from(selectedLocations)[0];
@@ -1158,8 +1451,7 @@ const Locations = () => {
 	const cancelRegroupMode = () => {
 		setIsRegroupMode(false);
 		setSceneMoves([]);
-		setDraggedScene(null);
-		setDragSourceLocationId(null);
+		setActiveId(null);
 		// Refresh to restore original state
 		const fetchLocations = async () => {
 			try {
@@ -1218,13 +1510,24 @@ const Locations = () => {
 			// Reset regroup mode
 			setIsRegroupMode(false);
 			setSceneMoves([]);
-			setDraggedScene(null);
-			setDragSourceLocationId(null);
+			setActiveId(null);
 
-			// Refresh the locations data
+			// Refresh the locations data, then sort by episode→scene number
 			const refreshResponse = await fetch(getApiUrl(`/api/${id}/locations`));
 			if (refreshResponse.ok) {
 				const jsonData = await refreshResponse.json();
+				// Sort each set's scenes: episodic → ep then scene; film → scene only
+				(jsonData.locations || []).forEach((loc) => {
+					if (!loc.scenes) return;
+					loc.scenes.sort((a, b) => {
+						const epA = parseFloat(episodeMap[String(a.scene_number)] ?? 0) || 0;
+						const epB = parseFloat(episodeMap[String(b.scene_number)] ?? 0) || 0;
+						if (epA !== epB) return epA - epB;
+						const snA = parseFloat(a.scene_number) || 0;
+						const snB = parseFloat(b.scene_number) || 0;
+						return snA - snB;
+					});
+				});
 				setLocationData(jsonData);
 			}
 
@@ -1237,85 +1540,94 @@ const Locations = () => {
 		}
 	};
 
-	// Drag handlers for regroup mode
-	const handleDragStart = (e, scene, locationId) => {
-		if (!isRegroupMode) return;
-		setDraggedScene(scene);
-		setDragSourceLocationId(locationId);
-		e.dataTransfer.effectAllowed = "move";
-		e.dataTransfer.setData("text/plain", JSON.stringify({ scene, locationId }));
+	// --- dnd-kit Drag handlers for regroup mode ---
+	// Parse a dnd-kit id: "locationId::sceneId"
+	const parseActiveId = (id) => {
+		if (!id) return { locationId: null, sceneId: null };
+		const sepIdx = id.indexOf("::");
+		if (sepIdx < 0) return { locationId: null, sceneId: null };
+		return {
+			locationId: id.slice(0, sepIdx),
+			sceneId: id.slice(sepIdx + 2),
+		};
 	};
 
-	const handleDragOver = (e, targetLocationId) => {
-		if (!isRegroupMode || !draggedScene) return;
-		if (targetLocationId === dragSourceLocationId) return;
-		e.preventDefault();
-		e.dataTransfer.dropEffect = "move";
+	const handleDndDragStart = ({ active }) => {
+		setActiveId(active.id);
 	};
 
-	const handleDrop = (e, targetLocationId) => {
-		e.preventDefault();
-		if (!isRegroupMode || !draggedScene || !dragSourceLocationId) return;
-		if (targetLocationId === dragSourceLocationId) return;
+	const handleDndDragEnd = ({ active, over }) => {
+		setActiveId(null);
+		if (!over) return;
 
-		const sceneId = String(draggedScene.scene_id);
+		const { locationId: sourceLocationId, sceneId } = parseActiveId(active.id);
+		// over.id is always the DroppableSetZone's locationId (rows are drag-only, not droppable)
+		const targetLocationId = String(over.id);
 
-		// Add the move to sceneMoves
+		if (!sourceLocationId || !targetLocationId || sourceLocationId === targetLocationId) return;
+
+		// Track the move
 		setSceneMoves((prev) => {
-			// Check if this scene was already moved
 			const existingMoveIndex = prev.findIndex((m) => m.scene_id === sceneId);
 			if (existingMoveIndex >= 0) {
-				// Update the existing move
 				const updated = [...prev];
 				if (updated[existingMoveIndex].from_location_id === targetLocationId) {
-					// Moving back to original - remove the move
+					// Moving back to original – cancel the move
 					updated.splice(existingMoveIndex, 1);
 				} else {
 					updated[existingMoveIndex].to_location_id = targetLocationId;
 				}
 				return updated;
 			}
-			// Add new move
 			return [...prev, {
 				scene_id: sceneId,
-				from_location_id: dragSourceLocationId,
-				to_location_id: targetLocationId
+				from_location_id: sourceLocationId,
+				to_location_id: targetLocationId,
 			}];
 		});
 
-		// Update local state to reflect the move visually
+		// Update local data: remove from source, ADD TO TOP of target
 		setLocationData((prevData) => {
 			const newData = JSON.parse(JSON.stringify(prevData));
-			const sourceIdx = newData.locations.findIndex((l) => l.location_id === dragSourceLocationId);
-			const targetIdx = newData.locations.findIndex((l) => l.location_id === targetLocationId);
+			const sourceIdx = newData.locations.findIndex((l) => String(l.location_id) === sourceLocationId);
+			const targetIdx = newData.locations.findIndex((l) => String(l.location_id) === targetLocationId);
 
 			if (sourceIdx >= 0 && targetIdx >= 0) {
 				const sourceScenes = newData.locations[sourceIdx].scenes || [];
 				const sceneIndex = sourceScenes.findIndex((s) => String(s.scene_id) === sceneId);
-
 				if (sceneIndex >= 0) {
 					const [movedScene] = sourceScenes.splice(sceneIndex, 1);
+					newData.locations[sourceIdx].scenes = sourceScenes;
 					if (!newData.locations[targetIdx].scenes) {
 						newData.locations[targetIdx].scenes = [];
 					}
-					newData.locations[targetIdx].scenes.push(movedScene);
-
-					// Update scene counts
+					// Add to TOP of target list
+					newData.locations[targetIdx].scenes.unshift(movedScene);
 					newData.locations[sourceIdx].scene_count = sourceScenes.length;
 					newData.locations[targetIdx].scene_count = newData.locations[targetIdx].scenes.length;
 				}
 			}
-
 			return newData;
 		});
-
-		setDraggedScene(null);
-		setDragSourceLocationId(null);
 	};
 
-	const handleDragEnd = () => {
-		setDraggedScene(null);
-		setDragSourceLocationId(null);
+	// Sort each set's scenes by episode number then scene number
+	const sortScenesByNumber = () => {
+		setLocationData((prevData) => {
+			const newData = JSON.parse(JSON.stringify(prevData));
+			newData.locations.forEach((loc) => {
+				if (!loc.scenes) return;
+				loc.scenes.sort((a, b) => {
+					const epA = parseFloat(episodeMap[String(a.scene_number)] ?? 0) || 0;
+					const epB = parseFloat(episodeMap[String(b.scene_number)] ?? 0) || 0;
+					if (epA !== epB) return epA - epB;
+					const snA = parseFloat(a.scene_number) || 0;
+					const snB = parseFloat(b.scene_number) || 0;
+					return snA - snB;
+				});
+			});
+			return newData;
+		});
 	};
 
 	return (
@@ -1332,9 +1644,7 @@ const Locations = () => {
 							<div className="loc-error-message">⚠️ {error}</div>
 						</div>
 					) : !locationData || locationData.locations.length === 0 ? (
-						<div className="loc-empty-container">
-							<div className="loc-message">No sets found</div>
-						</div>
+						<EmptyState title="No Data Available" subtitle="Upload a script to view sets." />
 					) : (
 						<>
 							{/* Page Header */}
@@ -1385,23 +1695,6 @@ const Locations = () => {
 											<button className="loc-btn-secondary" onClick={enterRegroupMode}>
 												<PiShuffle />
 												Regroup
-											</button>
-
-											{/* Expand/Collapse All Buttons */}
-											<div className="loc-header-divider-vertical"></div>
-											<button className="loc-btn-secondary" onClick={() => setCollapsedCards(new Set())}>
-												<PiArrowsOutCardinal />
-												Expand All
-											</button>
-											<button
-												className="loc-btn-secondary"
-												onClick={() => {
-													const allIndices = new Set(locationData.locations.map((_, i) => i));
-													setCollapsedCards(allIndices);
-												}}
-											>
-												<PiArrowsInCardinal />
-												Compress All
 											</button>
 										</>
 									) : locationSelectionMode === 'remove' ? (
@@ -1457,48 +1750,130 @@ const Locations = () => {
 											</button>
 										</>
 									) : null}
+
+									{/* Expand/Collapse All Buttons - always visible */}
+									<div className="loc-header-divider-vertical"></div>
+									<button className="loc-btn-secondary" onClick={() => setCollapsedCards(new Set())}>
+										<PiArrowsOutCardinal />
+										Expand All
+									</button>
+									<button
+										className="loc-btn-secondary"
+										onClick={() => {
+											const allIndices = new Set(locationData.locations.map((_, i) => i));
+											setCollapsedCards(allIndices);
+										}}
+									>
+										<PiArrowsInCardinal />
+										Collapse all
+									</button>
 								</div>
 
 								<div className="loc-header-divider"></div>
 							</div>
 
 							{/* Location Cards */}
-							<div className="loc-cards-container">
-								{locationData.locations.map((location, idx) => {
-									const isCollapsed = collapsedCards.has(idx);
-									const isSelected = selectedLocations.has(idx);
-									const showOptions = expandedOptions.has(idx);
-									const showScenes = expandedScenes.has(idx);
+							<DndContext
+								sensors={sensors}
+								collisionDetection={livePointerWithin}
+								onDragStart={isRegroupMode ? handleDndDragStart : undefined}
+								onDragEnd={isRegroupMode ? handleDndDragEnd : undefined}
+								autoScroll={{
+									enabled: true,
+									interval: 5,        // check every 5ms (smooth)
+									threshold: { x: 0.15, y: 0.15 }, // trigger zone near edges
+									acceleration: 12,   // scroll speed
+								}}
+							>
+								<div className="loc-cards-container">
+									{locationData.locations.map((location, idx) => {
+										const isCollapsed = collapsedCards.has(idx);
+										const isSelected = selectedLocations.has(idx);
+										const showOptions = expandedOptions.has(idx);
+										const showScenes = expandedScenes.has(idx);
 
-									// Determine lock status text for compressed view
-									const hasLockedOption = location.locked !== -1 && location.locked !== "-1" && location.locked !== null && location.locked !== undefined;
-									const lockStatusText = hasLockedOption ? "Option locked" : "Option not locked";
+										// Determine lock status text for compressed view
+										const hasLockedOption = location.locked !== -1 && location.locked !== "-1" && location.locked !== null && location.locked !== undefined;
+										const lockStatusText = hasLockedOption ? "Option locked" : "Option not locked";
 
-									return (
-										<div key={idx} className={`loc-location-card ${isCollapsed ? "loc-collapsed" : ""}`}>
-											{/* Card Header - Compressed View when collapsed */}
-											<div className={`loc-card-header ${isCollapsed ? "loc-card-header-compressed" : ""}`}>
-												<div className="loc-card-header-left">
-													{/* Location Checkbox - Only show when in selection mode */}
-													{locationSelectionMode && (
-														<div
-															className={`loc-location-checkbox ${isSelected ? "" : "loc-unchecked"}`}
-															onClick={() => toggleLocationSelection(idx)}
-														>
-															{isSelected ? <PiCheckSquareFill /> : <PiSquare />}
+										return (
+											<div key={idx} className={`loc-location-card ${isCollapsed ? "loc-collapsed" : ""}`}>
+												{/* Card Header - Compressed View when collapsed */}
+												<div className={`loc-card-header ${isCollapsed ? "loc-card-header-compressed" : ""}`}>
+													<div className="loc-card-header-left">
+														{/* Location Checkbox - Only show when in selection mode */}
+														{locationSelectionMode && (
+															<div
+																className={`loc-location-checkbox ${isSelected ? "" : "loc-unchecked"}`}
+																onClick={() => toggleLocationSelection(idx)}
+															>
+																{isSelected ? <PiCheckSquareFill /> : <PiSquare />}
+															</div>
+														)}
+
+														{/* Location Info */}
+														<div className={`loc-location-info ${isCollapsed ? "loc-location-info-inline" : ""}`}>
+															<span className="loc-location-id-box">{idx + 1}</span>
+															<span className="loc-location-name">{location.location}</span>
+														</div>
+
+														{/* Collapse Button - only show here when expanded */}
+														{!isCollapsed && (
+															<button
+																className={`loc-collapse-btn ${isCollapsed ? "loc-collapsed" : ""}`}
+																onClick={() => {
+																	setCollapsedCards((prev) => {
+																		const next = new Set(prev);
+																		if (next.has(idx)) next.delete(idx);
+																		else next.add(idx);
+																		return next;
+																	});
+																}}
+															>
+																{isCollapsed ? <PiCaretDown /> : <PiCaretUp />}
+															</button>
+														)}
+													</div>
+
+													{/* Compressed Stats - Only show when collapsed */}
+													{isCollapsed && (
+														<div className="loc-compressed-stats">
+															<div className="loc-compressed-divider"></div>
+															<div className="loc-compressed-stat-item">
+																<PiFilmSlateFill className="loc-compressed-icon" />
+																<span className="loc-compressed-stat-text">
+																	<span className="loc-compressed-value">{location.scene_count}</span>
+																	<span className="loc-compressed-label"> : Scenes</span>
+																</span>
+															</div>
+															<div className="loc-compressed-divider"></div>
+															<div className="loc-compressed-stat-item">
+																<PiUserFill className="loc-compressed-icon" />
+																<span className="loc-compressed-stat-text">
+																	<span className="loc-compressed-value">{getCastIdsForLocation(location.scenes).length}</span>
+																	<span className="loc-compressed-label"> : Cast</span>
+																</span>
+															</div>
+															<div className="loc-compressed-divider"></div>
+															<div className="loc-compressed-stat-item">
+																<PiMapPinFill className="loc-compressed-icon" />
+																<span className="loc-compressed-stat-text">
+																	<span className="loc-compressed-value">{Object.keys(location.location_options || {}).length}</span>
+																	<span className="loc-compressed-label"> : Options</span>
+																</span>
+															</div>
+															<div className="loc-compressed-divider"></div>
+															<div className="loc-compressed-stat-item">
+																<span className="loc-compressed-stat-text loc-compressed-label">{lockStatusText}</span>
+															</div>
+															<div className="loc-compressed-divider"></div>
 														</div>
 													)}
 
-													{/* Location Info */}
-													<div className={`loc-location-info ${isCollapsed ? "loc-location-info-inline" : ""}`}>
-														<span className="loc-location-id-box">{idx + 1}</span>
-														<span className="loc-location-name">{location.location}</span>
-													</div>
-
-													{/* Collapse Button - only show here when expanded */}
-													{!isCollapsed && (
+													{/* Collapse/Expand Button - Right side when collapsed */}
+													{isCollapsed && (
 														<button
-															className={`loc-collapse-btn ${isCollapsed ? "loc-collapsed" : ""}`}
+															className="loc-collapse-btn loc-collapse-btn-right"
 															onClick={() => {
 																setCollapsedCards((prev) => {
 																	const next = new Set(prev);
@@ -1508,463 +1883,477 @@ const Locations = () => {
 																});
 															}}
 														>
-															{isCollapsed ? <PiCaretDown /> : <PiCaretUp />}
+															<PiCaretDown />
 														</button>
+													)}
+
+													{/* Card Header Actions */}
+													{!isCollapsed && (
+														<div className="loc-card-header-actions">
+															<button
+																className="loc-btn-add-option"
+																onClick={() => {
+																	setSelectedLocationIndex(idx);
+																	setEditingOptionContext(null);
+																	setShowAddOptionModal(true);
+																	setOptionForm({
+																		locationName: "",
+																		address: "",
+																		notes: "",
+																		availableDates: [],
+																		unavailableDates: [],
+																		flexible: false,
+																		media: "",
+																		locationPinLink: "",
+																	});
+																}}
+															>
+																<PiPlusBold />
+																Add Option
+															</button>
+
+															{!isSelectingMode.has(idx) ? (
+																<button
+																	className="loc-btn-remove-option"
+																	onClick={() => setIsSelectingMode((prev) => new Set(prev).add(idx))}
+																>
+																	<PiMinusCircle />
+																	Remove Option
+																</button>
+															) : (
+																<>
+																	<button
+																		className="loc-btn-cancel"
+																		onClick={() => {
+																			setIsSelectingMode((prev) => {
+																				const next = new Set(prev);
+																				next.delete(idx);
+																				return next;
+																			});
+																			setSelectedOptions((prev) => {
+																				const next = new Set(prev);
+																				Array.from(next).forEach((key) => {
+																					if (key.startsWith(`${idx}-`)) {
+																						next.delete(key);
+																					}
+																				});
+																				return next;
+																			});
+																		}}
+																	>
+																		<PiX />
+																		Cancel Remove
+																	</button>
+																	<button
+																		className="loc-btn-danger"
+																		onClick={() => {
+																			const selectedForLocation = Array.from(selectedOptions)
+																				.filter((key) => key.startsWith(`${idx}-`))
+																				.map((key) => key.split("-")[1]);
+
+																			if (selectedForLocation.length > 0) {
+																				if (
+																					window.confirm(
+																						`Are you sure you want to remove ${selectedForLocation.length} selected option(s)?`
+																					)
+																				) {
+																					selectedForLocation.forEach((optId) => {
+																						removeLocationOption(idx, optId);
+																					});
+																					setSelectedOptions((prev) => {
+																						const next = new Set(prev);
+																						selectedForLocation.forEach((optId) => {
+																							next.delete(`${idx}-${optId}`);
+																						});
+																						return next;
+																					});
+																					setIsSelectingMode((prev) => {
+																						const next = new Set(prev);
+																						next.delete(idx);
+																						return next;
+																					});
+																				}
+																			}
+																		}}
+																		disabled={Array.from(selectedOptions).filter((key) => key.startsWith(`${idx}-`)).length === 0}
+																	>
+																		<PiMinusCircle />
+																		Remove Selected ({Array.from(selectedOptions).filter((key) => key.startsWith(`${idx}-`)).length})
+																	</button>
+																</>
+															)}
+														</div>
 													)}
 												</div>
 
-												{/* Compressed Stats - Only show when collapsed */}
-												{isCollapsed && (
-													<div className="loc-compressed-stats">
-														<div className="loc-compressed-divider"></div>
-														<div className="loc-compressed-stat-item">
-															<PiFilmSlateFill className="loc-compressed-icon" />
-															<span className="loc-compressed-stat-text">
-																<span className="loc-compressed-value">{location.scene_count}</span>
-																<span className="loc-compressed-label"> : Scenes</span>
-															</span>
-														</div>
-														<div className="loc-compressed-divider"></div>
-														<div className="loc-compressed-stat-item">
-															<PiUserFill className="loc-compressed-icon" />
-															<span className="loc-compressed-stat-text">
-																<span className="loc-compressed-value">{getCastIdsForLocation(location.scenes).length}</span>
-																<span className="loc-compressed-label"> : Cast</span>
-															</span>
-														</div>
-														<div className="loc-compressed-divider"></div>
-														<div className="loc-compressed-stat-item">
-															<PiMapPinFill className="loc-compressed-icon" />
-															<span className="loc-compressed-stat-text">
-																<span className="loc-compressed-value">{Object.keys(location.location_options || {}).length}</span>
-																<span className="loc-compressed-label"> : Options</span>
-															</span>
-														</div>
-														<div className="loc-compressed-divider"></div>
-														<div className="loc-compressed-stat-item">
-															<span className="loc-compressed-stat-text loc-compressed-label">{lockStatusText}</span>
-														</div>
-														<div className="loc-compressed-divider"></div>
-													</div>
-												)}
-
-												{/* Collapse/Expand Button - Right side when collapsed */}
-												{isCollapsed && (
-													<button
-														className="loc-collapse-btn loc-collapse-btn-right"
-														onClick={() => {
-															setCollapsedCards((prev) => {
-																const next = new Set(prev);
-																if (next.has(idx)) next.delete(idx);
-																else next.add(idx);
-																return next;
-															});
-														}}
-													>
-														<PiCaretDown />
-													</button>
-												)}
-
-												{/* Card Header Actions */}
+												{/* Card Body */}
 												{!isCollapsed && (
-													<div className="loc-card-header-actions">
-														<button
-															className="loc-btn-add-option"
-															onClick={() => {
-																setSelectedLocationIndex(idx);
-																setShowAddOptionModal(true);
-																setOptionForm({
-																	locationName: "",
-																	address: "",
-																	notes: "",
-																	availableDates: [],
-																	media: "",
-																	locationPinLink: "",
-																});
-															}}
-														>
-															<PiPlusBold />
-															Add Option
-														</button>
-
-														<button
-															className={`loc-btn-remove-option ${isSelectingMode.has(idx) ? "loc-active" : ""}`}
-															onClick={() => {
-																if (!isSelectingMode.has(idx)) {
-																	setIsSelectingMode((prev) => new Set(prev).add(idx));
-																} else {
-																	const selectedForLocation = Array.from(selectedOptions)
-																		.filter((key) => key.startsWith(`${idx}-`))
-																		.map((key) => key.split("-")[1]);
-
-																	if (selectedForLocation.length === 0) {
-																		alert("Please select options to remove");
-																		return;
-																	}
-
-																	if (
-																		window.confirm(
-																			`Are you sure you want to remove ${selectedForLocation.length} selected option(s)?`
-																		)
-																	) {
-																		selectedForLocation.forEach((optId) => {
-																			removeLocationOption(idx, optId);
-																		});
-																		setSelectedOptions((prev) => {
-																			const next = new Set(prev);
-																			selectedForLocation.forEach((optId) => {
-																				next.delete(`${idx}-${optId}`);
-																			});
-																			return next;
-																		});
-																		setIsSelectingMode((prev) => {
-																			const next = new Set(prev);
-																			next.delete(idx);
-																			return next;
-																		});
-																	}
-																}
-															}}
-														>
-															<PiMinusCircle />
-															{!isSelectingMode.has(idx)
-																? "Remove Option"
-																: `Remove Selected (${Array.from(selectedOptions).filter((key) => key.startsWith(`${idx}-`))
-																	.length
-																})`}
-														</button>
-													</div>
-												)}
-											</div>
-
-											{/* Card Body */}
-											{!isCollapsed && (
-												<div className="loc-card-body">
-													{/* Left Panel */}
-													{(() => {
-														const sceneAnalysis = analyzeLocationScenes(location.scenes);
-														const castDetails = getCastIdsForLocation(location.scenes);
-														return (
-															<div className="loc-left-panel">
-																{/* Stats Bar */}
-																<div className="loc-stats-bar">
-																	<div className="loc-stat-item">
-																		<span className="loc-stat-label">Scenes:</span>
-																		<span className="loc-stat-value">{sceneAnalysis.total}</span>
-																	</div>
-																	<div className="loc-stat-item">
-																		<span className="loc-stat-label">Int:</span>
-																		<span className="loc-stat-value">{sceneAnalysis.intCount}</span>
-																	</div>
-																	<div className="loc-stat-item">
-																		<span className="loc-stat-label">Ext:</span>
-																		<span className="loc-stat-value">{sceneAnalysis.extCount}</span>
-																	</div>
-																	<div className="loc-stat-item">
-																		<span className="loc-stat-label">Int/Ext:</span>
-																		<span className="loc-stat-value">{sceneAnalysis.intExtCount}</span>
-																	</div>
-																</div>
-
-																{/* Cast Section - shows cast IDs for this location's scenes */}
-																<div className="loc-cast-section">
-																	<span className="loc-section-title">Cast</span>
-																	<div className="loc-cast-badges-container">
-																		<div className="loc-cast-badges">
-																			{castDetails.length > 0 ? (
-																				castDetails.map((cast, i) => (
-																					<div
-																						key={i}
-																						className="loc-cast-badge"
-																						title={cast.character}
-																					>
-																						{cast.cast_id}
-																					</div>
-																				))
-																			) : (
-																				<span className="loc-empty-badge">No cast</span>
-																			)}
+													<div className="loc-card-body">
+														{/* Left Panel */}
+														{(() => {
+															const sceneAnalysis = analyzeLocationScenes(location.scenes);
+															const castDetails = getCastIdsForLocation(location.scenes);
+															return (
+																<div className="loc-left-panel">
+																	{/* Stats Bar */}
+																	<div className="loc-stats-bar">
+																		<div className="loc-stat-item">
+																			<span className="loc-stat-label">Scenes:</span>
+																			<span className="loc-stat-value">{sceneAnalysis.total}</span>
+																		</div>
+																		<div className="loc-stat-item">
+																			<span className="loc-stat-label">Int:</span>
+																			<span className="loc-stat-value">{sceneAnalysis.intCount}</span>
+																		</div>
+																		<div className="loc-stat-item">
+																			<span className="loc-stat-label">Ext:</span>
+																			<span className="loc-stat-value">{sceneAnalysis.extCount}</span>
+																		</div>
+																		<div className="loc-stat-item">
+																			<span className="loc-stat-label">Int/Ext:</span>
+																			<span className="loc-stat-value">{sceneAnalysis.intExtCount}</span>
 																		</div>
 																	</div>
-																</div>
 
-																{/* View Buttons */}
-																<div className="loc-view-buttons">
-																	<button
-																		className={`loc-btn-view ${showOptions ? "loc-btn-view-primary" : "loc-btn-view-outline"
-																			} ${isRegroupMode ? "loc-btn-disabled" : ""}`}
-																		onClick={() => {
-																			if (isRegroupMode) return; // Disable in regroup mode
-																			setExpandedOptions((p) => {
-																				const n = new Set(p);
-																				if (n.has(idx)) n.delete(idx);
-																				else n.add(idx);
-																				return n;
-																			});
-																			setExpandedScenes((p) => {
-																				const n = new Set(p);
-																				n.delete(idx);
-																				return n;
-																			});
-																		}}
-																		disabled={isRegroupMode}
-																	>
-																		View Options
-																	</button>
-
-																	<button
-																		className={`loc-btn-view ${showScenes ? "loc-btn-view-primary" : "loc-btn-view-outline"
-																			} ${isRegroupMode ? "loc-btn-disabled" : ""}`}
-																		onClick={() => {
-																			if (isRegroupMode) return; // Disable in regroup mode
-																			setExpandedScenes((p) => {
-																				const n = new Set(p);
-																				if (n.has(idx)) n.delete(idx);
-																				else n.add(idx);
-																				return n;
-																			});
-																			setExpandedOptions((p) => {
-																				const n = new Set(p);
-																				n.delete(idx);
-																				return n;
-																			});
-																		}}
-																	>
-																		View Scenes
-																	</button>
-																</div>
-															</div>
-														);
-													})()}
-
-													{/* Right Panel */}
-													<div className="loc-right-panel">
-														{/* Table Header Bar - Only show for Options view */}
-														{!showScenes && (
-															<div className="loc-table-header-bar">
-																{isSelectingMode.has(idx) && (
-																	<div className="loc-table-header-cell" style={{ width: 50 }}></div>
-																)}
-																<div className="loc-table-header-cell loc-col-sno">S.No</div>
-																<div className="loc-table-header-cell loc-col-name">Set Name</div>
-																<div className="loc-table-header-cell loc-col-address">Address</div>
-																<div className="loc-table-header-cell loc-col-notes">Notes</div>
-																<div className="loc-table-header-cell loc-col-media">Media</div>
-																<div className="loc-table-header-cell loc-col-pin">Pin Link</div>
-																<div className="loc-table-header-cell loc-col-dates">Dates</div>
-																<div className="loc-table-header-cell loc-col-lock">Lock</div>
-															</div>
-														)}
-
-														{/* Table Content */}
-														<div className="loc-table-content">
-															{!showScenes ? (
-																// Options Table
-																location.location_options && Object.keys(location.location_options).length > 0 ? (
-																	<table className="loc-data-table">
-																		<tbody>
-																			{Object.entries(location.location_options).map(([optId, opt], i) => {
-																				const key = `${idx}-${optId}`;
-																				const locked =
-																					location.locked === optId ||
-																					location.locked === parseInt(optId) ||
-																					String(location.locked) === optId;
-																				const hasAnyLocked =
-																					location.locked !== -1 &&
-																					location.locked !== "-1" &&
-																					location.locked !== null &&
-																					location.locked !== undefined;
-																				const otherLocked = hasAnyLocked && !locked;
-
-																				const locationName = opt.locationName || opt.location_name || "-";
-																				const address = opt.address || "-";
-																				const notes = opt.notes || "-";
-																				const media = opt.media || "-";
-																				const pinLink = opt.location_pin_link || opt.locationPinLink || "";
-																				const dates = opt.available_dates || opt.availableDates || [];
-																				const formatDate = (dateStr) => {
-																					const d = new Date(dateStr);
-																					return d.toLocaleDateString("en-US", {
-																						month: "short",
-																						day: "numeric",
-																					});
-																				};
-																				const datesDisplay =
-																					Array.isArray(dates) && dates.length > 0
-																						? dates.length <= 3
-																							? dates.map(formatDate).join(", ")
-																							: `${dates
-																								.slice(0, 2)
-																								.map(formatDate)
-																								.join(", ")} +${dates.length - 2
-																							} more`
-																						: "-";
-
-																				return (
-																					<tr
-																						key={optId}
-																						className={`${locked ? "loc-row-locked" : ""} loc-data-row-clickable`}
-																						onClick={() => {
-																							setOptionDetailsModal({
-																								option: opt,
-																								isLocked: locked,
-																								locationName: location.location,
-																							});
-																						}}
-																					>
-																						{isSelectingMode.has(idx) && (
-																							<td style={{ width: 50 }} onClick={(e) => e.stopPropagation()}>
-																								<input
-																									type="checkbox"
-																									className="loc-select-checkbox"
-																									checked={selectedOptions.has(key)}
-																									onChange={(e) => {
-																										setSelectedOptions((prev) => {
-																											const next = new Set(
-																												prev
-																											);
-																											if (e.target.checked) {
-																												next.add(key);
-																											} else {
-																												next.delete(key);
-																											}
-																											return next;
-																										});
-																									}}
-																								/>
-																							</td>
-																						)}
-																						<td style={{ width: 70 }}>{i + 1}</td>
-																						<td style={{ width: 140 }}>{locationName}</td>
-																						<td style={{ width: 110 }}>{address}</td>
-																						<td style={{ width: 90 }} className="loc-truncate">{notes}</td>
-																						<td style={{ width: 80 }} className="loc-truncate">{media}</td>
-																						<td style={{ width: 80 }} onClick={(e) => e.stopPropagation()}>
-																							{pinLink ? (
-																								<a
-																									href={pinLink}
-																									target="_blank"
-																									rel="noopener noreferrer"
-																									className="loc-link"
-																								>
-																									View
-																								</a>
-																							) : (
-																								"-"
-																							)}
-																						</td>
-																						<td
-																							style={{ width: 90 }}
-																							title={
-																								Array.isArray(dates) && dates.length > 0
-																									? `Available dates:\n${dates.join(
-																										"\n"
-																									)}`
-																									: "No dates set"
-																							}
+																	{/* Cast Section - shows cast IDs for this location's scenes */}
+																	<div className="loc-cast-section">
+																		<span className="loc-section-title">Cast</span>
+																		<div className="loc-cast-badges-container">
+																			<div className="loc-cast-badges">
+																				{castDetails.length > 0 ? (
+																					castDetails.map((cast, i) => (
+																						<div
+																							key={i}
+																							className="loc-cast-badge"
+																							title={cast.character}
 																						>
-																							{datesDisplay}
-																						</td>
-																						<td onClick={(e) => e.stopPropagation()}>
-																							<button
-																								className={`loc-lock-btn ${locked ? "loc-locked" : ""
-																									} ${otherLocked ? "loc-disabled" : ""}`}
-																								onClick={() =>
-																									toggleLockOption(
-																										idx,
-																										optId,
-																										location.location_id
-																									)
-																								}
-																								disabled={otherLocked}
+																							{cast.cast_id}
+																						</div>
+																					))
+																				) : (
+																					<span className="loc-empty-badge">No cast</span>
+																				)}
+																			</div>
+																		</div>
+																	</div>
+
+																	{/* View Buttons */}
+																	<div className="loc-view-buttons">
+																		<button
+																			className={`loc-btn-view ${showOptions ? "loc-btn-view-primary" : "loc-btn-view-outline"
+																				} ${isRegroupMode ? "loc-btn-disabled" : ""}`}
+																			onClick={() => {
+																				if (isRegroupMode) return; // Disable in regroup mode
+																				setExpandedOptions((p) => {
+																					const n = new Set(p);
+																					if (n.has(idx)) n.delete(idx);
+																					else n.add(idx);
+																					return n;
+																				});
+																				setExpandedScenes((p) => {
+																					const n = new Set(p);
+																					n.delete(idx);
+																					return n;
+																				});
+																			}}
+																			disabled={isRegroupMode}
+																		>
+																			View Options
+																		</button>
+
+																		<button
+																			className={`loc-btn-view ${showScenes ? "loc-btn-view-primary" : "loc-btn-view-outline"
+																				} ${isRegroupMode ? "loc-btn-disabled" : ""}`}
+																			onClick={() => {
+																				if (isRegroupMode) return; // Disable in regroup mode
+																				setExpandedScenes((p) => {
+																					const n = new Set(p);
+																					if (n.has(idx)) n.delete(idx);
+																					else n.add(idx);
+																					return n;
+																				});
+																				setExpandedOptions((p) => {
+																					const n = new Set(p);
+																					n.delete(idx);
+																					return n;
+																				});
+																			}}
+																		>
+																			View Scenes
+																		</button>
+																	</div>
+																</div>
+															);
+														})()}
+
+														{/* Right Panel */}
+														<div className="loc-right-panel">
+															{/* Table Header Bar - Only show for Options view */}
+															{!showScenes && (
+																<div className="loc-table-header-bar">
+																	{isSelectingMode.has(idx) && (
+																		<div className="loc-table-header-cell" style={{ width: 50 }}></div>
+																	)}
+																	<div className="loc-table-header-cell loc-col-sno">S.No</div>
+																	<div className="loc-table-header-cell loc-col-name">Set Name</div>
+																	<div className="loc-table-header-cell loc-col-address">Address</div>
+																	<div className="loc-table-header-cell loc-col-notes">Notes</div>
+																	<div className="loc-table-header-cell loc-col-media">Media</div>
+																	<div className="loc-table-header-cell loc-col-pin">Pin Link</div>
+																	<div className="loc-table-header-cell loc-col-dates">Dates</div>
+																	<div className="loc-table-header-cell loc-col-lock">Lock</div>
+																</div>
+															)}
+
+															{/* Table Content – DroppableSetZone wraps the whole area in regroup mode */}
+															<DroppableSetZone
+																locationId={location.location_id}
+																isRegroupMode={isRegroupMode}
+																extraClass="loc-table-content"
+															>
+																{!showScenes ? (
+																	// Options Table
+																	location.location_options && Object.keys(location.location_options).length > 0 ? (
+																		<table className="loc-data-table">
+																			<tbody>
+																				{Object.entries(location.location_options).map(([optId, opt], i) => {
+																					const key = `${idx}-${optId}`;
+																					const locked =
+																						location.locked === optId ||
+																						location.locked === parseInt(optId) ||
+																						String(location.locked) === optId;
+																					const hasAnyLocked =
+																						location.locked !== -1 &&
+																						location.locked !== "-1" &&
+																						location.locked !== null &&
+																						location.locked !== undefined;
+																					const otherLocked = hasAnyLocked && !locked;
+
+																					const locationName = opt.locationName || opt.location_name || "-";
+																					const address = opt.address || "-";
+																					const notes = opt.notes || "-";
+																					const media = opt.media || "-";
+																					const pinLink = opt.location_pin_link || opt.locationPinLink || "";
+																					const dates = opt.available_dates || opt.availableDates || [];
+																					const isFlexible = !!opt.flexible;
+																					const formatDate = (dateStr) => {
+																						const d = new Date(dateStr);
+																						return d.toLocaleDateString("en-US", {
+																							month: "short",
+																							day: "numeric",
+																						});
+																					};
+																					const datesDisplay =
+																						isFlexible
+																							? "Flexible"
+																							: Array.isArray(dates) && dates.length > 0
+																								? dates.length <= 3
+																									? dates.map(formatDate).join(", ")
+																									: `${dates
+																										.slice(0, 2)
+																										.map(formatDate)
+																										.join(", ")} +${dates.length - 2
+																									} more`
+																								: "-";
+
+																					return (
+																						<tr
+																							key={optId}
+																							className={`${locked ? "loc-row-locked" : ""} loc-data-row-clickable`}
+																							onClick={() => {
+																								setOptionDetailsModal({
+																									option: opt,
+																									isLocked: locked,
+																									locationName: location.location,
+																								});
+																							}}
+																						>
+																							{isSelectingMode.has(idx) && (
+																								<td style={{ width: 50 }} onClick={(e) => e.stopPropagation()}>
+																									<input
+																										type="checkbox"
+																										className="loc-select-checkbox"
+																										checked={selectedOptions.has(key)}
+																										onChange={(e) => {
+																											setSelectedOptions((prev) => {
+																												const next = new Set(
+																													prev
+																												);
+																												if (e.target.checked) {
+																													next.add(key);
+																												} else {
+																													next.delete(key);
+																												}
+																												return next;
+																											});
+																										}}
+																									/>
+																								</td>
+																							)}
+																							<td style={{ width: 70 }}>{i + 1}</td>
+																							<td style={{ width: 140 }}>{locationName}</td>
+																							<td style={{ width: 110 }}>{address}</td>
+																							<td style={{ width: 90 }} className="loc-truncate">{notes}</td>
+																							<td style={{ width: 80 }} className="loc-truncate">{media}</td>
+																							<td style={{ width: 80 }} onClick={(e) => e.stopPropagation()}>
+																								{pinLink ? (
+																									<a
+																										href={pinLink}
+																										target="_blank"
+																										rel="noopener noreferrer"
+																										className="loc-link"
+																									>
+																										View
+																									</a>
+																								) : (
+																									"-"
+																								)}
+																							</td>
+																							<td
+																								style={{ width: 90 }}
 																								title={
-																									locked
-																										? "Click to unlock"
-																										: otherLocked
-																											? "Another option is locked"
-																											: "Click to lock"
+																									Array.isArray(dates) && dates.length > 0
+																										? `Available dates:\n${dates.join(
+																											"\n"
+																										)}`
+																										: "No dates set"
 																								}
 																							>
-																								{locked ? (
-																									<PiLockSimple />
-																								) : (
-																									<PiLockSimpleOpen />
-																								)}
-																								{locked ? "Locked" : "Lock"}
-																							</button>
-																						</td>
-																					</tr>
-																				);
-																			})}
-																		</tbody>
-																	</table>
-																) : (
-																	<div className="loc-empty-state">
-																		<PiFolderPlus className="loc-empty-icon" />
-																		<span className="loc-empty-text">
-																			No Data added for this Set
-																		</span>
-																	</div>
-																)
-															) : // Scenes Table
-																(location.scenes || []).length > 0 || isRegroupMode ? (
-																	<div
-																		className={`loc-scenes-drop-zone ${isRegroupMode ? "loc-drop-active" : ""} ${draggedScene && dragSourceLocationId !== location.location_id ? "loc-drop-target" : ""}`}
-																		onDragOver={(e) => handleDragOver(e, location.location_id)}
-																		onDrop={(e) => handleDrop(e, location.location_id)}
-																	>
-																		{isRegroupMode && (location.scenes || []).length === 0 && (
-																			<div className="loc-drop-placeholder">
-																				Drop scenes here
-																			</div>
-																		)}
+																								{datesDisplay}
+																							</td>
+																							<td onClick={(e) => e.stopPropagation()}>
+																								<div className="loc-option-actions">
+																									<button
+																										className={`loc-lock-btn ${locked ? "loc-locked" : ""
+																											} ${otherLocked ? "loc-disabled" : ""}`}
+																										onClick={() =>
+																											toggleLockOption(
+																												idx,
+																												optId,
+																												location.location_id
+																											)
+																										}
+																										disabled={otherLocked}
+																										title={
+																											locked
+																												? "Click to unlock"
+																												: otherLocked
+																													? "Another option is locked"
+																													: "Click to lock"
+																										}
+																									>
+																										{locked ? (
+																											<PiLockSimple />
+																										) : (
+																											<PiLockSimpleOpen />
+																										)}
+																										{locked ? "Locked" : "Lock"}
+																									</button>
+																									<button
+																										className="loc-option-edit-btn"
+																										onClick={() => openEditOptionModal(idx, optId, opt)}
+																										title="Edit option"
+																									>
+																										<PiPencilSimple />
+																										Edit
+																									</button>
+																								</div>
+																							</td>
+																						</tr>
+																					);
+																				})}
+																			</tbody>
+																		</table>
+																	) : (
+																		<div className="loc-empty-state">
+																			<PiFolderPlus className="loc-empty-icon" />
+																			<span className="loc-empty-text">
+																				No Data added for this Set
+																			</span>
+																		</div>
+																	)
+																) : // Scenes Table (dnd-kit in regroup mode)
+																	(location.scenes || []).length > 0 || isRegroupMode ? (
 																		<table className="loc-data-table">
 																			<thead>
 																				<tr>
-																					{hasEpisodeInSets && <th>Episode</th>}
-																					<th>Scene No</th>
-																					<th>Int./Ext.</th>
-																					<th>Set</th>
-																					<th>Time</th>
+																					{hasEpisodeInSets && <th style={{ width: "8%" }}>Episode</th>}
+																					<th style={{ width: "8%" }}>Scene No</th>
+																					<th style={{ width: "8%" }}>Int./Ext.</th>
+																					<th style={{ width: "20%" }}>Location</th>
+																					<th style={{ width: "8%" }}>Time</th>
 																					<th>Synopsis</th>
-																					<th>Cast</th>
+																					<th style={{ width: "15%" }}>Cast</th>
 																				</tr>
 																			</thead>
 																			<tbody>
-																				{(location.scenes || []).map((scene, i) => (
-																					<tr
-																						key={i}
-																						draggable={isRegroupMode}
-																						onDragStart={(e) => handleDragStart(e, scene, location.location_id)}
-																						onDragEnd={handleDragEnd}
-																						className={`${isRegroupMode ? "loc-scene-draggable" : ""} ${draggedScene && String(draggedScene.scene_id) === String(scene.scene_id) ? "loc-scene-dragging" : ""}`}
-																					>
-																						{hasEpisodeInSets && <td>{episodeMap[String(scene.scene_number)] || "-"}</td>}
-																						<td>{scene.scene_number}</td>
-																						<td>{scene.int_ext}</td>
-																						<td>{location.location}</td>
-																						<td>{scene.time}</td>
-																						<td className="loc-synopsis-cell">{getSynopsisForScene(scene.scene_number)}</td>
-																						<td>{getCastForScene(scene)}</td>
-																					</tr>
-																				))}
+																				{(location.scenes || []).map((scene, i) =>
+																					isRegroupMode ? (
+																						<DraggableSceneRow
+																							key={`${location.location_id}::${scene.scene_id}`}
+																							scene={scene}
+																							locationId={String(location.location_id)}
+																							hasEpisode={hasEpisodeInSets}
+																							episodeMap={episodeMap}
+																							getLocationForScene={getLocationForScene}
+																							getSynopsisForScene={getSynopsisForScene}
+																							getCastForScene={getCastForScene}
+																						/>
+																					) : (
+																						<tr key={i}>
+																							{hasEpisodeInSets && <td>{episodeMap[String(scene.scene_number)] || "-"}</td>}
+																							<td>{scene.scene_number}</td>
+																							<td>{scene.int_ext}</td>
+																							<td>{getLocationForScene(scene)}</td>
+																							<td>{scene.time}</td>
+																							<td className="loc-synopsis-cell">{getSynopsisForScene(scene.scene_number)}</td>
+																							<td>{getCastForScene(scene)}</td>
+																						</tr>
+																					)
+																				)}
 																			</tbody>
 																		</table>
-																	</div>
-																) : (
-																	<div className="loc-empty-state">
-																		<PiFolderPlus className="loc-empty-icon" />
-																		<span className="loc-empty-text">No scenes listed for this Set</span>
-																	</div>
-																)}
+																	) : (
+																		<div className="loc-empty-state">
+																			<PiFolderPlus className="loc-empty-icon" />
+																			<span className="loc-empty-text">No scenes listed for this Set</span>
+																		</div>
+																	)}
+															</DroppableSetZone>
 														</div>
 													</div>
-												</div>
-											)}
-										</div>
-									);
-								})}
-							</div>
+												)}
+											</div>
+										);
+									})}
+								</div>
+								<DragOverlay
+									adjustScale={false}
+									dropAnimation={{ duration: 180, easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)" }}
+								>
+									{activeId ? (() => {
+										const [locId, sceneId] = activeId.split("::");
+										const loc = (locationData?.locations || []).find(l => String(l.location_id) === locId);
+										const scene = (loc?.scenes || []).find(s => String(s.scene_id) === sceneId);
+										if (!scene) return null;
+										return (
+											<table className="loc-data-table loc-drag-overlay-table">
+												<tbody>
+													<tr className="loc-drag-overlay-row-tr">
+														{hasEpisodeInSets && <td><strong>{episodeMap[String(scene.scene_number)] || "–"}</strong></td>}
+														<td><strong>{scene.scene_number}</strong></td>
+														<td>{scene.int_ext}</td>
+														<td>{getLocationForScene(scene)}</td>
+														<td>{scene.time}</td>
+														<td className="loc-synopsis-cell">{getSynopsisForScene(scene.scene_number)}</td>
+														<td>{getCastForScene(scene)}</td>
+													</tr>
+												</tbody>
+											</table>
+										);
+									})() : null}
+								</DragOverlay>
+							</DndContext>
 						</>
 					)}
 				</div>
@@ -1977,6 +2366,7 @@ const Locations = () => {
 					onSubmit={handleFormSubmit}
 					optionForm={optionForm}
 					setOptionForm={memoizedSetOptionForm}
+					isEditing={!!editingOptionContext}
 				/>
 			)}
 
@@ -2000,72 +2390,122 @@ const Locations = () => {
 						</div>
 
 						<div className="loc-option-modal-content">
-							<div className="loc-option-modal-section">
-								<div className="loc-option-modal-label">📍 Address</div>
-								<div className="loc-option-modal-value">
-									{optionDetailsModal.option.address || "Not specified"}
-								</div>
-							</div>
+							{(() => {
+								const dates = optionDetailsModal.option.available_dates || optionDetailsModal.option.availableDates || [];
+								const unavailableDates = optionDetailsModal.option.unavailable_dates || optionDetailsModal.option.unavailableDates || [];
+								const isFlexible = !!optionDetailsModal.option.flexible;
+								const pinLink = optionDetailsModal.option.location_pin_link || optionDetailsModal.option.locationPinLink;
 
-							<div className="loc-option-modal-section">
-								<div className="loc-option-modal-label">📝 Notes</div>
-								<div className="loc-option-modal-value loc-option-modal-notes">
-									{optionDetailsModal.option.notes || "No notes"}
-								</div>
-							</div>
-
-							<div className="loc-option-modal-section">
-								<div className="loc-option-modal-label">🎬 Media</div>
-								<div className="loc-option-modal-value">
-									{optionDetailsModal.option.media || "No media"}
-								</div>
-							</div>
-
-							<div className="loc-option-modal-section">
-								<div className="loc-option-modal-label">🗺️ Location Pin</div>
-								<div className="loc-option-modal-value">
-									{optionDetailsModal.option.location_pin_link || optionDetailsModal.option.locationPinLink ? (
-										<a
-											href={optionDetailsModal.option.location_pin_link || optionDetailsModal.option.locationPinLink}
-											target="_blank"
-											rel="noopener noreferrer"
-											className="loc-option-modal-link"
-										>
-											Open in Maps →
-										</a>
-									) : (
-										"No location pin"
-									)}
-								</div>
-							</div>
-
-							<div className="loc-option-modal-section loc-option-modal-dates-section">
-								<div className="loc-option-modal-label">
-									📅 Available Dates ({(optionDetailsModal.option.available_dates || optionDetailsModal.option.availableDates || []).length})
-								</div>
-								<div className="loc-option-modal-dates-container">
-									{(() => {
-										const dates = optionDetailsModal.option.available_dates || optionDetailsModal.option.availableDates || [];
-										if (dates.length === 0) {
-											return <span className="loc-option-modal-no-dates">No dates specified</span>;
-										}
-										return (
-											<div className="loc-option-modal-dates-list">
-												{dates.map((d) => (
-													<span key={d} className="loc-option-modal-date-tag">
-														{new Date(d).toLocaleDateString("en-US", {
-															weekday: "short",
-															month: "short",
-															day: "numeric",
-															year: "numeric",
-														})}
-													</span>
-												))}
+								return (
+									<>
+										<div className="loc-option-modal-summary">
+											<div className="loc-option-modal-stat">
+												<span className="loc-option-modal-stat-label">Availability</span>
+												<span className={`loc-option-modal-stat-value ${isFlexible ? "is-flexible" : ""}`}>
+													{isFlexible ? "Flexible" : "Fixed"}
+												</span>
 											</div>
-										);
-									})()}
-								</div>
-							</div>
+											<div className="loc-option-modal-stat">
+												<span className="loc-option-modal-stat-label">Available</span>
+												<span className="loc-option-modal-stat-value">{isFlexible ? "Flexible" : dates.length}</span>
+											</div>
+											<div className="loc-option-modal-stat">
+												<span className="loc-option-modal-stat-label">Unavailable</span>
+												<span className="loc-option-modal-stat-value">{unavailableDates.length}</span>
+											</div>
+										</div>
+
+										<div className="loc-option-modal-grid">
+											<div className="loc-option-modal-section">
+												<div className="loc-option-modal-label">Address</div>
+												<div className="loc-option-modal-value">
+													{optionDetailsModal.option.address || "Not specified"}
+												</div>
+											</div>
+
+											<div className="loc-option-modal-section">
+												<div className="loc-option-modal-label">Location Pin</div>
+												<div className="loc-option-modal-value">
+													{pinLink ? (
+														<a
+															href={pinLink}
+															target="_blank"
+															rel="noopener noreferrer"
+															className="loc-option-modal-link"
+														>
+															Open in Maps
+														</a>
+													) : (
+														"No location pin"
+													)}
+												</div>
+											</div>
+										</div>
+
+										<div className="loc-option-modal-section">
+											<div className="loc-option-modal-label">Notes</div>
+											<div className="loc-option-modal-value loc-option-modal-notes">
+												{optionDetailsModal.option.notes || "No notes"}
+											</div>
+										</div>
+
+										<div className="loc-option-modal-section">
+											<div className="loc-option-modal-label">Media</div>
+											<div className="loc-option-modal-value">
+												{optionDetailsModal.option.media || "No media"}
+											</div>
+										</div>
+
+										<div className="loc-option-modal-section loc-option-modal-dates-section">
+											<div className="loc-option-modal-label">
+												Available Dates {isFlexible ? "(Flexible)" : `(${dates.length})`}
+											</div>
+											<div className="loc-option-modal-dates-container">
+												{isFlexible ? (
+													<span className="loc-option-modal-flexible-pill">Flexible</span>
+												) : dates.length === 0 ? (
+													<span className="loc-option-modal-no-dates">No dates specified</span>
+												) : (
+													<div className="loc-option-modal-dates-list">
+														{dates.map((d) => (
+															<span key={d} className="loc-option-modal-date-tag is-available">
+																{new Date(d).toLocaleDateString("en-US", {
+																	weekday: "short",
+																	month: "short",
+																	day: "numeric",
+																	year: "numeric",
+																})}
+															</span>
+														))}
+													</div>
+												)}
+											</div>
+										</div>
+
+										{unavailableDates.length > 0 && (
+											<div className="loc-option-modal-section loc-option-modal-dates-section">
+												<div className="loc-option-modal-label">
+													Unavailable Dates ({unavailableDates.length})
+												</div>
+												<div className="loc-option-modal-dates-container">
+													<div className="loc-option-modal-dates-list">
+														{unavailableDates.map((d) => (
+															<span key={d} className="loc-option-modal-date-tag is-unavailable">
+																{new Date(d).toLocaleDateString("en-US", {
+																	weekday: "short",
+																	month: "short",
+																	day: "numeric",
+																	year: "numeric",
+																})}
+															</span>
+														))}
+													</div>
+												</div>
+											</div>
+										)}
+									</>
+								);
+							})()}
 						</div>
 
 						<div className="loc-option-modal-footer">
@@ -2173,6 +2613,9 @@ const Locations = () => {
 					<div className="loc-modal loc-modal-merge" onClick={(e) => e.stopPropagation()}>
 						<h3 className="loc-modal-title">Merge Sets</h3>
 						<div className="loc-merge-modal-content">
+							<p className="loc-merge-warning-text">
+								This action will delete both original sets and update all associated scenes to use the new merged set.
+							</p>
 							<p className="loc-merge-info-text">
 								You are merging the following sets:
 							</p>
@@ -2218,9 +2661,6 @@ const Locations = () => {
 								</p>
 							</div>
 
-							<p className="loc-merge-warning-text">
-								This action will delete both original sets and update all associated scenes to use the new merged set.
-							</p>
 						</div>
 						<div className="loc-modal-buttons">
 							<button
@@ -2273,6 +2713,11 @@ const Locations = () => {
 									({splitLocationScenes.length} scenes)
 								</span>
 							</div>
+
+							<p className="loc-split-warning-text">
+								This will delete the original set and create two new sets. Set options will be duplicated to both new sets.
+								In the schedule, the new sets will have empty dates and flexible dates disabled.
+							</p>
 
 							<div className="loc-split-names-row">
 								<div className="loc-form-group loc-split-name-group">
@@ -2366,22 +2811,23 @@ const Locations = () => {
 										<strong>{scenesForSet2.size}</strong> scene(s) → {splitNewName2 || "Set 2"}
 									</span>
 									<span className="loc-split-summary-item loc-split-unassigned">
-										<strong>{splitLocationScenes.length - scenesForSet1.size - scenesForSet2.size}</strong> unassigned
+										<strong>{totalSplitScenes - assignedSplitScenes}</strong> unassigned
 									</span>
 								</div>
 							</div>
 
-							<p className="loc-split-warning-text">
-								This will delete the original set and create two new sets. Set options will be duplicated to both new sets.
-								In the schedule, the new sets will have empty dates and flexible dates disabled.
-							</p>
+							{hasUnassignedSplitScenes && (
+								<p className="loc-split-warning-text">
+									Assign all scenes to one of the two new sets to enable splitting.
+								</p>
+							)}
 						</div>
 						<div className="loc-modal-buttons">
 							<button
 								type="button"
 								onClick={performSplitLocation}
 								className="loc-submit-btn"
-								disabled={!splitNewName1.trim() || !splitNewName2.trim() || (scenesForSet1.size === 0 && scenesForSet2.size === 0)}
+								disabled={!splitNewName1.trim() || !splitNewName2.trim() || totalSplitScenes === 0 || hasUnassignedSplitScenes}
 							>
 								<PiScissors />
 								Split Set

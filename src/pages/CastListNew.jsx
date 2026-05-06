@@ -24,6 +24,7 @@ import {
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import "../css/CastListNew.css";
+import EmptyState from "../components/EmptyState";
 
 /*
   CastList - Figma Design Implementation
@@ -292,30 +293,30 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 													Mark Unavailable (Red)
 												</label>
 											</div>
-									<div className="cln-date-range-inputs">
-										<input
-											type="date"
-											value={dateRangeStart}
-											onChange={(e) => setDateRangeStart(e.target.value)}
-											className="cln-date-input"
-										/>
-										<span className="cln-date-separator">to</span>
-										<input
-											type="date"
-											value={dateRangeEnd}
-											min={dateRangeStart}
-											onChange={(e) => setDateRangeEnd(e.target.value)}
-											className="cln-date-input"
-										/>
-										<button
-											type="button"
-											onClick={addDateRange}
-											className="cln-add-range-btn"
-											disabled={!dateRangeStart || !dateRangeEnd}
-										>
-											Add Range
-										</button>
-									</div>
+											<div className="cln-date-range-inputs">
+												<input
+													type="date"
+													value={dateRangeStart}
+													onChange={(e) => setDateRangeStart(e.target.value)}
+													className="cln-date-input"
+												/>
+												<span className="cln-date-separator">to</span>
+												<input
+													type="date"
+													value={dateRangeEnd}
+													min={dateRangeStart}
+													onChange={(e) => setDateRangeEnd(e.target.value)}
+													className="cln-date-input"
+												/>
+												<button
+													type="button"
+													onClick={addDateRange}
+													className="cln-add-range-btn"
+													disabled={!dateRangeStart || !dateRangeEnd}
+												>
+													Add Range
+												</button>
+											</div>
 											<div className="cln-date-picker-summary">
 												<span>
 													Available: {selectedDates.length} | Unavailable: {selectedUnavailableDates.length}
@@ -324,9 +325,9 @@ const AddActorOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOpti
 													Clear All
 												</button>
 											</div>
-									<div className="cln-calendar-wrapper">
-										<Calendar selectRange={false} onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
-									</div>
+											<div className="cln-calendar-wrapper">
+												<Calendar selectRange={false} onClickDay={handleCalendarDateClick} tileClassName={tileClassName} />
+											</div>
 											{(selectedDates.length > 0 || selectedUnavailableDates.length > 0) && (
 												<div className="cln-selected-dates">
 													{selectedDates.length > 0 && (
@@ -481,6 +482,10 @@ const CastListNew = () => {
 			setIsLoading(true);
 			try {
 				const res = await fetch(getApiUrl(`/api/${id}/cast-list`));
+				if (res.status === 404) {
+					setCastData({ cast_list: [] });
+					return;
+				}
 				if (!res.ok) throw new Error("Failed to fetch cast list");
 				const data = await res.json();
 				CalculateScenceChars(data);
@@ -1210,9 +1215,7 @@ const CastListNew = () => {
 							<div className="cln-error-message">⚠️ {error}</div>
 						</div>
 					) : !castData || !(Array.isArray(castData.cast_list) && castData.cast_list.length) ? (
-						<div className="cln-empty-container">
-							<div className="cln-message">No cast members found</div>
-						</div>
+						<EmptyState title="No Data Available" subtitle="Upload a script to view characters." />
 					) : (
 						<>
 							{/* Page Header */}
@@ -1257,7 +1260,7 @@ const CastListNew = () => {
 												}}
 											>
 												<PiArrowsInCardinal />
-												Compress All
+												Collapse all
 											</button>
 										</>
 									) : characterSelectionMode === "remove" ? (
@@ -1475,17 +1478,16 @@ const CastListNew = () => {
 															<PiMinusCircle />
 															{!isSelectingMode.has(idx)
 																? "Remove Option"
-																: `Remove Selected (${
-																		Array.from(selectedOptions).filter((key) => key.startsWith(`${idx}-`))
-																			.length
-																	})`}
+																: `Remove Selected (${Array.from(selectedOptions).filter((key) => key.startsWith(`${idx}-`))
+																	.length
+																})`}
 														</button>
 													</div>
 												)}
 											</div>
 
 											{/* Card Body */}
-											{!isCollapsed && (
+											<div className={`cln-card-expandable ${!isCollapsed ? "expanded" : ""}`}>
 												<div className="cln-card-body">
 													{/* Left Panel */}
 													<div className="cln-left-panel">
@@ -1537,9 +1539,8 @@ const CastListNew = () => {
 														{/* View Buttons */}
 														<div className="cln-view-buttons">
 															<button
-																className={`cln-btn-view ${
-																	showOptions ? "cln-btn-view-primary" : "cln-btn-view-outline"
-																}`}
+																className={`cln-btn-view ${showOptions ? "cln-btn-view-primary" : "cln-btn-view-outline"
+																	}`}
 																onClick={() => {
 																	setExpandedOptions((p) => {
 																		const n = new Set(p);
@@ -1558,9 +1559,8 @@ const CastListNew = () => {
 															</button>
 
 															<button
-																className={`cln-btn-view ${
-																	showScenes ? "cln-btn-view-primary" : "cln-btn-view-outline"
-																}`}
+																className={`cln-btn-view ${showScenes ? "cln-btn-view-primary" : "cln-btn-view-outline"
+																	}`}
 																onClick={() => {
 																	setExpandedScenes((p) => {
 																		const n = new Set(p);
@@ -1604,7 +1604,7 @@ const CastListNew = () => {
 															{!showScenes ? (
 																// Options Table
 																member.cast_options && Object.keys(member.cast_options).length > 0 ? (
-																	<table className="cln-data-table">
+																	<table className="cln-data-table cln-options-table">
 																		<tbody>
 																			{Object.entries(member.cast_options).map(([optId, opt], i) => {
 																				const key = `${idx}-${optId}`;
@@ -1670,11 +1670,10 @@ const CastListNew = () => {
 																						? dates.length <= 3
 																							? dates.map(formatDate).join(", ")
 																							: `${dates
-																									.slice(0, 2)
-																									.map(formatDate)
-																									.join(", ")} +${
-																									dates.length - 2
-																								} more`
+																								.slice(0, 2)
+																								.map(formatDate)
+																								.join(", ")} +${dates.length - 2
+																							} more`
 																						: Array.isArray(unavailableDates) && unavailableDates.length > 0
 																							? `Unavailable: ${unavailableDates.length}`
 																							: "-";
@@ -1724,8 +1723,8 @@ const CastListNew = () => {
 																							title={
 																								Array.isArray(dates) && dates.length > 0
 																									? `Available dates:\n${dates.join(
-																											"\n",
-																										)}`
+																										"\n",
+																									)}`
 																									: "No dates set"
 																							}
 																						>
@@ -1734,9 +1733,8 @@ const CastListNew = () => {
 																						<td onClick={(e) => e.stopPropagation()}>
 																							<div className="cln-option-actions">
 																								<button
-																									className={`cln-lock-btn ${
-																										locked ? "cln-locked" : ""
-																									} ${otherLocked ? "cln-disabled" : ""}`}
+																									className={`cln-lock-btn ${locked ? "cln-locked" : ""
+																										} ${otherLocked ? "cln-disabled" : ""}`}
 																									onClick={() =>
 																										toggleLockOption(
 																											idx,
@@ -1784,55 +1782,55 @@ const CastListNew = () => {
 																	</div>
 																)
 															) : // Scenes Table
-															(member.scenes || []).length > 0 ? (
-																<table className="cln-data-table">
-																	<thead>
-																		<tr>
-																			{hasEpisodeInScenes && <th>Episode</th>}
-																			<th>Scene No</th>
-																			<th>Int./Ext.</th>
-																			<th>Location</th>
-																			<th>Time</th>
-																			<th>Synopsis</th>
-																			<th>Characters</th>
-																		</tr>
-																	</thead>
-																	<tbody>
-																		{(member.scenes || []).map((s, i) => {
-																			const episodeNo = getData(s, "Episode Number");
-																			const sceneNo = getData(s, "Scene Number");
-																			const intExt = getData(s, "Int./Ext.");
-																			const location = getData(s, "Location");
-																			const time = getData(s, "Time");
-																			const synopsis = getData(s, "Synopsis");
-																			const characters = sceneChars[s]
-																				? sceneChars[s].join(", ")
-																				: "N/A";
+																(member.scenes || []).length > 0 ? (
+																	<table className="cln-data-table">
+																		<thead>
+																			<tr>
+																				{hasEpisodeInScenes && <th style={{ width: "8%" }}>Episode</th>}
+																				<th style={{ width: "8%" }}>Scene No</th>
+																				<th style={{ width: "8%" }}>Int./Ext.</th>
+																				<th style={{ width: "20%" }}>Location</th>
+																				<th style={{ width: "8%" }}>Time</th>
+																				<th>Synopsis</th>
+																				<th style={{ width: "15%" }}>Characters</th>
+																			</tr>
+																		</thead>
+																		<tbody>
+																			{(member.scenes || []).map((s, i) => {
+																				const episodeNo = getData(s, "Episode Number");
+																				const sceneNo = getData(s, "Scene Number");
+																				const intExt = getData(s, "Int./Ext.");
+																				const location = getData(s, "Location");
+																				const time = getData(s, "Time");
+																				const synopsis = getData(s, "Synopsis");
+																				const characters = sceneChars[s]
+																					? sceneChars[s].join(", ")
+																					: "N/A";
 
-																			return (
-																				<tr key={i}>
-																			{hasEpisodeInScenes && <td>{episodeNo !== "N/A" ? episodeNo : "-"}</td>}
-																			<td>{sceneNo !== "N/A" ? sceneNo : i + 1}</td>
-																					<td>{intExt}</td>
-																					<td>{location}</td>
-																					<td>{time}</td>
-																					<td>{synopsis}</td>
-																					<td>{characters}</td>
-																				</tr>
-																			);
-																		})}
-																	</tbody>
-																</table>
-															) : (
-																<div className="cln-empty-state">
-																	<PiFolderPlus className="cln-empty-icon" />
-																	<span className="cln-empty-text">No scenes listed for this Character</span>
-																</div>
-															)}
+																				return (
+																					<tr key={i}>
+																						{hasEpisodeInScenes && <td>{episodeNo !== "N/A" ? episodeNo : "-"}</td>}
+																						<td>{sceneNo !== "N/A" ? sceneNo : i + 1}</td>
+																						<td>{intExt}</td>
+																						<td>{location}</td>
+																						<td>{time}</td>
+																						<td>{synopsis}</td>
+																						<td>{characters}</td>
+																					</tr>
+																				);
+																			})}
+																		</tbody>
+																	</table>
+																) : (
+																	<div className="cln-empty-state">
+																		<PiFolderPlus className="cln-empty-icon" />
+																		<span className="cln-empty-text">No scenes listed for this Character</span>
+																	</div>
+																)}
 														</div>
 													</div>
 												</div>
-											)}
+											</div>
 										</div>
 									);
 								})}

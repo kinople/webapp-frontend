@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { fetchWithAuth, getApiUrl } from "../utils/api";
+import CustomDropdown from "../components/CustomDropdown";
 import "../css/Script.css";
 
 // Local assets
@@ -658,21 +659,22 @@ const Script = () => {
 				<div className="script-header-left">
 					{isEpisodicProject && (
 						<div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 12 }}>
-							<select
-								className="script-model-select"
-								value={selectedEpisodeNumber}
-								onChange={(e) => setSelectedEpisodeNumber(e.target.value)}
-							>
-								{episodes.length === 0 ? (
-									<option value="">No episodes yet</option>
-								) : (
-									episodes.map((ep) => (
-										<option key={String(ep.ep_number)} value={String(ep.ep_number)}>
-											{`Ep ${ep.ep_number}${ep.ep_name ? ` - ${ep.ep_name}` : ""}`}
-										</option>
-									))
-								)}
-							</select>
+							{episodes.length === 0 ? (
+								<CustomDropdown
+									value=""
+									onChange={() => {}}
+									options={[{ value: "", label: "No episodes yet" }]}
+								/>
+							) : (
+								<CustomDropdown
+									value={selectedEpisodeNumber}
+									onChange={(e) => setSelectedEpisodeNumber(e.target.value)}
+									options={episodes.map((ep) => ({
+										value: String(ep.ep_number),
+										label: `Ep ${ep.ep_number}${ep.ep_name ? ` - ${ep.ep_name}` : ""}`
+									}))}
+								/>
+							)}
 						</div>
 					)}
 
@@ -909,20 +911,20 @@ const Script = () => {
 												</div>
 
 												{episodeChoice === "existing" ? (
-													<select
+													<CustomDropdown
 														value={importExistingEpisode || ""}
 														onChange={(e) => setImportExistingEpisode(e.target.value)}
-														className="script-model-select"
-														style={{ marginTop: 8 }}
+														style={{ marginTop: 8, width: "100%" }}
 														disabled={isProcessing}
-													>
-														<option value="">Select Episode...</option>
-														{episodes.map((ep) => (
-															<option key={String(ep.ep_number)} value={String(ep.ep_number)}>
-																{`Ep ${ep.ep_number}${ep.ep_name ? ` - ${ep.ep_name}` : ""}`}
-															</option>
-														))}
-													</select>
+														placeholder="Select Episode..."
+														options={[
+															{ value: "", label: "Select Episode..." },
+															...episodes.map((ep) => ({
+																value: String(ep.ep_number),
+																label: `Ep ${ep.ep_number}${ep.ep_name ? ` - ${ep.ep_name}` : ""}`
+															}))
+														]}
+													/>
 												) : (
 													<div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
 														<input
@@ -951,17 +953,18 @@ const Script = () => {
 									{user === "2" && (
 										<div className="script-model-selection">
 											<label className="script-model-label">Select LLM Model:</label>
-											<select
+											<CustomDropdown
 												value={selectedModel}
 												onChange={(e) => setSelectedModel(e.target.value)}
-												className="script-model-select"
+												style={{ width: "100%" }}
 												disabled={isProcessing}
-											>
-												<option value="GPT-4.1 (2025-04-14)">GPT-4.1 (2025-04-14)</option>
-												<option value="gpt-5">GPT-5 (2025-08-07)</option>
-												<option value="gpt-5-nano-2025-08-07">GPT-5 Nano (2025-08-07)</option>
-												<option value="gpt-5-mini-2025-08-07">GPT-5 Mini (2025-08-07)</option>
-											</select>
+												options={[
+													{ value: "GPT-4.1 (2025-04-14)", label: "GPT-4.1 (2025-04-14)" },
+													{ value: "gpt-5", label: "GPT-5 (2025-08-07)" },
+													{ value: "gpt-5-nano-2025-08-07", label: "GPT-5 Nano (2025-08-07)" },
+													{ value: "gpt-5-mini-2025-08-07", label: "GPT-5 Mini (2025-08-07)" }
+												]}
+											/>
 										</div>
 									)}
 
