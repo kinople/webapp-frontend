@@ -6,6 +6,7 @@ import '../css/ManageShootDays.css';
 import { fetchWithAuth, getApiUrl } from '../utils/api';
 import { getToken } from '../utils/auth';
 import EmptyState from '../components/EmptyState';
+import CustomDatePicker from '../components/CustomDatePicker';
 
 const CallSheetHome = () => {
     const navigate = useNavigate();
@@ -540,9 +541,9 @@ const CallSheetHome = () => {
                             <p>Loading call sheets...</p>
                         </div>
                     ) : breakdownScenes.length === 0 && shootDays.length === 0 ? (
-                        <EmptyState 
-                            title="No Data Available" 
-                            subtitle="Upload a script to create call sheets." 
+                        <EmptyState
+                            title="No Data Available"
+                            subtitle="Upload a script to create call sheets."
                             className="msd-call-sheet-empty-wrapper"
                             cardClassName="msd-call-sheet-empty-card"
                         />
@@ -601,8 +602,7 @@ const CallSheetHome = () => {
                             </label>
                             <label>
                                 Shoot Date:
-                                <input
-                                    type="date"
+                                <CustomDatePicker
                                     className="msd-input"
                                     value={createData.date || ''}
                                     onChange={(event) => handleCreateDateChange(event.target.value)}

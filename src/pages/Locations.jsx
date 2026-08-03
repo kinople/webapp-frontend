@@ -29,6 +29,7 @@ import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import "../css/Locations.css";
 import EmptyState from "../components/EmptyState";
+import CustomDatePicker from "../components/CustomDatePicker";
 
 // Create a memoized modal component
 const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionForm, setOptionForm, isEditing }) => {
@@ -280,15 +281,13 @@ const MemoizedAddLocationOptionModal = React.memo(({ onClose, onSubmit, optionFo
 												</label>
 											</div>
 											<div className="loc-date-range-inputs">
-												<input
-													type="date"
+												<CustomDatePicker
 													value={dateRangeStart}
 													onChange={(e) => setDateRangeStart(e.target.value)}
 													className="loc-date-input"
 												/>
 												<span className="loc-date-separator">to</span>
-												<input
-													type="date"
+												<CustomDatePicker
 													value={dateRangeEnd}
 													min={dateRangeStart}
 													onChange={(e) => setDateRangeEnd(e.target.value)}

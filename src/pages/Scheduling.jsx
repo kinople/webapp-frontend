@@ -37,7 +37,7 @@ const CreateScheduleModal = ({ onClose, onSubmit, projectId }) => {
     const handleLocationChange = (locationId, isChecked) => {
         setFormData(prev => ({
             ...prev,
-            locationGroups: isChecked 
+            locationGroups: isChecked
                 ? [...prev.locationGroups, locationId]
                 : prev.locationGroups.filter(id => id !== locationId)
         }));
@@ -85,7 +85,7 @@ const CreateScheduleModal = ({ onClose, onSubmit, projectId }) => {
                                             onChange={(e) => handleLocationChange(locationItem.location_id, e.target.checked)}
                                             style={styles.checkbox}
                                         />
-                                        <label 
+                                        <label
                                             htmlFor={`location-${index}`}
                                             style={styles.locationLabel}
                                         >
@@ -126,14 +126,14 @@ const CreateScheduleModal = ({ onClose, onSubmit, projectId }) => {
                     </div>
 
                     <div style={styles.buttonGroup}>
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             onClick={onClose}
                             style={styles.cancelButton}
                         >
                             Cancel
                         </button>
-                        <button 
+                        <button
                             type="submit"
                             style={styles.addButton}
                             disabled={loadingLocations}
@@ -164,7 +164,7 @@ const Scheduling = () => {
                     throw new Error('Failed to fetch schedules');
                 }
                 const data = await response.json();
-                
+
                 // Handle the new API response structure
                 if (data.schedules && Array.isArray(data.schedules)) {
                     setSchedules(data.schedules);
@@ -219,7 +219,7 @@ const Scheduling = () => {
 
     const handleDeleteSchedule = async (e, scheduleId) => {
         e.stopPropagation(); // Prevent card click when clicking delete
-        
+
         if (!confirm('Are you sure you want to delete this schedule? This action cannot be undone.')) {
             return;
         }
@@ -248,7 +248,7 @@ const Scheduling = () => {
                 <div>
                     <h2 style={styles.pageTitle}>Scheduling</h2>
                 </div>
-                <button 
+                <button
                     style={styles.createButton}
                     onClick={() => setShowCreateModal(true)}
                     disabled={isLoading}
@@ -268,8 +268,8 @@ const Scheduling = () => {
                 ) : (
                     <div style={styles.schedulesGrid}>
                         {schedules.map((schedule) => (
-                            <div 
-                                key={schedule.id} 
+                            <div
+                                key={schedule.id}
                                 style={styles.scheduleCard}
                                 onClick={() => handleScheduleClick(schedule)}
                             >
@@ -290,7 +290,7 @@ const Scheduling = () => {
                                             <span style={styles.infoLabel}>Locations:</span>
                                             <span style={styles.infoValue}>
                                                 {Array.isArray(schedule.locations) && schedule.locations.length > 0
-                                                    ? schedule.locations.length === 1 
+                                                    ? schedule.locations.length === 1
                                                         ? schedule.locations[0]
                                                         : `${schedule.locations.length} locations`
                                                     : 'Not set'

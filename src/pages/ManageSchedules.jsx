@@ -3,23 +3,25 @@ import { useNavigate, useParams } from "react-router-dom";
 import { eachDayOfInterval, format } from "date-fns";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { getApiUrl } from "../utils/api";
-import { DndContext, closestCenter, useDroppable, PointerSensor, KeyboardSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragOverlay, closestCenter, pointerWithin, useDraggable, useDroppable, PointerSensor, KeyboardSensor, useSensor, useSensors, MeasuringStrategy } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
 import DOODSchedule from "../components/DOOD";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import "../css/ManageSchedules.css";
 import React from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import Loader from "../components/Loader";
 import Chatbot from "../components/Chatbot";
 import { useSelector } from "react-redux";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { FaFileExcel } from "react-icons/fa";
+import { MdFormatColorFill } from "react-icons/md";
 import EmptyState from "../components/EmptyState";
+import CustomTimelineScrollbar from "../components/CustomTimelineScrollbar";
+import CustomDatePicker from "../components/CustomDatePicker";
 
 function formatPageEights(pageEights) {
 	if (!pageEights) return "N/A";
@@ -40,18 +42,147 @@ function formatSceneDisplay(sceneNumber, episodeNumber) {
 	return episode ? `Ep${episode}-${scene}` : scene;
 }
 
-const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, characterNameToIdMap, isEpisodic }) => {
-	const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: scene.id, disabled: !isEditing });
+function toDisplayList(value) {
+	if (Array.isArray(value)) {
+		return value
+			.map((item) => String(item ?? "").trim())
+			.filter(Boolean);
+	}
+	if (typeof value === "string") {
+		return value
+			.split(",")
+			.map((item) => item.trim())
+			.filter(Boolean);
+	}
+	return [];
+}
 
-	const style = {
-		transform: CSS.Transform.toString(transform),
-		transition,
-		cursor: "grab",
-		userSelect: "none",
+const SCENE_COLOR_OPTIONS = [
+	{ value: "white", label: "White", accent: "#d1d5db", tint: "#ffffff", text: "#0f1724" },
+	{ value: "yellow", label: "Yellow", accent: "#f59e0b", tint: "#fef3c7", text: "#92400e" },
+	{ value: "blue", label: "Blue", accent: "#3b82f6", tint: "#dbeafe", text: "#1d4ed8" },
+	{ value: "green", label: "Green", accent: "#22c55e", tint: "#dcfce7", text: "#166534" },
+	{ value: "pink", label: "Pink", accent: "#ec4899", tint: "#fce7f3", text: "#9d174d" },
+	{ value: "orange", label: "Orange", accent: "#f97316", tint: "#ffedd5", text: "#c2410c" },
+];
+
+const SCENE_COLOR_MAP = SCENE_COLOR_OPTIONS.reduce((acc, option) => {
+	acc[option.value] = option;
+	return acc;
+}, {});
+
+function normalizeSceneColor(color) {
+	const normalized = String(color ?? "")
+		.trim()
+		.toLowerCase();
+	return SCENE_COLOR_MAP[normalized] ? normalized : "white";
+}
+
+function getSceneColorMeta(color) {
+	return SCENE_COLOR_MAP[normalizeSceneColor(color)];
+}
+
+function getSceneColorVars(color) {
+	const meta = getSceneColorMeta(color);
+	return {
+		"--sched-scene-color-accent": meta.accent,
+		"--sched-scene-color-tint": meta.tint,
+		"--sched-scene-color-text": meta.text,
+	};
+}
+
+
+const DragHandle = ({ handleProps = {} }) => {
+	return (
+		<div className="sched-drag-handle sched-drag-handle-static" aria-hidden="true" {...handleProps}>
+			<span className="sched-drag-handle-dots" />
+		</div>
+	);
+};
+
+const SceneColorButton = ({ sceneId, sceneNumber, color, onSceneColorChange, interactive = true }) => {
+	const [isOpen, setIsOpen] = React.useState(false);
+	const popupRef = React.useRef(null);
+
+	React.useEffect(() => {
+		if (!isOpen) return undefined;
+
+		const handlePointerDown = (event) => {
+			if (popupRef.current && !popupRef.current.contains(event.target)) {
+				setIsOpen(false);
+			}
+		};
+
+		document.addEventListener("pointerdown", handlePointerDown);
+		return () => document.removeEventListener("pointerdown", handlePointerDown);
+	}, [isOpen]);
+
+	return (
+		<div
+			className="sched-scene-color-picker"
+			ref={popupRef}
+			onPointerDown={(e) => e.stopPropagation()}
+			onMouseDown={(e) => e.stopPropagation()}
+			onClick={(e) => e.stopPropagation()}
+		>
+			<button
+				type="button"
+				className={`sched-scene-color-fill-button ${isOpen ? "is-open" : ""}`}
+				style={getSceneColorVars(color)}
+				onClick={(e) => {
+					e.stopPropagation();
+					if (interactive) {
+						setIsOpen((prev) => !prev);
+					}
+				}}
+				disabled={!interactive}
+				aria-label={`Fill color for scene ${sceneNumber}`}
+				title="Fill color"
+			>
+				<MdFormatColorFill aria-hidden="true" />
+			</button>
+			{isOpen && (
+				<div className="sched-scene-color-palette" role="menu" aria-label={`Color choices for scene ${sceneNumber}`}>
+					{SCENE_COLOR_OPTIONS.map((option) => (
+						<button
+							key={option.value}
+							type="button"
+							className={`sched-scene-color-option ${normalizeSceneColor(color) === option.value ? "active" : ""}`}
+							style={getSceneColorVars(option.value)}
+							onPointerDown={(e) => e.stopPropagation()}
+							onClick={(e) => {
+								e.stopPropagation();
+								onSceneColorChange(sceneId, option.value);
+								setIsOpen(false);
+							}}
+							aria-label={`${option.label} color for scene ${sceneNumber}`}
+							title={option.label}
+						/>
+					))}
+				</div>
+			)}
+		</div>
+	);
+};
+
+const SceneCardInner = React.forwardRef(({ scene, style, className, rowAttributes, dragHandleProps, sceneHours, setSceneHours, characterNameToIdMap, isEpisodic, onSceneColorChange, onSceneClick, isEditing }, ref) => {
+	const sceneColor = normalizeSceneColor(scene.scene_color);
+	const rowStyle = {
+		...style,
+		...getSceneColorVars(sceneColor),
 	};
 
 	return (
-		<tr ref={setNodeRef} style={style} className="sched-data-row" {...attributes} {...listeners}>
+		<tr
+			ref={ref}
+			style={rowStyle}
+			className={`${className} sched-scene-color-row ${onSceneClick ? "sched-scene-row-clickable" : ""}`}
+			onClick={onSceneClick ? () => onSceneClick(scene) : undefined}
+			{...rowAttributes}
+		>
+			<td className="sched-data-cell sched-drag-handle-cell">
+				{isEditing && <DragHandle handleProps={dragHandleProps} />}
+			</td>
 			{isEpisodic && <td className="sched-data-cell">{scene.episode_number || "-"}</td>}
 			<td className="sched-data-cell">{scene.scene_number}</td>
 
@@ -69,6 +200,8 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 					type="number"
 					className="sched-hours-input"
 					placeholder="HH"
+					onPointerDown={(e) => e.stopPropagation()}
+					onClick={(e) => e.stopPropagation()}
 					value={sceneHours[scene.id]?.hours ?? ""}
 					onChange={(e) => {
 						const newSceneHours = { ...sceneHours };
@@ -76,7 +209,6 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 							newSceneHours[scene.id] = { hours: "", minutes: "" };
 						}
 						const value = parseInt(e.target.value);
-						console.log(value);
 						if (value < 0) {
 							alert("Cannot have negative values for hours");
 							return;
@@ -93,6 +225,8 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 					type="number"
 					className="sched-hours-input"
 					placeholder="MM"
+					onPointerDown={(e) => e.stopPropagation()}
+					onClick={(e) => e.stopPropagation()}
 					value={sceneHours[scene.id]?.minutes ?? ""}
 					onChange={(e) => {
 						const newSceneHours = { ...sceneHours };
@@ -100,7 +234,6 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 							newSceneHours[scene.id] = { hours: "", minutes: "" };
 						}
 						const value = parseInt(e.target.value);
-						console.log(value);
 						if (value < 0 || value > 60) {
 							alert("Enter a acceptable value for minutes");
 							return;
@@ -110,11 +243,151 @@ const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, 
 					}}
 				/>
 			</td>
+			<td className="sched-data-cell sched-scene-color-rail-cell">
+				<SceneColorButton
+					sceneId={scene.id}
+					sceneNumber={scene.scene_number}
+					color={sceneColor}
+					onSceneColorChange={onSceneColorChange}
+				/>
+			</td>
+		</tr>
+	);
+});
+
+const SceneCard = ({ scene, isEditing, scheduleMode, sceneHours, setSceneHours, characterNameToIdMap, isEpisodic, onSceneColorChange, onSceneClick }) => {
+	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+		id: scene.id,
+		disabled: !isEditing,
+	});
+
+	const style = {
+		cursor: isDragging ? "grabbing" : isEditing ? "grab" : "default",
+		userSelect: "none",
+		opacity: isDragging ? 0.18 : 1,
+	};
+
+	return (
+		<SceneCardInner
+			ref={setNodeRef}
+			style={style}
+			className={`sched-data-row ${isEditing ? "sched-data-row-draggable" : ""}`}
+			rowAttributes={{
+				"data-schedule-scene-row": "true",
+				"data-scene-id": String(scene.id),
+				...(isEditing ? { ...attributes, ...listeners } : {}),
+			}}
+			dragHandleProps={{
+				...attributes,
+				...listeners,
+			}}
+			scene={scene}
+			scheduleMode={scheduleMode}
+			sceneHours={sceneHours}
+			setSceneHours={setSceneHours}
+			characterNameToIdMap={characterNameToIdMap}
+			isEpisodic={isEpisodic}
+			onSceneColorChange={onSceneColorChange}
+			onSceneClick={onSceneClick}
+			isEditing={isEditing}
+		/>
+	);
+};
+
+const SceneDragOverlay = ({ scene, characterNameToIdMap, isEpisodic, showHours }) => {
+	const sceneColor = normalizeSceneColor(scene.scene_color);
+	return (
+		<div className="sched-scene-drag-overlay" style={getSceneColorVars(sceneColor)}>
+			<table className="sched-table sched-scene-drag-overlay-table">
+				<tbody>
+					<tr className="sched-data-row sched-scene-color-row">
+						<td className="sched-data-cell sched-drag-handle-cell">
+							<DragHandle />
+						</td>
+						{isEpisodic && <td className="sched-data-cell">{scene.episode_number || "-"}</td>}
+						<td className="sched-data-cell">{scene.scene_number}</td>
+						<td className="sched-data-cell">{scene.int_ext || "N/A"}</td>
+						<td className="sched-data-cell sched-location-synopsis-column">
+							{scene.location_name} <br /> <br />
+							Synopsis: {scene.synopsis || "N/A"}
+						</td>
+						<td className="sched-data-cell">{formatPageEights(scene.page_eighths) || "N/A"}</td>
+						<td className="sched-data-cell">{(scene.character_names || []).map((name) => characterNameToIdMap[name.toUpperCase()] || name).join(", ")}</td>
+						{showHours && <td className="sched-data-cell sched-scene-drag-overlay-hours">Est. Hours</td>}
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	);
+};
+
+const DragPlaceholderRow = ({ colSpan, dragHeight }) => {
+	return (
+		<tr className="sched-drop-placeholder-row">
+			<td className="sched-drop-placeholder-cell" colSpan={colSpan}>
+				<div className="sched-drop-placeholder-inner" style={{ minHeight: dragHeight ? `${dragHeight}px` : "40px" }} />
+			</td>
 		</tr>
 	);
 };
 
-const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHours, setScheduleDays, characterNameToIdMap, isEpisodic }) => {
+const renderRowsWithPlaceholder = ({ scenes, containerId, dragPreview, activeDragId, colSpan, renderScene, dragHeight }) => {
+	const rows = [];
+	const showPlaceholder = dragPreview?.containerId === containerId;
+	const previewIndex = showPlaceholder ? dragPreview.index : -1;
+	const filteredScenes =
+		dragPreview?.sourceContainerId === containerId && activeDragId
+			? scenes.filter((scene) => String(scene.id) !== String(activeDragId))
+			: scenes;
+
+	filteredScenes.forEach((scene, index) => {
+		if (previewIndex === index) {
+			rows.push(<DragPlaceholderRow key={`placeholder-${containerId}-${index}`} colSpan={colSpan} dragHeight={dragHeight} />);
+		}
+		rows.push(renderScene(scene));
+	});
+
+	if (previewIndex === filteredScenes.length) {
+		rows.push(<DragPlaceholderRow key={`placeholder-${containerId}-end`} colSpan={colSpan} dragHeight={dragHeight} />);
+	} else if (filteredScenes.length === 0 && previewIndex === 0 && activeDragId) {
+		rows.push(<DragPlaceholderRow key={`placeholder-${containerId}-empty`} colSpan={colSpan} dragHeight={dragHeight} />);
+	}
+
+	return rows;
+};
+
+const CalendarDragPlaceholderBlock = ({ dragHeight }) => {
+	return (
+		<div className="sched-calendar-scene-block sched-drop-placeholder-inner" style={{ minHeight: dragHeight ? `${dragHeight}px` : "40px", border: "2px dashed #9ca3af", background: "#f3f4f6" }} />
+	);
+};
+
+const renderBlocksWithPlaceholder = ({ scenes, containerId, dragPreview, activeDragId, renderScene, dragHeight }) => {
+	const blocks = [];
+	const showPlaceholder = dragPreview?.containerId === containerId;
+	const previewIndex = showPlaceholder ? dragPreview.index : -1;
+	const filteredScenes =
+		dragPreview?.sourceContainerId === containerId && activeDragId
+			? scenes.filter((scene) => String(scene.id) !== String(activeDragId))
+			: scenes;
+
+	filteredScenes.forEach((scene, index) => {
+		if (previewIndex === index) {
+			blocks.push(<CalendarDragPlaceholderBlock key={`placeholder-${containerId}-${index}`} dragHeight={dragHeight} />);
+		}
+		blocks.push(renderScene(scene));
+	});
+
+	if (previewIndex === filteredScenes.length) {
+		blocks.push(<CalendarDragPlaceholderBlock key={`placeholder-${containerId}-end`} dragHeight={dragHeight} />);
+	} else if (filteredScenes.length === 0 && previewIndex === 0 && activeDragId) {
+		blocks.push(<CalendarDragPlaceholderBlock key={`placeholder-${containerId}-empty`} dragHeight={dragHeight} />);
+	}
+
+	return blocks;
+};
+
+const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHours, setScheduleDays, characterNameToIdMap, isEpisodic, dragPreview, activeDragId, onSceneColorChange, onSceneClick, dragHeight }) => {
 	const { setNodeRef } = useDroppable({
 		id: day.id,
 	});
@@ -124,7 +397,7 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 	const d = day.date.split("-");
 
 	return (
-		<div ref={setNodeRef} className={`sched-day-card ${!drop ? "sched-day-card-collapsed" : ""}`}>
+		<div id={`day-column-${day.id}`} ref={setNodeRef} className={`sched-day-card ${!drop ? "sched-day-card-collapsed" : ""}`}>
 			<div className="sched-day-header">
 				<h4>{d[2] + "-" + d[1] + "-" + d[0]}</h4>
 				<button
@@ -147,24 +420,29 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 				)}
 			</div>
 			{drop && (
-				<SortableContext items={day.scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-					<table className="sched-table">
-						<thead className="sched-thead">
-							<tr className="sched-header-row">
-								{isEpisodic && <th className="sched-header-cell">Ep</th>}
-								<th className="sched-header-cell">Scene</th>
-
-								<th className="sched-header-cell">Int./Ext.</th>
-								<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
-								<th className="sched-header-cell">Pgs</th>
-
-								<th className="sched-header-cell">Characters</th>
-
-								<th className="sched-header-cell">Est. Hours</th>
-							</tr>
-						</thead>
-						<tbody>
-							{day.scenes.map((scene) => (
+				<table className="sched-table">
+					<thead className="sched-thead">
+						<tr className="sched-header-row">
+							<th className="sched-header-cell sched-drag-handle-header" />
+							{isEpisodic && <th className="sched-header-cell">Ep</th>}
+							<th className="sched-header-cell">Scene</th>
+							<th className="sched-header-cell">Int./Ext.</th>
+							<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
+							<th className="sched-header-cell">Pgs</th>
+							<th className="sched-header-cell">Characters</th>
+							<th className="sched-header-cell">Est. Hours</th>
+							<th className="sched-header-cell sched-scene-color-rail-header" />
+						</tr>
+					</thead>
+					<tbody>
+						{renderRowsWithPlaceholder({
+							scenes: day.scenes,
+							containerId: day.id,
+							dragPreview,
+							activeDragId,
+							colSpan: isEpisodic ? 9 : 8,
+							dragHeight: dragHeight,
+							renderScene: (scene) => (
 								<SceneCard
 									key={scene.id}
 									scene={scene}
@@ -174,33 +452,51 @@ const ScheduleColumn = ({ day, isEditing, scheduleMode, sceneHours, setSceneHour
 									setSceneHours={setSceneHours}
 									characterNameToIdMap={characterNameToIdMap}
 									isEpisodic={isEpisodic}
+									onSceneColorChange={onSceneColorChange}
+									onSceneClick={onSceneClick}
 								/>
-							))}
-						</tbody>
-					</table>
-				</SortableContext>
+							),
+						})}
+					</tbody>
+				</table>
 			)}
 		</div>
 	);
 };
 
 // Draggable scene card for unscheduled scenes
-const UnscheduledSceneCard = ({ scene, isEditing, characterNameToIdMap, isEpisodic }) => {
-	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+const UnscheduledSceneCard = ({ scene, isEditing, characterNameToIdMap, isEpisodic, onSceneClick, onSceneColorChange }) => {
+	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
 		id: scene.id,
 		disabled: !isEditing,
 	});
 
 	const style = {
-		transform: CSS.Transform.toString(transform),
-		transition,
-		cursor: isEditing ? "grab" : "default",
+		cursor: isDragging ? "grabbing" : isEditing ? "grab" : "default",
 		userSelect: "none",
-		opacity: isDragging ? 0.5 : 1,
+		opacity: isDragging ? 0.18 : 1,
 	};
 
 	return (
-		<tr ref={setNodeRef} style={style} className="sched-data-row sched-unscheduled-drag-row" {...attributes} {...listeners}>
+		<tr
+			ref={setNodeRef}
+			style={{ ...style, ...getSceneColorVars(scene.scene_color) }}
+			className={`sched-data-row sched-scene-color-row sched-unscheduled-drag-row ${isEditing ? "sched-data-row-draggable" : ""} ${onSceneClick ? "sched-scene-row-clickable" : ""}`}
+			onClick={onSceneClick ? () => onSceneClick(scene) : undefined}
+			data-schedule-scene-row="true"
+			data-scene-id={String(scene.id)}
+			{...(isEditing ? { ...attributes, ...listeners } : {})}
+		>
+			<td className="sched-data-cell sched-drag-handle-cell">
+				{isEditing && (
+					<DragHandle
+						handleProps={{
+							...attributes,
+							...listeners,
+						}}
+					/>
+				)}
+			</td>
 			{isEpisodic && <td className="sched-data-cell">{scene.episode_number || "-"}</td>}
 			<td className="sched-data-cell sched-unscheduled-scene-number">{scene.scene_number}</td>
 			<td className="sched-data-cell">{scene.int_ext || "N/A"}</td>
@@ -210,23 +506,31 @@ const UnscheduledSceneCard = ({ scene, isEditing, characterNameToIdMap, isEpisod
 			</td>
 			<td className="sched-data-cell">{formatPageEights(scene.page_eighths) || "N/A"}</td>
 			<td className="sched-data-cell">{(scene.character_names || []).map((name) => characterNameToIdMap[name.toUpperCase()] || name).join(", ")}</td>
+			<td className="sched-data-cell sched-scene-color-rail-cell">
+				<SceneColorButton
+					sceneId={scene.id}
+					sceneNumber={scene.scene_number}
+					color={scene.scene_color}
+					onSceneColorChange={onSceneColorChange}
+					interactive={true}
+				/>
+			</td>
 		</tr>
 	);
 };
 
 // Draggable scene block for calendar view
 const CalendarSceneBlock = ({ scene, isEditing }) => {
-	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
 		id: scene.id,
 		disabled: !isEditing,
 	});
 
 	const style = {
-		transform: CSS.Transform.toString(transform),
-		transition,
 		cursor: isEditing ? "grab" : "default",
 		userSelect: "none",
-		opacity: isDragging ? 0.5 : 1,
+		opacity: isDragging ? 0.2 : 1,
+		...getSceneColorVars(scene.scene_color),
 	};
 
 	return (
@@ -236,6 +540,8 @@ const CalendarSceneBlock = ({ scene, isEditing }) => {
 			className={`sched-calendar-scene-block ${isEditing ? "sched-calendar-scene-draggable" : ""}`}
 			{...attributes}
 			{...listeners}
+			data-calendar-scene-block="true"
+			data-scene-id={String(scene.id)}
 		>
 			<b>
 				<div>
@@ -247,34 +553,37 @@ const CalendarSceneBlock = ({ scene, isEditing }) => {
 					{scene.time_of_day && <span>{scene.time_of_day}</span>}
 				</div>
 			</b>
-
 		</div>
 	);
 };
 
 // Droppable calendar day column
-const CalendarDayColumn = ({ day, isEditing, formatCalendarDateHeader }) => {
+const CalendarDayColumn = ({ day, isEditing, formatCalendarDateHeader, dragPreview, activeDragId, dragHeight }) => {
 	const { setNodeRef } = useDroppable({
 		id: `calendar-${day.id}`,
 	});
 
-	const { day: dayNum, weekday, month } = formatCalendarDateHeader(day.date);
+	const { weekday, fullDate } = formatCalendarDateHeader(day.date);
 
 	return (
-		<div ref={setNodeRef} className={`sched-calendar-day-column ${isEditing ? "sched-calendar-day-droppable" : ""}`}>
+		<div ref={setNodeRef} id={`calendar-column-${day.id}`} className={`sched-calendar-day-column ${isEditing ? "sched-calendar-day-droppable" : ""}`}>
 			<div className="sched-calendar-day-header">
 				<span className="sched-calendar-weekday">{weekday}</span>
-				<span className="sched-calendar-day-num">{dayNum}</span>
-				<span className="sched-calendar-month">{month}</span>
+				<span className="sched-calendar-date-label">{fullDate}</span>
 			</div>
 			<div className="sched-calendar-scenes-container">
-				<SortableContext items={day.scenes ? day.scenes.map((s) => s.id) : []} strategy={verticalListSortingStrategy}>
-					{day.scenes && day.scenes.length > 0 ? (
-						day.scenes.map((scene, idx) => <CalendarSceneBlock key={scene.id || idx} scene={scene} isEditing={isEditing} />)
-					) : (
-						<div className="sched-calendar-no-scenes">{isEditing ? "Drop scenes here" : "No scenes"}</div>
-					)}
-				</SortableContext>
+				{day.scenes && day.scenes.length > 0 || (dragPreview?.containerId === String(day.id) && activeDragId) ? (
+					renderBlocksWithPlaceholder({
+						scenes: day.scenes || [],
+						containerId: String(day.id),
+						dragPreview,
+						activeDragId,
+						dragHeight: dragHeight,
+						renderScene: (scene) => <CalendarSceneBlock key={scene.id} scene={scene} isEditing={isEditing} />
+					})
+				) : (
+					<div className="sched-calendar-no-scenes">{isEditing ? "Drop scenes here" : "No scenes"}</div>
+				)}
 			</div>
 		</div>
 	);
@@ -293,13 +602,91 @@ function findContainer(days, id, unscheduledScenesWithIds = []) {
 
 	// Check scheduled days
 	for (const day of days) {
-		if (day.id === id) {
+		if (String(day.id) === String(id)) {
 			return day;
 		}
-		if (day.scenes.find((scene) => scene.id === id)) {
+		if (day.scenes.find((scene) => String(scene.id) === String(id))) {
 			return day;
 		}
 	}
+	return null;
+}
+
+function resolveDropTarget(days, targetId, unscheduledScenesWithIds = [], insertAtTop = false) {
+	const container = insertAtTop
+		? targetId === "unscheduled"
+			? { id: "unscheduled", scenes: unscheduledScenesWithIds }
+			: days.find((day) => day.id === targetId)
+		: findContainer(days, targetId, unscheduledScenesWithIds);
+
+	if (!container) {
+		return null;
+	}
+
+	if (insertAtTop) {
+		return { containerId: container.id, index: 0 };
+	}
+
+	if (targetId === container.id) {
+		return { containerId: container.id, index: container.scenes.length };
+	}
+
+	const overIndex = container.scenes.findIndex((scene) => scene.id === targetId);
+	return {
+		containerId: container.id,
+		index: overIndex === -1 ? container.scenes.length : overIndex,
+	};
+}
+
+function getScheduleContainerElement(containerId, isCalendarTarget = false) {
+	if (isCalendarTarget) return document.getElementById(`calendar-column-${containerId}`);
+	return document.getElementById(`day-column-${containerId}`) || document.getElementById(`calendar-column-${containerId}`);
+}
+
+function getPointerBasedInsertIndex(containerId, activeId, pointerY, isCalendarTarget = false) {
+	const container = getScheduleContainerElement(containerId, isCalendarTarget);
+	if (!container) return null;
+
+	let rows = [...container.querySelectorAll('tr[data-schedule-scene-row="true"]')];
+	if (rows.length === 0) {
+		rows = [...container.querySelectorAll('div[data-calendar-scene-block="true"]')];
+	}
+
+	rows = rows.filter((row) => row.dataset.sceneId !== String(activeId));
+
+	for (let index = 0; index < rows.length; index += 1) {
+		const rect = rows[index].getBoundingClientRect();
+		const midpoint = rect.top + rect.height / 2;
+		if (pointerY < midpoint) {
+			return index;
+		}
+	}
+
+	return rows.length;
+}
+
+function getContainerIdFromPointer(x, y) {
+	// Use elementsFromPoint to look through layers (DragOverlay may be on top)
+	const elements = document.elementsFromPoint(x, y);
+	if (!elements || elements.length === 0) return null;
+
+	for (const element of elements) {
+		const timelineNode = element.closest('[id^="timeline-node-"]');
+		if (timelineNode?.id) {
+			return timelineNode.id.replace("timeline-node-", "");
+		}
+
+		const dayColumn = element.closest('[id^="day-column-"]');
+		if (dayColumn?.id) {
+			return dayColumn.id.replace("day-column-", "");
+		}
+
+		const calendarColumn = element.closest('[id^="calendar-column-"]');
+		if (calendarColumn?.id) {
+			return calendarColumn.id.replace("calendar-column-", "calendar-");
+		}
+	}
+
 	return null;
 }
 
@@ -322,6 +709,131 @@ const parseTSV = (tsvText) => {
 		console.error("Error parsing TSV", e);
 		return [];
 	}
+};
+
+
+
+// Custom collision detection algorithm that prioritizes the timeline scrollbar dots,
+// and falls back to closestCenter for sorting lists to ensure both work flawlessly.
+const customCollisionDetection = (args) => {
+	const { pointerCoordinates, droppableContainers } = args;
+	if (!pointerCoordinates) {
+		return closestCenter(args);
+	}
+
+	const pointerCollisions = pointerWithin(args);
+
+	if (pointerCollisions.length > 0) {
+		const timelineCollision = pointerCollisions.find((collision) => {
+			if (!String(collision.id).startsWith("timeline-nav-")) {
+				return false;
+			}
+
+			const dayId = String(collision.id).replace("timeline-nav-", "");
+			const node = document.getElementById(`timeline-node-${dayId}`);
+			if (!node) return false;
+
+			const rect = node.getBoundingClientRect();
+			return (
+				pointerCoordinates.x >= rect.left &&
+				pointerCoordinates.x <= rect.right &&
+				pointerCoordinates.y >= rect.top &&
+				pointerCoordinates.y <= rect.bottom
+			);
+		});
+
+		if (timelineCollision) {
+			return [timelineCollision];
+		}
+	}
+
+	const nonTimelineContainers = droppableContainers.filter(
+		(container) => !String(container.id).startsWith("timeline-nav-"),
+	);
+
+	if (nonTimelineContainers.length > 0) {
+		const pointerHits = pointerWithin({
+			...args,
+			droppableContainers: nonTimelineContainers,
+		});
+		if (pointerHits.length > 0) {
+			return pointerHits;
+		}
+
+		return closestCenter({
+			...args,
+			droppableContainers: nonTimelineContainers,
+		});
+	}
+
+	return closestCenter(args);
+};
+// Panel to display unscheduled scenes with drag-drop support
+const UnscheduledScenesPanel = ({ unscheduledScenesWithIds, isEditing, characterNameToIdMap, isEpisodic, dragPreview, activeDragId, onSceneClick, dragHeight, onSceneColorChange }) => {
+	const { setNodeRef } = useDroppable({
+		id: "unscheduled",
+	});
+
+	const [isExpanded, setIsExpanded] = useState(true);
+
+	const hasScenes = unscheduledScenesWithIds && unscheduledScenesWithIds.length > 0;
+
+	return (
+		(isEditing || hasScenes) && (
+			<div id="day-column-unscheduled" ref={setNodeRef} className={`sched-unscheduled-panel ${!isExpanded ? "sched-unscheduled-panel-collapsed" : ""}`}>
+				<div className="sched-unscheduled-panel-header">
+					<h4>
+						Unscheduled Scenes ({unscheduledScenesWithIds?.length || 0})
+						{isEditing && <span className="sched-drag-hint"> - Drag scenes to schedule or unschedule them</span>}
+					</h4>
+					<button onClick={() => setIsExpanded(!isExpanded)}>{isExpanded ? "▲" : "▼"}</button>
+				</div>
+				{isExpanded && (
+					hasScenes ? (
+						<table className="sched-table">
+							<thead className="sched-thead">
+								<tr className="sched-header-row">
+									<th className="sched-header-cell sched-drag-handle-header" />
+									{isEpisodic && <th className="sched-header-cell">Ep</th>}
+									<th className="sched-header-cell">Scene</th>
+									<th className="sched-header-cell">Int./Ext.</th>
+									<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
+									<th className="sched-header-cell">Pgs</th>
+									<th className="sched-header-cell">Characters</th>
+									<th className="sched-header-cell sched-scene-color-rail-header" />
+								</tr>
+							</thead>
+							<tbody>
+								{renderRowsWithPlaceholder({
+									scenes: unscheduledScenesWithIds,
+									containerId: "unscheduled",
+									dragPreview,
+									activeDragId,
+									colSpan: isEpisodic ? 8 : 7,
+									dragHeight: dragHeight,
+									renderScene: (scene) => (
+										<UnscheduledSceneCard
+											key={scene.id}
+											scene={scene}
+											isEditing={isEditing}
+											characterNameToIdMap={characterNameToIdMap}
+											isEpisodic={isEpisodic}
+											onSceneClick={onSceneClick}
+											onSceneColorChange={onSceneColorChange}
+										/>
+									),
+								})}
+							</tbody>
+						</table>
+					) : (
+						<div className={`sched-unscheduled-empty ${dragPreview?.containerId === "unscheduled" && activeDragId ? "sched-unscheduled-empty-target" : ""}`}>
+							{isEditing ? "Drag scenes here to unschedule them" : "All scenes are scheduled"}
+						</div>
+					)
+				)}
+			</div>
+		)
+	);
 };
 
 const ManageSchedules = () => {
@@ -355,6 +867,7 @@ const ManageSchedules = () => {
 	const [sceneHours, setSceneHours] = useState({});
 	const [DOODSelected, setDOODselected] = useState(false);
 	const [generatedMaxScenes, setGeneratedMaxScenes] = useState("");
+	const [generatedTotalShootDays, setGeneratedTotalShootDays] = useState("");
 	const [scheduleDates, setScheduleDates] = useState({ start: "N/A", end: "N/A" });
 	const [HoursSaved, setHoursSaved] = useState(false);
 	const [constraintType, setConstraintType] = useState("");
@@ -362,6 +875,10 @@ const ManageSchedules = () => {
 	const [generatedMaxHoursPerDay, setGeneratedMaxHoursPerDay] = useState("");
 	const [conflicts, setConflicts] = useState([]);
 	const [showConflictModal, setShowConflictModal] = useState(false);
+	const [isDraggingScene, setIsDraggingScene] = useState(false);
+	const [activeDragId, setActiveDragId] = useState(null);
+	const [dragPreview, setDragPreview] = useState(null);
+	const [unscheduledSceneOrder, setUnscheduledSceneOrder] = useState([]);
 
 	// Generate Schedule Modal state
 	const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -379,6 +896,11 @@ const ManageSchedules = () => {
 	const [modalAddMode, setModalAddMode] = useState("available"); // "available" or "unavailable"
 	const modalContentRef = useRef(null);
 	const doodContentRef = useRef(null);
+	const activeSceneRef = useRef(null);
+	const lastHoveredTimelineIdRef = useRef(null);
+	const lastHoveredContainerRef = useRef(null);
+	const activeDragRectRef = useRef(null);
+	const pointerPosRef = useRef({ x: 0, y: 0 });
 	const doodGridRef = useRef(null);
 
 	// DOOD Modal state
@@ -397,6 +919,7 @@ const ManageSchedules = () => {
 	const [isCalendarSaving, setIsCalendarSaving] = useState(false);
 	const calendarGridRef = useRef(null);
 	const calendarContentRef = useRef(null);
+	const scheduleContentRef = useRef(null);
 
 	// Cast and Location lists from APIs
 	const [castList, setCastList] = useState([]);
@@ -406,7 +929,10 @@ const ManageSchedules = () => {
 	const [breakdownCharacters, setBreakdownCharacters] = useState([]);
 	const [breakdownScenes, setBreakdownScenes] = useState([]);
 
-	const ConflictsModal = () => {
+	const [parsing, setParsing] = useState([]);
+	const [selectedSceneDetails, setSelectedSceneDetails] = useState(null);
+
+	const renderConflictsModal = () => {
 		if (!showConflictModal) return null;
 		console.log("conflicts are : ", conflicts);
 
@@ -461,8 +987,103 @@ const ManageSchedules = () => {
 		);
 	};
 
+	const renderSceneDetailsModal = () => {
+		if (!selectedSceneDetails) return null;
+
+		const { scene, breakdownScene, parsingScene } = selectedSceneDetails;
+		const displaySceneNumber = formatSceneDisplay(
+			scene?.scene_number || breakdownScene?.scene_number,
+			scene?.episode_number || breakdownScene?.episode_number,
+		);
+		const sceneHeading = parsingScene?.heading || breakdownScene?.heading || breakdownScene?.set || breakdownScene?.location || "";
+		const subtitle = [
+			scene?.int_ext || scene?.["Int./Ext."] || breakdownScene?.int_ext,
+			scene?.location_name || scene?.Location || breakdownScene?.location,
+			scene?.time_of_day || scene?.Time || scene?.["Time of Day"] || breakdownScene?.time,
+		]
+			.filter(Boolean)
+			.join(" • ");
+		const synopsis = scene?.synopsis || scene?.Synopsis || breakdownScene?.synopsis;
+		const pageEighths = scene?.page_eighths || scene?.["Page Eighths"] || breakdownScene?.page_eighths;
+		const characterList = toDisplayList(scene?.character_names || scene?.Characters || breakdownScene?.characters);
+		const breakdownGroups = [
+			{ label: "Action Props", items: toDisplayList(breakdownScene?.action_props) },
+			{ label: "Other Props", items: toDisplayList(breakdownScene?.other_props) },
+			{ label: "Picture Vehicles", items: toDisplayList(breakdownScene?.picture_vehicles) },
+			{ label: "Animals", items: toDisplayList(breakdownScene?.animals) },
+			{ label: "Extras", items: toDisplayList(breakdownScene?.extras) },
+			{ label: "Wardrobe", items: toDisplayList(breakdownScene?.wardrobe) },
+			{ label: "Set Dressing", items: toDisplayList(breakdownScene?.set_dressing) },
+		];
+		const metaCards = [
+			{ label: "Set", value: breakdownScene?.set || scene?.location_name || scene?.Location || breakdownScene?.location || "-" },
+			{ label: "Time", value: scene?.time_of_day || scene?.Time || scene?.["Time of Day"] || breakdownScene?.time || "-" },
+			{ label: "Pages", value: formatPageEights(pageEighths) || "-" },
+			{ label: "Cast", value: characterList.length ? characterList.join(", ") : "-" },
+		];
+
+		return (
+			<div className="sched-conflicts-modal-overlay" onClick={() => setSelectedSceneDetails(null)}>
+				<div className="sched-scene-details-modal" onClick={(e) => e.stopPropagation()}>
+					<div className="sched-scene-details-hero">
+						<div className="sched-scene-details-header-copy">
+							<div className="sched-scene-details-kicker">Scene Breakdown</div>
+							<h2 className="sched-conflicts-modal-heading">Scene {displaySceneNumber || "-"}</h2>
+							{subtitle && <div className="sched-scene-details-subtitle">{subtitle}</div>}
+						</div>
+						<button className="sched-conflicts-modal-close-button" onClick={() => setSelectedSceneDetails(null)}>
+							×
+						</button>
+					</div>
+
+					<div className="sched-scene-details-content">
+						<div className="sched-scene-details-meta-grid">
+							{metaCards.map((card) => (
+								<div key={card.label} className="sched-scene-details-meta-card">
+									<div className="sched-scene-details-meta-label">{card.label}</div>
+									<div className="sched-scene-details-meta-value">{card.value}</div>
+								</div>
+							))}
+						</div>
+
+
+
+						{synopsis && (
+							<div className="sched-scene-details-section">
+								<div className="sched-scene-details-label">Synopsis</div>
+								<div className="sched-scene-details-body">{synopsis}</div>
+							</div>
+						)}
+
+						<div className="sched-scene-details-section">
+							<div className="sched-scene-details-label">Breakdown</div>
+							<div className="sched-scene-details-breakdown-grid">
+								{breakdownGroups.map((group) => (
+									<div key={group.label} className="sched-scene-details-breakdown-card">
+										<div className="sched-scene-details-breakdown-title">{group.label}</div>
+										{group.items.length > 0 ? (
+											<div className="sched-scene-details-chip-list">
+												{group.items.map((item) => (
+													<span key={`${group.label}-${item}`} className="sched-scene-details-chip">
+														{item}
+													</span>
+												))}
+											</div>
+										) : (
+											<div className="sched-scene-details-empty">None listed</div>
+										)}
+									</div>
+								))}
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		);
+	};
+
 	// Generate Schedule Modal Component
-	const GenerateScheduleModal = () => {
+	const renderGenerateScheduleModal = () => {
 		if (!showGenerateModal) return null;
 
 		// Check for elements with dates outside the schedule range
@@ -529,19 +1150,37 @@ const ManageSchedules = () => {
 					const normalizedName = cast.character?.toUpperCase();
 					if (normalizedName && !addedCharacters.has(normalizedName)) {
 						addedCharacters.add(normalizedName);
+						const isLocked = cast.locked !== -1 && cast.locked !== "-1" && cast.locked !== null && cast.locked !== undefined;
+						let lockedOptionName = "";
+						if (isLocked) {
+							const castOptions = cast.cast_options || {};
+							const lockedOpt = castOptions[String(cast.locked)];
+							lockedOptionName = lockedOpt?.name || lockedOpt?.option_name || String(cast.locked);
+						}
 						options.push({
 							value: cast.character,
 							label: `👤 ${cast.character}`,
 							cast_id: cast.cast_id,
+							isLocked,
+							lockedOptionName,
 						});
 					}
 				});
 			} else if (type === "location" && locationList.length > 0) {
 				locationList.forEach((loc) => {
+					const isLocked = loc.locked !== -1 && loc.locked !== "-1" && loc.locked !== null && loc.locked !== undefined;
+					let lockedOptionName = "";
+					if (isLocked) {
+						const locationOptions = loc.location_options || {};
+						const lockedOpt = locationOptions[String(loc.locked)];
+						lockedOptionName = lockedOpt?.name || lockedOpt?.option_name || String(loc.locked);
+					}
 					options.push({
 						value: loc.location,
 						label: `📍 ${loc.location}`,
 						location_id: loc.location_id,
+						isLocked,
+						lockedOptionName,
 					});
 				});
 			}
@@ -1066,6 +1705,7 @@ const ManageSchedules = () => {
 					throw new Error(`${result.message} \n Try changing constraints`);
 				}
 				console.log("Schedule generated successfully:", result);
+				setGeneratedTotalShootDays(result.total_shoot_days || "N/A");
 
 				setTimeout(async () => {
 					try {
@@ -1111,8 +1751,7 @@ const ManageSchedules = () => {
 								<div className="sched-date-range-inputs">
 									<label className="sched-controls-label">
 										Start Date:
-										<input
-											type="date"
+										<CustomDatePicker
 											value={scheduleStartDate}
 											onChange={(e) => setScheduleStartDate(e.target.value)}
 											className="sched-date-range-input"
@@ -1121,8 +1760,7 @@ const ManageSchedules = () => {
 									<span className="sched-date-range-separator">to</span>
 									<label className="sched-controls-label">
 										End Date:
-										<input
-											type="date"
+										<CustomDatePicker
 											value={scheduleEndDate}
 											min={scheduleStartDate}
 											onChange={(e) => setScheduleEndDate(e.target.value)}
@@ -1242,7 +1880,7 @@ const ManageSchedules = () => {
 						{/* Character/Location Availability Section */}
 						{scheduleStartDate && scheduleEndDate && (
 							<div className="sched-generate-section">
-								<h3 className="sched-section-title">Set Availability Dates</h3>
+								<h3 className="sched-section-title">Edit Availability Dates</h3>
 								<div className="sched-element-selector">
 									<div className="sched-selector-header">
 										<select
@@ -1254,7 +1892,7 @@ const ManageSchedules = () => {
 											<option value="location">Sets</option>
 										</select>
 									</div>
-									<div className="sched-selector-header sched-selector-header-margin">
+									<div className="sched-selector-header sched-selector-header-margin" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
 										<select
 											value={modalElement}
 											onChange={(e) => handleModalElementChange(e.target.value)}
@@ -1267,6 +1905,29 @@ const ManageSchedules = () => {
 												</option>
 											))}
 										</select>
+										{(() => {
+											const selectedOpt = getModalElementOptions(modalElementType).find(o => o.value === modalElement);
+											if (selectedOpt?.isLocked) {
+												return (
+													<span style={{
+														display: "inline-flex",
+														alignItems: "center",
+														gap: "4px",
+														background: "rgba(251,191,36,0.15)",
+														border: "1px solid rgba(251,191,36,0.5)",
+														color: "#fbbf24",
+														borderRadius: "6px",
+														padding: "2px 8px",
+														fontSize: "0.75rem",
+														fontWeight: 600,
+														whiteSpace: "nowrap",
+													}}>
+														🔒 Locked{selectedOpt.lockedOptionName ? `: ${selectedOpt.lockedOptionName}` : ""}
+													</span>
+												);
+											}
+											return null;
+										})()}
 									</div>
 								</div>
 
@@ -1340,8 +2001,7 @@ const ManageSchedules = () => {
 												{/* Date Range Selector */}
 												<div className="sched-date-range-container">
 													<div className="sched-date-range-inputs">
-														<input
-															type="date"
+														<CustomDatePicker
 															value={modalDateRangeStart}
 															min={scheduleStartDate}
 															max={scheduleEndDate}
@@ -1350,8 +2010,7 @@ const ManageSchedules = () => {
 															placeholder="Start Date"
 														/>
 														<span className="sched-date-range-separator">to</span>
-														<input
-															type="date"
+														<CustomDatePicker
 															value={modalDateRangeEnd}
 															min={modalDateRangeStart || scheduleStartDate}
 															max={scheduleEndDate}
@@ -1421,7 +2080,7 @@ const ManageSchedules = () => {
 	};
 
 	// DOOD (Day Out Of Days) Modal Component
-	const DoodModal = () => {
+	const renderDoodModal = () => {
 		if (!showDoodModal) return null;
 
 		// Generate array of dates between start and end
@@ -1814,10 +2473,12 @@ const ManageSchedules = () => {
 		// Format date for calendar display
 		const formatCalendarDateHeader = (dateStr) => {
 			const date = new Date(dateStr);
-			const day = date.getDate();
 			const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
-			const month = date.toLocaleDateString("en-US", { month: "short" });
-			return { day, weekday, month };
+			const dd = String(date.getDate()).padStart(2, "0");
+			const mm = String(date.getMonth() + 1).padStart(2, "0");
+			const yyyy = date.getFullYear();
+			const fullDate = `${dd}/${mm}/${yyyy}`;
+			return { weekday, fullDate };
 		};
 
 		return (
@@ -2109,11 +2770,34 @@ const ManageSchedules = () => {
 									</>
 								)}
 							</div>
-
 							{scheduleDays && scheduleDays.length > 0 ? (
 								<div className="sched-calendar-grid-wrapper" ref={calendarGridRef}>
-									{isCalendarEditing ? (
-										<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCalendarDragEnd}>
+										<DndContext
+											sensors={sensors}
+											collisionDetection={closestCenter}
+											measuring={{
+												droppable: {
+													strategy: MeasuringStrategy.Always,
+												},
+											}}
+											onDragStart={(event) => {
+												setActiveDragId(event.active.id);
+												setIsDraggingScene(true);
+												if (event.active.rect.current.initial) {
+													activeDragRectRef.current = event.active.rect.current.initial;
+												}
+											}}
+											onDragOver={handleDragOver}
+											onDragCancel={() => {
+												setActiveDragId(null);
+												setIsDraggingScene(false);
+											}}
+											onDragEnd={(event) => {
+												handleCalendarDragEnd(event);
+												setActiveDragId(null);
+												setIsDraggingScene(false);
+											}}
+										>
 											<div className="sched-calendar-grid">
 												{scheduleDays.map((day) => (
 													<CalendarDayColumn
@@ -2121,46 +2805,43 @@ const ManageSchedules = () => {
 														day={day}
 														isEditing={isCalendarEditing}
 														formatCalendarDateHeader={formatCalendarDateHeader}
+														dragPreview={dragPreview}
+														activeDragId={activeDragId}
+														dragHeight={activeDragRectRef.current?.height}
 													/>
 												))}
 											</div>
+											<DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.18, 0.67, 0.6, 1.08)" }}>
+												{activeDragId ? (() => {
+													const dragScene = getActiveScene();
+													if (!dragScene) return null;
+													return (
+														<div
+															className="sched-calendar-scene-block sched-calendar-scene-draggable"
+															style={{
+																...getSceneColorVars(dragScene.scene_color),
+																opacity: 0.9,
+																transform: "scale(1.02)",
+																boxShadow: "0 8px 16px rgba(0,0,0,0.15)",
+																cursor: "grabbing",
+																pointerEvents: "none",
+															}}
+														>
+															<b>
+																<div>
+																	{formatSceneDisplay(dragScene.scene_number, dragScene.episode_number)}
+																	{"   "}
+																	{dragScene.int_ext && dragScene.int_ext} {"      "}
+																	{dragScene.location_name || "N/A"}
+																	{"    -    "}
+																	{dragScene.time_of_day && <span>{dragScene.time_of_day}</span>}
+																</div>
+															</b>
+														</div>
+													);
+												})() : null}
+											</DragOverlay>
 										</DndContext>
-									) : (
-										<div className="sched-calendar-grid">
-											{scheduleDays.map((day) => {
-												const { day: dayNum, weekday, month } = formatCalendarDateHeader(day.date);
-												return (
-													<div key={day.id} className="sched-calendar-day-column">
-														<div className="sched-calendar-day-header">
-															<span className="sched-calendar-weekday">{weekday}</span>
-															<span className="sched-calendar-day-num">{dayNum}</span>
-															<span className="sched-calendar-month">{month}</span>
-														</div>
-														<div className="sched-calendar-scenes-container">
-															{day.scenes && day.scenes.length > 0 ? (
-																day.scenes.map((scene, idx) => (
-																	<div key={scene.id || idx} className="sched-calendar-scene-block">
-																		<b>
-																			<div>
-																				{scene.scene_number}
-																				{"   "}
-																				{scene.int_ext && scene.int_ext}
-																				{scene.location_name || "N/A"}
-																				{"  -   "}
-																				{scene.time_of_day && <span>{scene.time_of_day}</span>}
-																			</div>
-																		</b>
-																	</div>
-																))
-															) : (
-																<div className="sched-calendar-no-scenes">No scenes</div>
-															)}
-														</div>
-													</div>
-												);
-											})}
-										</div>
-									)}
 								</div>
 							) : (
 								<div className="sched-calendar-placeholder">No schedule data available. Generate a schedule first.</div>
@@ -2172,101 +2853,10 @@ const ManageSchedules = () => {
 		);
 	};
 
-	// Panel to display unscheduled scenes with drag-drop support
-	const UnscheduledScenesPanel = ({ unscheduledScenesWithIds, isEditing, characterNameToIdMap, isEpisodic }) => {
-		const { setNodeRef } = useDroppable({
-			id: "unscheduled",
-		});
-
-		const [isExpanded, setIsExpanded] = useState(true);
-
-		const hasScenes = unscheduledScenesWithIds && unscheduledScenesWithIds.length > 0;
-
-		return (
-			(isEditing || hasScenes) && (
-				<div ref={setNodeRef} className={`sched-unscheduled-panel ${!isExpanded ? "sched-unscheduled-panel-collapsed" : ""}`}>
-					<div className="sched-unscheduled-panel-header">
-						<h4>
-							Unscheduled Scenes ({unscheduledScenesWithIds?.length || 0})
-							{isEditing && <span className="sched-drag-hint"> - Drag scenes to schedule or unschedule them</span>}
-						</h4>
-						<button onClick={() => setIsExpanded(!isExpanded)}>{isExpanded ? "▲" : "▼"}</button>
-					</div>
-					{isExpanded && (
-						<SortableContext items={hasScenes ? unscheduledScenesWithIds.map((s) => s.id) : []} strategy={verticalListSortingStrategy}>
-							{hasScenes ? (
-								<table className="sched-table">
-									<thead className="sched-thead">
-										<tr className="sched-header-row">
-											{isEpisodic && <th className="sched-header-cell">Ep</th>}
-											<th className="sched-header-cell">Scene</th>
-											<th className="sched-header-cell">Int./Ext.</th>
-											<th className="sched-header-cell sched-location-synopsis-column">Location/Synopsis</th>
-											<th className="sched-header-cell">Pgs</th>
-											<th className="sched-header-cell">Characters</th>
-										</tr>
-									</thead>
-									<tbody>
-										{unscheduledScenesWithIds.map((scene) => (
-											<UnscheduledSceneCard
-												key={scene.id}
-												scene={scene}
-												isEditing={isEditing}
-												characterNameToIdMap={characterNameToIdMap}
-												isEpisodic={isEpisodic}
-											/>
-										))}
-									</tbody>
-								</table>
-							) : (
-								<div className="sched-unscheduled-empty">
-									{isEditing ? "Drag scenes here to unschedule them" : "All scenes are scheduled"}
-								</div>
-							)}
-						</SortableContext>
-					)}
-				</div>
-			)
-		);
-	};
-
 	const handleSaveChanges = async () => {
 		try {
-			const filteredDays = scheduleDays.filter((day) => {
-				return day.scenes && day.scenes.length > 0;
-			});
-
-			const schedule_by_day = filteredDays.reduce((acc, day) => {
-				acc[day.date] = {
-					date: day.date,
-					scenes: day.scenes.map((scene) => ({
-						scene_id: scene.scene_id,
-						scene_number: scene.scene_number,
-						episode_number: scene.episode_number,
-						location_name: scene.location_name,
-						character_names: scene.character_names,
-						character_ids: scene.character_ids,
-					})),
-				};
-				return acc;
-			}, {});
-			console.log("PAyload for save changes ::::::::::::::::::::; ", schedule_by_day);
-
-			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`), {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ schedule_by_day }),
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-
-				throw new Error(errorData.message || "Failed to save schedule");
-			} else {
-				setScheduleDays(filteredDays);
-			}
+			const filteredDays = await persistScheduleDays(scheduleDays);
+			setScheduleDays(filteredDays);
 			fetchScheduleData();
 			alert("Schedule saved successfully!");
 			setIsEditing(false);
@@ -2284,40 +2874,8 @@ const ManageSchedules = () => {
 		const contentScrollTop = calendarContentRef.current?.scrollTop;
 		setIsCalendarSaving(true);
 		try {
-			const filteredDays = scheduleDays.filter((day) => {
-				return day.scenes && day.scenes.length > 0;
-			});
-
-			const schedule_by_day = filteredDays.reduce((acc, day) => {
-				acc[day.date] = {
-					date: day.date,
-					scenes: day.scenes.map((scene) => ({
-						scene_id: scene.scene_id,
-						scene_number: scene.scene_number,
-						episode_number: scene.episode_number,
-						location_name: scene.location_name,
-						character_names: scene.character_names,
-						character_ids: scene.character_ids,
-					})),
-				};
-				return acc;
-			}, {});
-			console.log("Calendar save payload: ", schedule_by_day);
-
-			const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`), {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ schedule_by_day }),
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.message || "Failed to save schedule");
-			} else {
-				setScheduleDays(filteredDays);
-			}
+			const filteredDays = await persistScheduleDays(scheduleDays);
+			setScheduleDays(filteredDays);
 			await fetchScheduleData();
 			setIsCalendarEditing(false);
 			// Restore scroll position after React re-renders
@@ -2369,6 +2927,9 @@ const ManageSchedules = () => {
 		const scrollTop = calendarGridRef.current?.scrollTop;
 		const contentScrollTop = calendarContentRef.current?.scrollTop;
 
+		const previewAtDrop = dragPreview;
+		setDragPreview(null);
+
 		if (!over) {
 			return;
 		}
@@ -2382,29 +2943,38 @@ const ManageSchedules = () => {
 
 		setScheduleDays((days) => {
 			const activeContainer = findCalendarContainer(days, activeId);
-			const overContainer = findCalendarContainer(days, overId);
 
-			if (!activeContainer || !overContainer) {
+			let targetContainerId = overId;
+			if (typeof overId === "string" && overId.startsWith("calendar-")) {
+				targetContainerId = overId.replace("calendar-", "");
+			}
+
+			const fallbackTarget = resolveDropTarget(days, targetContainerId, [], false);
+			const finalTarget = previewAtDrop || fallbackTarget;
+
+			if (!activeContainer || !finalTarget) {
+				return days;
+			}
+
+			const overContainer = days.find((day) => String(day.id) === String(finalTarget.containerId));
+			if (!overContainer) {
 				return days;
 			}
 
 			// Handle reordering within the same day
 			if (activeContainer.id === overContainer.id) {
 				const activeIndex = activeContainer.scenes.findIndex((s) => s.id === activeId);
-				const overIndex = overContainer.scenes.findIndex((s) => s.id === overId);
-				if (activeIndex !== -1 && overIndex !== -1) {
-					const newScenes = arrayMove(activeContainer.scenes, activeIndex, overIndex);
-					return days.map((day) => {
-						if (day.id === activeContainer.id) {
-							return { ...day, scenes: newScenes };
-						}
-						return day;
-					});
+				if (activeIndex !== -1) {
+					const reorderedScenes = [...activeContainer.scenes];
+					const [movedScene] = reorderedScenes.splice(activeIndex, 1);
+					const insertIndex = Math.max(0, Math.min(finalTarget.index, reorderedScenes.length));
+					reorderedScenes.splice(insertIndex, 0, movedScene);
+					return days.map((day) => (day.id === activeContainer.id ? { ...day, scenes: reorderedScenes } : day));
 				}
 				return days;
 			}
 
-			// Handle moving between days
+			// Handle moving between different days
 			const activeDayIndex = days.findIndex((d) => d.id === activeContainer.id);
 			const overDayIndex = days.findIndex((d) => d.id === overContainer.id);
 
@@ -2413,22 +2983,20 @@ const ManageSchedules = () => {
 			const activeSceneIndex = activeContainer.scenes.findIndex((s) => s.id === activeId);
 			if (activeSceneIndex === -1) return days;
 
-			const [movedScene] = activeContainer.scenes.splice(activeSceneIndex, 1);
-
-			// Find insertion index in target day
-			let overSceneIndex = overContainer.scenes.findIndex((s) => s.id === overId);
-			if (overSceneIndex === -1) {
-				overSceneIndex = overContainer.scenes.length;
-			}
+			const newActiveScenes = [...activeContainer.scenes];
+			const [movedScene] = newActiveScenes.splice(activeSceneIndex, 1);
+			const newOverScenes = [...overContainer.scenes];
+			const overSceneIndex = Math.max(0, Math.min(finalTarget.index, newOverScenes.length));
+			newOverScenes.splice(overSceneIndex, 0, movedScene);
 
 			const newDays = [...days];
 			newDays[activeDayIndex] = {
 				...newDays[activeDayIndex],
-				scenes: activeContainer.scenes,
+				scenes: newActiveScenes,
 			};
 			newDays[overDayIndex] = {
 				...newDays[overDayIndex],
-				scenes: [...overContainer.scenes.slice(0, overSceneIndex), movedScene, ...overContainer.scenes.slice(overSceneIndex)],
+				scenes: newOverScenes,
 			};
 
 			return newDays;
@@ -2492,6 +3060,10 @@ const ManageSchedules = () => {
 						console.log("breakdown scenes: ", breakdownData.scene_breakdowns);
 					}
 
+					if (breakdownData.parsing) {
+						setParsing(breakdownData.parsing);
+					}
+
 					if (breakdownData.hours) {
 						setHoursSaved(true);
 						setSceneHours(breakdownData.hours);
@@ -2507,38 +3079,21 @@ const ManageSchedules = () => {
 
 	// Fetch cast list from API
 	useEffect(() => {
-		const fetchCastList = async () => {
-			try {
-				const response = await fetch(getApiUrl(`/api/${id}/cast-list`));
-				if (response.ok) {
-					const data = await response.json();
-					setCastList(data.cast_list || []);
-				}
-			} catch (error) {
-				console.error("Error fetching cast list:", error);
-			}
-		};
 		fetchCastList();
 	}, [id]);
 
 	// Fetch location list from API
 	useEffect(() => {
-		const fetchLocationList = async () => {
-			try {
-				const response = await fetch(getApiUrl(`/api/${id}/locations`));
-				if (response.ok) {
-					const data = await response.json();
-					setLocationList(data.locations || []);
-					console.log("location list ------------ ", data);
-				}
-			} catch (error) {
-				console.error("Error fetching location list:", error);
-			}
-		};
 		fetchLocationList();
 	}, [id]);
 
-	const sensors = useSensors(useSensor(PointerSensor));
+	const sensors = useSensors(
+		useSensor(PointerSensor, {
+			activationConstraint: {
+				distance: 8,
+			},
+		}),
+	);
 
 	const parseHours = (time) => {
 		if (!time || (!time.hours && !time.minutes)) return 0;
@@ -2553,6 +3108,129 @@ const ManageSchedules = () => {
 		const m = Math.round((totalHours - h) * 60);
 		return { hours: h.toString(), minutes: m.toString().padStart(2, "0") };
 	};
+
+	const buildSchedulePayload = (days) => {
+		const filteredDays = days.filter((day) => day.scenes && day.scenes.length > 0);
+		const schedule_by_day = filteredDays.reduce((acc, day) => {
+			acc[day.date] = {
+				date: day.date,
+				scenes: day.scenes.map((scene) => ({
+					scene_id: scene.scene_id,
+					scene_number: scene.scene_number,
+					episode_number: scene.episode_number,
+					location_name: scene.location_name,
+					character_names: scene.character_names,
+					character_ids: scene.character_ids,
+					scene_color: normalizeSceneColor(scene.scene_color),
+				})),
+			};
+			return acc;
+		}, {});
+		return {
+			filteredDays,
+			schedule_by_day,
+			unscheduled_scene_order: unscheduledSceneOrder,
+		};
+	};
+
+	const persistScheduleDays = async (days) => {
+		const { filteredDays, schedule_by_day, unscheduled_scene_order } = buildSchedulePayload(days);
+		const response = await fetch(getApiUrl(`/api/${id}/schedule/${scheduleId}`), {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ schedule_by_day, unscheduled_scene_order }),
+		});
+
+		if (!response.ok) {
+			const errorData = await response.json();
+			throw new Error(errorData.message || "Failed to save schedule");
+		}
+
+		return filteredDays;
+	};
+
+	const updateSceneColor = async (sceneId, color) => {
+		const normalizedColor = normalizeSceneColor(color);
+
+		// Resolve the actual breakdown scene_id (unscheduled scenes use 'unsched-<id>' as their id)
+		const unschedScene = unscheduledScenesWithIds.find((s) => String(s.id) === String(sceneId));
+		const breakdownId = unschedScene ? String(unschedScene.scene_id) : null;
+
+		// For scheduled scenes, look up scene_id from scheduleDays
+		const scheduledScene = !breakdownId
+			? scheduleDays.flatMap((d) => d.scenes).find((s) => String(s.id) === String(sceneId))
+			: null;
+		const actualSceneId = breakdownId || (scheduledScene ? String(scheduledScene.scene_id) : String(sceneId));
+
+		// Optimistic update: update breakdownScenes locally
+		const prevBreakdown = breakdownScenes;
+		setBreakdownScenes((prev) =>
+			prev.map((s) =>
+				String(s.id) === actualSceneId ? { ...s, scene_color: normalizedColor } : s
+			)
+		);
+
+		// Also update scheduleDays for immediate visual feedback
+		const prevDays = scheduleDays;
+		setScheduleDays((days) =>
+			days.map((day) => ({
+				...day,
+				scenes: day.scenes.map((scene) =>
+					String(scene.scene_id) === actualSceneId ? { ...scene, scene_color: normalizedColor } : scene
+				),
+			}))
+		);
+
+		try {
+			const response = await fetch(getApiUrl(`/api/${id}/scene-color`), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ scene_id: actualSceneId, color: normalizedColor }),
+			});
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.message || "Failed to save scene color");
+			}
+		} catch (error) {
+			console.error("Error updating scene color:", error);
+			// Revert optimistic updates
+			setBreakdownScenes(prevBreakdown);
+			setScheduleDays(prevDays);
+			alert("Failed to save scene color: " + error.message);
+		}
+	};
+
+	const fetchCastList = async () => {
+		try {
+			const response = await fetch(getApiUrl(`/api/${id}/cast-list`));
+			if (response.ok) {
+				const data = await response.json();
+				setCastList(data.cast_list || []);
+			}
+		} catch (error) {
+			console.error("Error fetching cast list:", error);
+		}
+	};
+
+	const fetchLocationList = async () => {
+		try {
+			const response = await fetch(getApiUrl(`/api/${id}/locations`));
+			if (response.ok) {
+				const data = await response.json();
+				setLocationList(data.locations || []);
+				console.log("location list ------------ ", data);
+			}
+		} catch (error) {
+			console.error("Error fetching location list:", error);
+		}
+	};
+
+	const refreshSupportingData = async () => {
+		await Promise.all([fetchCastList(), fetchLocationList()]);
+	};
+
 	const fetchScheduleData = async () => {
 		try {
 			setIsLoading(true);
@@ -2564,6 +3242,7 @@ const ManageSchedules = () => {
 			console.log("schedule-data ------------ ", data);
 			setScheduleData(data);
 			setGeneratedMaxScenes(data["generated_schedule"]["constraints"]["max_scenes_per_day"] || "N/A");
+			setGeneratedTotalShootDays(data["generated_schedule"]["total_shoot_days"] || "N/A");
 			setConstraintType(data["generated_schedule"]["constraints"]["constraint_type"] || "N/A");
 			console.log("conatraont type set as ::: ", typeof data["generated_schedule"]["constraints"]["constraint_type"]);
 			setGeneratedMaxPageEightsPerDay(data["generated_schedule"]["constraints"]["max_page_eighths_per_day"] || "N/A");
@@ -2584,6 +3263,18 @@ const ManageSchedules = () => {
 		PageEights /= 8;
 		return `${PageEights} ${m}/8 `;
 	}
+
+	useEffect(() => {
+		const handlePointerMove = (e) => {
+			pointerPosRef.current = { x: e.clientX, y: e.clientY };
+		};
+		window.addEventListener("pointermove", handlePointerMove, { capture: true });
+		window.addEventListener("mousemove", handlePointerMove, { capture: true });
+		return () => {
+			window.removeEventListener("pointermove", handlePointerMove, { capture: true });
+			window.removeEventListener("mousemove", handlePointerMove, { capture: true });
+		};
+	}, []);
 
 	useEffect(() => {
 		fetchScheduleData();
@@ -2740,6 +3431,53 @@ const ManageSchedules = () => {
 		return map;
 	}, [breakdownCharacters]);
 
+	const findBreakdownSceneIndex = (sceneLike) => {
+		if (!sceneLike || !Array.isArray(breakdownScenes) || breakdownScenes.length === 0) {
+			return -1;
+		}
+
+		const rawId = sceneLike.scene_id ?? sceneLike.id;
+		if (rawId !== undefined && rawId !== null && String(rawId).trim() !== "") {
+			const normalizedId = String(rawId);
+			const byIdIndex = breakdownScenes.findIndex((candidate) => String(candidate?.id) === normalizedId);
+			if (byIdIndex !== -1) {
+				return byIdIndex;
+			}
+		}
+
+		const sceneNumber = String(sceneLike.scene_number || sceneLike["Scene Number"] || sceneLike["Scene No."] || "").trim();
+		const episodeNumber = String(sceneLike.episode_number || sceneLike["Episode Number"] || "").trim();
+		if (!sceneNumber) {
+			return -1;
+		}
+
+		return breakdownScenes.findIndex((candidate) => {
+			const candidateSceneNumber = String(candidate?.scene_number || "").trim();
+			const candidateEpisodeNumber = String(candidate?.episode_number || "").trim();
+			if (candidateSceneNumber !== sceneNumber) {
+				return false;
+			}
+			if (episodeNumber) {
+				return candidateEpisodeNumber === episodeNumber;
+			}
+			return true;
+		});
+	};
+
+	const handleSceneClick = (sceneLike) => {
+		if (isDraggingScene) return;
+
+		const breakdownIndex = findBreakdownSceneIndex(sceneLike);
+		const breakdownScene = breakdownIndex >= 0 ? breakdownScenes[breakdownIndex] : null;
+		const parsingScene = breakdownIndex >= 0 ? parsing[breakdownIndex] : null;
+
+		setSelectedSceneDetails({
+			scene: sceneLike,
+			breakdownScene,
+			parsingScene,
+		});
+	};
+
 	// Calculate unscheduled scenes by comparing breakdown scenes with scheduled scenes
 	const unscheduledScenes = useMemo(() => {
 		if (!breakdownScenes || breakdownScenes.length === 0) return [];
@@ -2763,7 +3501,7 @@ const ManageSchedules = () => {
 
 	// Create unscheduled scenes with unique drag IDs (prefixed with 'unsched-' to avoid conflicts)
 	const unscheduledScenesWithIds = useMemo(() => {
-		return unscheduledScenes.map((scene) => ({
+		const orderedScenes = unscheduledScenes.map((scene) => ({
 			id: `unsched-${scene.id}`,
 			scene_id: scene.id,
 			scene_number: scene.scene_number,
@@ -2775,8 +3513,39 @@ const ManageSchedules = () => {
 			location_name: scene.location,
 			character_names: scene.characters || [],
 			character_ids: scene.characters_ids || [],
+			scene_color: normalizeSceneColor(scene.scene_color),
 		}));
-	}, [unscheduledScenes]);
+
+		const orderIndex = new Map(unscheduledSceneOrder.map((sceneId, index) => [String(sceneId), index]));
+		return orderedScenes.sort((a, b) => {
+			const aIndex = orderIndex.get(String(a.scene_id));
+			const bIndex = orderIndex.get(String(b.scene_id));
+			if (aIndex === undefined && bIndex === undefined) return 0;
+			if (aIndex === undefined) return 1;
+			if (bIndex === undefined) return -1;
+			return aIndex - bIndex;
+		});
+	}, [unscheduledSceneOrder, unscheduledScenes]);
+
+	// Color sync useEffect removed — colors now come from breakdownScenes (single source of truth)
+
+	useEffect(() => {
+		const savedOrder = Array.isArray(scheduleData?.unscheduled_scene_order)
+			? scheduleData.unscheduled_scene_order.map((sceneId) => String(sceneId))
+			: [];
+		const currentIds = unscheduledScenes.map((scene) => String(scene.id));
+
+		setUnscheduledSceneOrder((prev) => {
+			const baseOrder = savedOrder.length > 0 ? savedOrder : prev;
+			const next = [
+				...baseOrder.filter((sceneId) => currentIds.includes(sceneId)),
+				...currentIds.filter((sceneId) => !baseOrder.includes(sceneId)),
+			];
+			const prevKeys = prev.join("|");
+			const nextKeys = next.join("|");
+			return prevKeys === nextKeys ? prev : next;
+		});
+	}, [scheduleData, unscheduledScenes]);
 
 	// Get locked option info for the selected location
 	const selectedLocationLockedInfo = useMemo(() => {
@@ -2831,6 +3600,8 @@ const ManageSchedules = () => {
 	}, [elementType, element, castList]);
 
 	useEffect(() => {
+		if (isEditing || isCalendarEditing) return;
+
 		if (scheduleData && scheduleData.schedule && scheduleData.schedule.schedule_by_day) {
 			// Build character name to ID mapping from castList API data (fallback)
 			const charNameToId = {};
@@ -2870,6 +3641,7 @@ const ManageSchedules = () => {
 								newScene.location_name = breakdownScene.location;
 
 								newScene.character_names = breakdownScene.characters || [];
+								newScene.scene_color = normalizeSceneColor(breakdownScene.scene_color || scheduledScene.scene_color);
 
 								// Use character_ids from breakdown data if available, otherwise map from names
 								if (breakdownScene.characters_ids) {
@@ -2894,6 +3666,7 @@ const ManageSchedules = () => {
 
 									newScene.character_names = fullScene["Characters"] ? fullScene["Characters"].split(",").map((c) => c.trim()) : [];
 									newScene.character_ids = newScene.character_names.map((name) => charNameToId[name] || null);
+									newScene.scene_color = normalizeSceneColor(scheduledScene.scene_color);
 								} else {
 									// Scene not found in breakdown data - it may have been deleted
 									// Return null to filter it out
@@ -2912,12 +3685,12 @@ const ManageSchedules = () => {
 				const dates = days.map((item) => new Date(item.date));
 				const startDate = new Date(Math.min(...dates));
 				const endDate = new Date(Math.max(...dates));
-				const formatDate = (d) =>
-					d.toLocaleDateString("en-US", {
-						year: "numeric",
-						month: "long",
-						day: "numeric",
-					});
+				const formatDate = (d) => {
+					const dd = String(d.getDate()).padStart(2, "0");
+					const mm = String(d.getMonth() + 1).padStart(2, "0");
+					const yyyy = d.getFullYear();
+					return `${dd}/${mm}/${yyyy}`;
+				};
 
 				setScheduleDates({ start: formatDate(startDate), end: formatDate(endDate) });
 				setScheduleDays(days);
@@ -2927,40 +3700,92 @@ const ManageSchedules = () => {
 					date: day.date,
 					scenes: day.scenes.map((scene, index) => ({
 						...scene,
-								episode_number: scene.episode_number || "",
+						episode_number: scene.episode_number || "",
 						id: scene.scene_id ? String(scene.scene_id) : `${day.date}-${index}-${scene.scene_number}`,
+						scene_color: normalizeSceneColor(
+							(breakdownScenes.find(bs => String(bs.id) === String(scene.scene_id))?.scene_color) || scene.scene_color
+						),
 					})),
 				}));
 				console.log("days -- ", days);
 				setScheduleDays(days);
 			}
 		}
-	}, [scheduleData, scenes, castList, breakdownScenes]);
+	}, [scheduleData, scenes, castList, breakdownScenes, isEditing, isCalendarEditing]);
+
+	const handleDragStart = (event) => {
+		setIsDraggingScene(true);
+		setActiveDragId(event.active.id);
+		lastHoveredContainerRef.current = null;
+		if (event.active.rect.current.initial) {
+			activeDragRectRef.current = event.active.rect.current.initial;
+		}
+		const activeContainer = findContainer(scheduleDays, event.active.id, unscheduledScenesWithIds);
+		if (activeContainer) {
+			const activeIndex = activeContainer.scenes.findIndex((scene) => String(scene.id) === String(event.active.id));
+			setDragPreview({
+				containerId: activeContainer.id,
+				index: Math.max(activeIndex, 0),
+				sourceContainerId: activeContainer.id,
+			});
+		} else {
+			setDragPreview(null);
+		}
+	};
+
+	const handleDragCancel = () => {
+		setIsDraggingScene(false);
+		setActiveDragId(null);
+		setDragPreview(null);
+		lastHoveredTimelineIdRef.current = null;
+		lastHoveredContainerRef.current = null;
+	};
 
 	const handleDragEnd = (event) => {
+		setIsDraggingScene(false);
 		const { active, over } = event;
+		const previewAtDrop = dragPreview;
+		setActiveDragId(null);
+		setDragPreview(null);
+		lastHoveredTimelineIdRef.current = null;
+		lastHoveredContainerRef.current = null;
 
-		if (!over) {
+		if (!over && !previewAtDrop) {
 			return;
 		}
 
 		const activeId = active.id;
-		const overId = over.id;
+		const overId = over?.id ?? previewAtDrop?.containerId;
 
-		if (activeId === overId) {
+		let targetContainerId = overId;
+		let insertAtTop = false;
+
+		// Intercept timeline node drops to place at the top of that day
+		if (typeof overId === "string" && overId.startsWith("timeline-nav-")) {
+			targetContainerId = overId.replace("timeline-nav-", "");
+			insertAtTop = true;
+		}
+
+		if (activeId === targetContainerId) {
 			return;
 		}
 
 		setScheduleDays((days) => {
 			const activeContainer = findContainer(days, activeId, unscheduledScenesWithIds);
-			const overContainer = findContainer(days, overId, unscheduledScenesWithIds);
+			const fallbackTarget = resolveDropTarget(days, targetContainerId, unscheduledScenesWithIds, insertAtTop);
+			const finalTarget = previewAtDrop || fallbackTarget;
+			const overContainer = finalTarget
+				? finalTarget.containerId === "unscheduled"
+					? { id: "unscheduled", scenes: unscheduledScenesWithIds }
+					: days.find((day) => day.id === finalTarget.containerId)
+				: null;
 
-			if (!activeContainer || !overContainer) {
+			if (!activeContainer || !overContainer || !finalTarget) {
 				return days;
 			}
 
 			// Handle dropping scheduled scenes into unscheduled container
-			if (overContainer.id === "unscheduled" && activeContainer.id !== "unscheduled") {
+				if (overContainer.id === "unscheduled" && activeContainer.id !== "unscheduled") {
 				// Find and remove the scene from its current day
 				const activeDayIndex = days.findIndex((d) => d.id === activeContainer.id);
 				if (activeDayIndex === -1) return days;
@@ -2974,11 +3799,22 @@ const ManageSchedules = () => {
 					scenes: newDays[activeDayIndex].scenes.filter((s) => s.id !== activeId),
 				};
 
-				return newDays;
-			}
+				const movedScene = activeContainer.scenes.find((s) => s.id === activeId);
+					if (movedScene?.scene_id !== undefined && movedScene?.scene_id !== null) {
+						const movedSceneOrderId = String(movedScene.scene_id);
+						setUnscheduledSceneOrder((prev) => {
+							const withoutScene = prev.filter((sceneId) => sceneId !== movedSceneOrderId);
+							const insertIndex = Math.max(0, Math.min(finalTarget.index, withoutScene.length));
+							withoutScene.splice(insertIndex, 0, movedSceneOrderId);
+							return withoutScene;
+						});
+					}
+
+					return newDays;
+				}
 
 			// Handle dragging from unscheduled to a schedule day
-			if (activeContainer.id === "unscheduled") {
+			if (activeContainer.id === "unscheduled" && overContainer.id !== "unscheduled") {
 				const overDayIndex = days.findIndex((d) => d.id === overContainer.id);
 				if (overDayIndex === -1) return days;
 
@@ -3009,15 +3845,14 @@ const ManageSchedules = () => {
 					location_name: unscheduledScene.location_name,
 					character_names: unscheduledScene.character_names,
 					character_ids: unscheduledScene.character_ids,
+					scene_color: normalizeSceneColor(unscheduledScene.scene_color),
 				};
-				console.log("newScene-----------", newScene);
 
 				const newDays = [...days];
-
-				// Find insertion index
-				let overSceneIndex = overContainer.scenes.findIndex((s) => s.id === overId);
-				if (overSceneIndex === -1) {
-					overSceneIndex = newDays[overDayIndex].scenes.length;
+				const overSceneIndex = Math.min(finalTarget.index, newDays[overDayIndex].scenes.length);
+				if (unscheduledScene.scene_id !== undefined && unscheduledScene.scene_id !== null) {
+					const movedSceneOrderId = String(unscheduledScene.scene_id);
+					setUnscheduledSceneOrder((prev) => prev.filter((sceneId) => sceneId !== movedSceneOrderId));
 				}
 
 				newDays[overDayIndex] = {
@@ -3030,17 +3865,23 @@ const ManageSchedules = () => {
 
 			// Handle reordering within the same day
 			if (activeContainer.id === overContainer.id) {
+				if (activeContainer.id === "unscheduled") {
+					const reorderedScenes = activeContainer.scenes.filter((scene) => String(scene.id) !== String(activeId));
+					const movedScene = activeContainer.scenes.find((scene) => String(scene.id) === String(activeId));
+					if (!movedScene) return days;
+
+					const insertIndex = Math.max(0, Math.min(finalTarget.index, reorderedScenes.length));
+					reorderedScenes.splice(insertIndex, 0, movedScene);
+					setUnscheduledSceneOrder(reorderedScenes.map((scene) => String(scene.scene_id)));
+					return days;
+				}
 				const activeIndex = activeContainer.scenes.findIndex((s) => s.id === activeId);
-				const overIndex = overContainer.scenes.findIndex((s) => s.id === overId);
-				if (activeIndex !== -1 && overIndex !== -1) {
-					const newScenes = arrayMove(activeContainer.scenes, activeIndex, overIndex);
-					const newDays = days.map((day) => {
-						if (day.id === activeContainer.id) {
-							return { ...day, scenes: newScenes };
-						}
-						return day;
-					});
-					return newDays;
+				if (activeIndex !== -1) {
+					const reorderedScenes = [...activeContainer.scenes];
+					const [movedScene] = reorderedScenes.splice(activeIndex, 1);
+					const insertIndex = Math.max(0, Math.min(finalTarget.index, reorderedScenes.length));
+					reorderedScenes.splice(insertIndex, 0, movedScene);
+					return days.map((day) => (day.id === activeContainer.id ? { ...day, scenes: reorderedScenes } : day));
 				}
 			} else {
 				// Handle moving between different schedule days
@@ -3051,12 +3892,7 @@ const ManageSchedules = () => {
 
 				const newDays = [...days];
 				const [movedScene] = newDays[activeDayIndex].scenes.splice(activeSceneIndex, 1);
-
-				let overSceneIndex = overContainer.scenes.findIndex((s) => s.id === overId);
-				if (overSceneIndex === -1) {
-					overSceneIndex = newDays[overDayIndex].scenes.length;
-				}
-
+				const overSceneIndex = Math.min(finalTarget.index, newDays[overDayIndex].scenes.length);
 				newDays[overDayIndex].scenes.splice(overSceneIndex, 0, movedScene);
 
 				return newDays;
@@ -3219,8 +4055,11 @@ const ManageSchedules = () => {
 
 					const character_names = breakdownScene?.characters || scene.character_names || [];
 					const character_ids = breakdownScene?.characters_ids || scene.character_ids || [];
-					const location_name = breakdownScene?.location || scene.location_name;
+					const location_name = breakdownScene?.set || scene.location_name;
+					//////////
 
+
+					// console.log("breakdownScenescheck",breakdownScenes)
 					character_ids?.forEach((charId, index) => {
 						const charName = character_names?.[index];
 						const charData = characterDates[charName];
@@ -3240,6 +4079,8 @@ const ManageSchedules = () => {
 					});
 
 					const locationData = locationDates[location_name];
+					// console.log("locationDates",locationDates);
+
 					if (locationData) {
 						// Check if location is marked as unavailable on this date
 						if (locationData.unavailable_dates && locationData.unavailable_dates.includes(dayData.date)) {
@@ -3382,6 +4223,7 @@ const ManageSchedules = () => {
 				throw new Error(`${result.message} \n Try changing constraints`);
 			}
 			console.log("Schedule generated successfully:", result);
+			setGeneratedTotalShootDays(result.total_shoot_days || "N/A");
 
 			setTimeout(async () => {
 				try {
@@ -3390,6 +4232,7 @@ const ManageSchedules = () => {
 						const refreshedData = await refreshResponse.json();
 						setScheduleData(refreshedData);
 						setGeneratedMaxScenes(refreshedData["generated_schedule"]["constraints"]["max_scenes_per_day"] || "N/A");
+						setGeneratedTotalShootDays(refreshedData["generated_schedule"]["total_shoot_days"] || "N/A");
 						setConstraintType(refreshedData["generated_schedule"]["constraints"]["constraint_type"] || "N/A");
 						setGeneratedMaxPageEightsPerDay(refreshedData["generated_schedule"]["constraints"]["max_page_eighths_per_day"] || "N/A");
 						setGeneratedMaxHoursPerDay(refreshedData["generated_schedule"]["constraints"]["max_hours_per_day"] || "N/A");
@@ -3470,11 +4313,10 @@ const ManageSchedules = () => {
 
 	const formatDisplayDate = (dateString) => {
 		const date = new Date(dateString);
-		return date.toLocaleDateString("en-US", {
-			weekday: "short",
-			month: "short",
-			day: "numeric",
-		});
+		const dd = String(date.getDate()).padStart(2, "0");
+		const mm = String(date.getMonth() + 1).padStart(2, "0");
+		const yyyy = date.getFullYear();
+		return `${dd}/${mm}/${yyyy}`;
 	};
 
 	const generateCalendarDays = () => {
@@ -3749,6 +4591,8 @@ const ManageSchedules = () => {
 		}
 	};
 	const projectName = useSelector((state) => state.project.projectName);
+	const sidebarCollapsed = useSelector((state) => state.ui.navbarCollapsed);
+	const sidebarWidth = sidebarCollapsed ? "60px" : "238px";
 
 	const handleClearSchedule = async () => {
 		if (!window.confirm("Are you sure you want to clear the schedule? This will remove the generated schedule and all availability dates for every location and character.")) {
@@ -3768,6 +4612,7 @@ const ManageSchedules = () => {
 			setIsEditing(false);
 			setConstraintType("");
 			setGeneratedMaxScenes("");
+			setGeneratedTotalShootDays("");
 			setGeneratedMaxPageEightsPerDay("");
 			setGeneratedMaxHoursPerDay("");
 			setScheduleDates({ start: "N/A", end: "N/A" });
@@ -3914,8 +4759,123 @@ const ManageSchedules = () => {
 		saveAs(blob, `${(projectName || "Schedule").replace(/\s+/g, "_")}_Schedule.xlsx`);
 	};
 
+	// Helper to get scene object for DragOverlay
+	const getActiveScene = () => {
+		if (!activeDragId) return null;
+
+		const unscheduledMatch = unscheduledScenesWithIds.find((s) => s.id === activeDragId);
+		if (unscheduledMatch) return unscheduledMatch;
+
+		for (const day of scheduleDays) {
+			const match = day.scenes.find((s) => s.id === activeDragId);
+			if (match) return match;
+		}
+		return null;
+	};
+
+	const activeScene = getActiveScene();
+	const showHoursInOverlay = activeScene ? !String(activeDragId || "").startsWith("unsched-") : false;
+
+	const updateDragPreviewForTarget = (activeId, targetContainerId, insertAtTop = false) => {
+		if (!targetContainerId || !activeId) {
+			setDragPreview(null);
+			return;
+		}
+
+		const isCalendarTarget = typeof targetContainerId === "string" && targetContainerId.startsWith("calendar-");
+		const normalizedTargetId = isCalendarTarget ? targetContainerId.replace("calendar-", "") : targetContainerId;
+
+		const activeContainer = findContainer(scheduleDays, activeId, unscheduledScenesWithIds);
+		const target = resolveDropTarget(scheduleDays, normalizedTargetId, unscheduledScenesWithIds, insertAtTop);
+		if (!activeContainer || !target) {
+			setDragPreview(null);
+			return;
+		}
+
+		let previewIndex = target.index;
+		if (!insertAtTop) {
+			const pointerIndex = getPointerBasedInsertIndex(target.containerId, activeId, pointerPosRef.current.y, isCalendarTarget);
+			if (pointerIndex !== null) {
+				previewIndex = pointerIndex;
+			}
+		}
+
+		if (activeContainer.id === target.containerId) {
+			previewIndex = Math.max(0, Math.min(previewIndex, target.containerId === "unscheduled"
+				? unscheduledScenesWithIds.filter((scene) => String(scene.id) !== String(activeId)).length
+				: (scheduleDays.find((day) => day.id === target.containerId)?.scenes || []).filter((scene) => String(scene.id) !== String(activeId)).length));
+		}
+
+		setDragPreview((prev) => {
+			if (
+				prev?.containerId === target.containerId &&
+				prev?.index === previewIndex &&
+				prev?.sourceContainerId === activeContainer.id
+			) {
+				return prev;
+			}
+			return { containerId: target.containerId, index: previewIndex, sourceContainerId: activeContainer.id };
+		});
+	};
+
+	const handleDragOver = (event) => {
+		const { active, over } = event;
+		const overId = over?.id;
+		const activeId = active?.id;
+
+		if (!overId || !activeId) {
+			setDragPreview(null);
+			return;
+		}
+
+		if (overId && typeof overId === "string" && overId.startsWith("timeline-nav-")) {
+				if (lastHoveredTimelineIdRef.current !== overId) {
+					lastHoveredTimelineIdRef.current = overId;
+					const dayId = overId.replace("timeline-nav-", "");
+					const el = document.getElementById(`day-column-${dayId}`);
+					if (el && scheduleContentRef.current) {
+						scheduleContentRef.current.scrollTo({
+							top: el.offsetTop - 16,
+							behavior: "auto"
+						});
+					}
+				}
+			updateDragPreviewForTarget(activeId, overId.replace("timeline-nav-", ""), true);
+			return;
+		} else {
+			lastHoveredTimelineIdRef.current = null;
+		}
+
+		updateDragPreviewForTarget(activeId, overId);
+	};
+
+	useEffect(() => {
+		if (!isDraggingScene || !activeDragId) return;
+
+		let frameId = null;
+
+		const updateFromPointer = () => {
+			const { x, y } = pointerPosRef.current;
+			const containerId = getContainerIdFromPointer(x, y);
+
+			if (containerId) {
+				lastHoveredContainerRef.current = containerId;
+				updateDragPreviewForTarget(activeDragId, containerId);
+			}
+			frameId = requestAnimationFrame(updateFromPointer);
+		};
+
+		frameId = requestAnimationFrame(updateFromPointer);
+
+		return () => {
+			if (frameId) {
+				cancelAnimationFrame(frameId);
+			}
+		};
+	}, [isDraggingScene, activeDragId, scheduleDays, unscheduledScenesWithIds]);
+
 	return (
-		<div className="sched-page-container">
+		<div className="sched-page-container" style={{ left: sidebarWidth }}>
 			{isGenerating && (
 				<div className="sched-modal-overlay">
 					<div className="sched-modal">
@@ -4136,6 +5096,7 @@ const ManageSchedules = () => {
 									: constraintType === "hours"
 										? `max ${generatedMaxHoursPerDay} hours per day`
 										: `max ${parsePageEights(maxGeneratedPageEightsPerDay)} page eights per day`}
+								{generatedTotalShootDays ? ` • ${generatedTotalShootDays} shoot days` : ""}
 							</span>
 						)}
 					</div>
@@ -4155,9 +5116,10 @@ const ManageSchedules = () => {
 						</div>
 					)}
 
-					<ConflictsModal />
-					<GenerateScheduleModal />
-					<DoodModal />
+					{renderConflictsModal()}
+					{renderGenerateScheduleModal()}
+					{renderDoodModal()}
+					{renderSceneDetailsModal()}
 
 					<div className="sched-controls-section">
 						<div className="sched-controls-group">
@@ -4221,9 +5183,7 @@ const ManageSchedules = () => {
 											Save
 										</button>
 
-										<input
-											label="Add a date"
-											type="date"
+										<CustomDatePicker
 											value={newScheduleDayInput}
 											onChange={(e) => setNewScheduleDayInput(e.target.value)}
 											className="sched-edit-date-input"
@@ -4268,15 +5228,59 @@ const ManageSchedules = () => {
 					</div>
 
 					{scheduleData?.schedule && (
-						<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-							{/* Unscheduled Scenes Panel - Always visible */}
-							<UnscheduledScenesPanel
-								unscheduledScenesWithIds={unscheduledScenesWithIds}
+						<DndContext
+							sensors={sensors}
+							collisionDetection={customCollisionDetection}
+							measuring={{
+								droppable: {
+									strategy: MeasuringStrategy.Always,
+								},
+							}}
+							onDragStart={handleDragStart}
+							onDragOver={handleDragOver}
+							onDragEnd={handleDragEnd}
+							onDragCancel={handleDragCancel}
+							autoScroll={{
+								canScroll: (element) => {
+									// Disable dnd-kit auto-scroll if cursor is over the timeline scrollbar track
+									const track = document.querySelector(".sched-custom-scrollbar-track");
+									if (track) {
+										const rect = track.getBoundingClientRect();
+										if (
+											pointerPosRef.current.x >= rect.left &&
+											pointerPosRef.current.x <= rect.right &&
+											pointerPosRef.current.y >= rect.top &&
+											pointerPosRef.current.y <= rect.bottom
+										) {
+											return false;
+										}
+									}
+									return true;
+								}
+							}}
+						>
+							<CustomTimelineScrollbar
+								scrollRef={scheduleContentRef}
+								days={(isEditing || (unscheduledScenesWithIds && unscheduledScenesWithIds.length > 0)) ? [{ id: "unscheduled", date: "Unscheduled" }, ...scheduleDays] : scheduleDays}
 								isEditing={isEditing}
-								characterNameToIdMap={characterNameToIdMap}
-								isEpisodic={isEpisodic}
+								isDraggingScene={isDraggingScene}
 							/>
-							<div className="sched-schedule-content">
+							<div
+								className={`sched-schedule-content sched-schedule-content-custom-scroll ${isEditing ? "sched-schedule-content-editing" : ""}`}
+								ref={scheduleContentRef}
+							>
+								{/* Unscheduled Scenes Panel - Now part of scroll container */}
+								<UnscheduledScenesPanel
+									unscheduledScenesWithIds={unscheduledScenesWithIds}
+									isEditing={isEditing}
+									characterNameToIdMap={characterNameToIdMap}
+									isEpisodic={isEpisodic}
+									dragPreview={dragPreview}
+									activeDragId={activeDragId}
+									onSceneClick={handleSceneClick}
+									dragHeight={activeDragRectRef.current?.height}
+									onSceneColorChange={updateSceneColor}
+								/>
 								{scheduleDays.map((day) => {
 									return (
 										<ScheduleColumn
@@ -4289,14 +5293,30 @@ const ManageSchedules = () => {
 											setScheduleDays={setScheduleDays}
 											characterNameToIdMap={characterNameToIdMap}
 											isEpisodic={isEpisodic}
+											dragPreview={dragPreview}
+											activeDragId={activeDragId}
+											onSceneColorChange={updateSceneColor}
+											onSceneClick={handleSceneClick}
+											dragHeight={activeDragRectRef.current?.height}
 										/>
 									);
 								})}
 							</div>
+							<DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.18, 0.67, 0.6, 1.08)" }}>
+								{activeScene ? (
+									<SceneDragOverlay
+										scene={activeScene}
+										characterNameToIdMap={characterNameToIdMap}
+										isEpisodic={isEpisodic}
+										showHours={showHoursInOverlay}
+									/>
+								) : null}
+							</DragOverlay>
+
 						</DndContext>
 					)}
 					{!scheduleData?.schedule && scenes.length > 0 && (
-						<div className="sched-all-scenes-container">
+						<div className="sched-all-scenes-container sched-all-scenes-scroll">
 							<h4>All Scenes</h4>
 							<table className="sched-table">
 								<thead className="sched-thead">
@@ -4315,7 +5335,7 @@ const ManageSchedules = () => {
 								</thead>
 								<tbody>
 									{scenes.map((scene, index) => (
-										<tr key={index} className="sched-data-row">
+										<tr key={index} className="sched-data-row sched-scene-row-clickable" onClick={() => handleSceneClick(scene)}>
 											{isEpisodic && <td className="sched-data-cell">{scene["Episode Number"] || scene.episode_number || "-"}</td>}
 											<td className="sched-data-cell">{scene["Scene Number"] || scene["Scene No."] || ""}</td>
 
@@ -4332,6 +5352,7 @@ const ManageSchedules = () => {
 													type="number"
 													className="sched-hours-input"
 													placeholder="HH"
+													onClick={(e) => e.stopPropagation()}
 													value={sceneHours[scene["Scene Number"] ?? scene["Scene No."]]?.hours ?? ""}
 													onChange={(e) => {
 														const newSceneHours = { ...sceneHours };
@@ -4358,6 +5379,7 @@ const ManageSchedules = () => {
 													type="number"
 													className="sched-hours-input"
 													placeholder="MM"
+													onClick={(e) => e.stopPropagation()}
 													value={sceneHours[scene["Scene Number"] ?? scene["Scene No."]]?.minutes ?? ""}
 													onChange={(e) => {
 														const newSceneHours = { ...sceneHours };
@@ -4389,7 +5411,15 @@ const ManageSchedules = () => {
 					)}
 				</div>
 
-				<Chatbot scheduleData={scheduleData} scheduleDays={scheduleDays} scenes={scenes} id={id} fetchScheduleData={fetchScheduleData} />
+				<Chatbot
+					scheduleData={scheduleData}
+					scheduleDays={scheduleDays}
+					scenes={scenes}
+					conflicts={conflicts}
+					id={id}
+					fetchScheduleData={fetchScheduleData}
+					refreshSupportingData={refreshSupportingData}
+				/>
 			</div>
 		</div>
 	);

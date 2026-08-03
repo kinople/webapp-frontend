@@ -2,20 +2,21 @@
 
 /* Container */
 .sidebar-container {
-	height: 100%;
-	width: 238px;
-	background-color: #fbfbfb;
-	border-right: 2px solid #ebebed;
-	font-family: "Inter", sans-serif;
-	position: fixed;
-	top: 0;
-	left: 0;
-	z-index: 100;
-	display: flex;
-	flex-direction: column;
-	padding: 7px 12px 12px 12px;
-	box-sizing: border-box;
-	transition: width 0.3s ease;
+height: 100%;
+  width: 238px;
+  background-color: #fbfbfb;
+  border-right: 2px solid #ebebed;
+  font-family: Inter,sans-serif;
+  position: fixed;
+  top: 0;
+  left: 0;
+  /* z-index: 100; */
+  display: flex;
+  flex-direction: column;
+  padding: 7px 0 12px;
+  box-sizing: border-box;
+  transition: width .3s ease;
+
 }
 
 /* Collapsed Sidebar */
@@ -34,11 +35,9 @@
 /* Header Section */
 .sidebar-header {
 	display: flex;
-	align-items: center;
-	gap: 11.5px;
-	padding-bottom: 12px;
-	margin-bottom: 16px;
-	border-bottom: 2px solid #ebebed;
+  align-items: center;
+  gap: 11.5px;
+  padding: 0 8px 10px;
 }
 
 .sidebar-logo-icon {
@@ -96,25 +95,25 @@
 
 /* Project Name Button */
 .sidebar-project-wrapper {
-	padding-bottom: 14px;
-	margin-bottom: 14px;
-	border-bottom: 2px solid #ebebed;
+	padding: 10px 8px;
+  border-bottom: 2px solid #ebebed;
+  border-top: 2px solid #ebebed;
 }
 
 .sidebar-project-button {
-	width: auto;
-	height: 30px;
-	background-color: transparent;
-	border: 1.078px solid #ca2212;
-	border-radius: 6.469px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 7px 14px;
-	cursor: pointer;
-	position: relative;
-	overflow: hidden;
-	box-sizing: border-box;
+	width: 100%;
+  height: 42px;
+  background-color: transparent;
+  border: 1.078px solid #ca2212;
+  border-radius: 6.469px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 14px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .sidebar-project-button::before {
@@ -129,25 +128,24 @@
 }
 
 .sidebar-project-name {
-	font-family: "Arial", sans-serif;
-	font-size: 15.094px;
-	font-weight: 400;
-	color: #4a4a4a;
-	line-height: normal;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	max-width: 100%;
+font-family: Arial,sans-serif;
+  font-size: 15.094px;
+  font-weight: 700;
+  color: #4a4a4a;
+  line-height: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Workspace Selector */
 .sidebar-workspace-selector {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	cursor: pointer;
-	margin-bottom: 10px;
-	padding-left: 0px;
+display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 15px 10px 10px 14px;
 }
 
 .sidebar-workspace-badge {
@@ -177,12 +175,11 @@
 }
 
 .sidebar-workspace-name {
-	font-family: "Inter", sans-serif;
-	font-size: 13.231px;
-	font-weight: 500;
-	line-height: 21.5px;
-	color: black;
-	width: 100%;
+	font-family: Inter,sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 21px;
+  color: #000;
 }
 
 .sidebar-workspace-caret {
@@ -195,19 +192,22 @@
 /* Menu Section (Settings & Profile) */
 .sidebar-menu-section {
 	display: flex;
-	flex-direction: column;
-	gap: 4px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 7px 10px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #ebebed;
 }
 
 .sidebar-menu-item {
 	display: flex;
-	align-items: center;
-	gap: 10px;
-	padding: 10px 10px 10px 0;
-	cursor: pointer;
-	transition: background-color 0.2s;
-	border-radius: 6px;
-	text-decoration: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 7px;
+  cursor: pointer;
+  transition: background-color .2s;
+  border-radius: 6px;
+  text-decoration: none;
 }
 
 .sidebar-menu-item:hover {
@@ -257,22 +257,19 @@
 /* Main Navigation */
 .sidebar-main-nav {
 	display: flex;
-	flex-direction: column;
-	gap: 4px;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 10px;
 }
 
 .sidebar-nav-item {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	width: 100%;
-	padding: 10px;
-	box-sizing: border-box;
-	border: 1px solid transparent;
-	cursor: pointer;
-	transition: background-color 0.2s;
-	border-radius: 6px;
-	text-decoration: none;
+display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 5px;
+  cursor: pointer;
+  transition: all .2s;
+  text-decoration: none;
 }
 
 .sidebar-nav-item:hover {
@@ -313,6 +310,7 @@
 	justify-content: center;
 	padding: 10px 0;
 }
+
 .sidebar-container.collapsed .sidebar-nav-item.active {
 	padding: 10px 0;
 }
@@ -326,8 +324,9 @@
 .sidebar-logout {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	padding: 10px 10px 10px 0;
+	gap: 9px;
+	padding: 8px 5px;
+	box-sizing: border-box;
 	cursor: pointer;
 	transition: background-color 0.2s;
 	margin-top: 14px;

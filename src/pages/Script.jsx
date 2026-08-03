@@ -624,6 +624,16 @@ const Script = () => {
 		}
 	}, [filteredScripts, selectedScript]);
 
+	// Auto-select the first script when scripts are present
+	useEffect(() => {
+		if (filteredScripts.length > 0 && !selectedScript && !pdfUrl) {
+			// open the first visible script automatically
+			handleScriptClick(filteredScripts[0].name);
+		}
+		// We intentionally omit handleScriptClick from deps to avoid repeated calls
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [filteredScripts]);
+
 	const handleTabScrollLeft = () => {
 		if (canScrollLeft) {
 			setTabScrollIndex(tabScrollIndex - 1);

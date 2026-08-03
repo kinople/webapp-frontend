@@ -345,6 +345,8 @@ const ScriptBreakdownNew = () => {
 	// Character IDs for the currently editing scene
 	const [editingCharacterIds, setEditingCharacterIds] = useState([]);
 	const [originalEditingCharacterIds, setOriginalEditingCharacterIds] = useState([]);
+	const [isAutoSaving, setIsAutoSaving] = useState(false);
+	const autoSaveTimeoutRef = useRef(null);
 	const tableWrapRef = useRef(null);
 	const searchFilterRef = useRef(null);
 	const [showLeftShadow, setShowLeftShadow] = useState(false);
@@ -478,6 +480,19 @@ const ScriptBreakdownNew = () => {
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
 	const [showImagePreviewModal, setShowImagePreviewModal] = useState(false);
 	const [previewImageIndex, setPreviewImageIndex] = useState(0);
+
+	// Helper to clear pending auto-save
+	const clearPendingAutoSave = useCallback(() => {
+		clearTimeout(autoSaveTimeoutRef.current);
+		autoSaveTimeoutRef.current = null;
+	}, []);
+
+	// Cleanup on unmount
+	useEffect(() => {
+		return () => {
+			clearPendingAutoSave();
+		};
+	}, [clearPendingAutoSave]);
 
 	// Derive master script (oldest/first uploaded) and generated scripts (all others)
 	const masterScript = useMemo(() => {
@@ -1441,8 +1456,11 @@ const ScriptBreakdownNew = () => {
 		return sceneChanged || charactersChanged;
 	}, [editingScene, originalEditingScene, editingCharacterIds, originalEditingCharacterIds, areIdListsEqual]);
 
-	const handleSaveSceneChanges = useCallback(async () => {
+	const handleSaveSceneChanges = useCallback(async ({ autoSave = false } = {}) => {
 		if (!editingScene) return;
+		if (autoSave) {
+			setIsAutoSaving(true);
+		}
 		try {
 			// Update the TSV breakdown for table display
 			const updatedBreakdown = [...scriptBreakdown];
@@ -1507,12 +1525,34 @@ const ScriptBreakdownNew = () => {
 			setSceneBreakdowns(updatedSceneBreakdowns);
 			setOriginalEditingScene(editingScene);
 			setOriginalEditingCharacterIds([...editingCharacterIds]);
+		if (!autoSave) {
 			alert("Changes saved successfully!");
-		} catch (e) {
-			console.error(e);
+		}
+	} catch (e) {
+		console.error(e);
+		if (!autoSave) {
 			alert("Failed to save changes. Try again.");
 		}
+	} finally {
+		if (autoSave) {
+			setIsAutoSaving(false);
+		}
+	}
 	}, [parsing, editingScene, scriptBreakdown, sceneBreakdowns, editingCharacterIds, allCharacters, editingSceneIndex, id, masterScript, formatPageEighthsValue, parsePageEighthsValue]);
+
+	// Auto-save effect for scene changes
+	useEffect(() => {
+		if (!editingScene || viewMode !== "scene" || !hasSceneChanges || isAutoSaving) {
+			clearPendingAutoSave();
+			return undefined;
+		}
+
+		autoSaveTimeoutRef.current = setTimeout(() => {
+			handleSaveSceneChanges({ autoSave: true });
+		}, 1200);
+
+		return () => clearPendingAutoSave();
+	}, [clearPendingAutoSave, editingScene, hasSceneChanges, isAutoSaving, handleSaveSceneChanges, viewMode]);
 
 	/* ---------- Add Element ---------- */
 	const handleAddElement = useCallback(async () => {
@@ -2957,15 +2997,34 @@ const ScriptBreakdownNew = () => {
 						</button>
 					</div>
 
-					<button
-						className="sbn-close-btn"
-						onClick={() => {
-							setViewMode("table");
-							setEditingScene(null);
-						}}
-					>
-						✕
-					</button>
+					<div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+						{!isViewOnly && (
+							<span style={{
+								fontSize: "12px",
+								fontWeight: "500",
+								color: "#059669",
+								backgroundColor: "#D1FAE5",
+								padding: "4px 8px",
+								borderRadius: "4px",
+								display: "flex",
+								alignItems: "center",
+								gap: "4px"
+							}}>
+								<span style={{ color: "#059669" }}>●</span>
+								{isAutoSaving ? "Saving..." : "Auto-saved"}
+							</span>
+						)}
+						<button
+							className="sbn-close-btn"
+							onClick={() => {
+								clearPendingAutoSave();
+								setViewMode("table");
+								setEditingScene(null);
+							}}
+						>
+							✕
+						</button>
+					</div>
 				</div>
 
 				<div className="sbn-scene-content">
@@ -3163,19 +3222,15 @@ const ScriptBreakdownNew = () => {
 				</div>
 
 				<div className="sbn-scene-actions">
-					{!isViewOnly && (
-						<button className="sbn-scene-save-btn" onClick={handleSaveSceneChanges} disabled={!hasSceneChanges}>
-							Save Changes
-						</button>
-					)}
 					<button
 						className="sbn-cancel-btn"
 						onClick={() => {
+							clearPendingAutoSave();
 							setEditingScene(null);
 							setViewMode("table");
 						}}
 					>
-						{isViewOnly ? "Close" : "Cancel"}
+						Close
 					</button>
 				</div>
 			</div>

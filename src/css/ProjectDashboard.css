@@ -139,52 +139,243 @@
 	margin-top: 4px;
 }
 
+.proj-dash-schedule-combined-card {
+	position: relative;
+	overflow: hidden;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 252, 0.98) 100%),
+		linear-gradient(135deg, rgba(249, 115, 22, 0.06), rgba(59, 130, 246, 0.04));
+}
+
+.proj-dash-schedule-combined-card .proj-dash-stat-header {
+	margin-bottom: 18px;
+	padding-top: 6px;
+}
+
+.proj-dash-schedule-combined-card .proj-dash-stat-title {
+	display: block;
+	color: #334155;
+}
+
+.proj-dash-schedule-combined-card .proj-dash-stat-subtitle {
+	margin-top: 6px;
+	font-size: 12px;
+}
+
+.proj-dash-schedule-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+	margin-top: 14px;
+}
+
+.proj-dash-schedule-metric {
+	padding: 14px 16px;
+	border-radius: 14px;
+	border: 1px solid #e7ebf3;
+	background: rgba(255, 255, 255, 0.9);
+	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.proj-dash-schedule-metric-primary,
+.proj-dash-schedule-metric-secondary {
+	background: #f8f9fb;
+}
+
+.proj-dash-schedule-label {
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.4px;
+	text-transform: uppercase;
+	color: #64748b;
+	margin-bottom: 8px;
+}
+
+.proj-dash-schedule-value-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.proj-dash-schedule-value {
+	font-size: 30px;
+	font-weight: 800;
+	line-height: 1;
+	color: #0f1724;
+}
+
+.proj-dash-schedule-unit {
+	font-size: 12px;
+	font-weight: 700;
+	color: #94a3b8;
+	text-transform: uppercase;
+	letter-spacing: 0.4px;
+}
+
+.proj-dash-schedule-dates-container {
+	margin-top: 16px;
+	padding-top: 12px;
+	border-top: 1px solid rgba(0,0,0,0.04);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.proj-dash-schedule-date-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.proj-dash-schedule-date-label {
+	font-size: 10px;
+	font-weight: 700;
+	color: #94a3b8;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.proj-dash-schedule-date-value {
+	font-size: 12px;
+	font-weight: 600;
+	color: #475569;
+}
+
+.proj-dash-schedule-details {
+	margin-top: 14px;
+	padding-top: 14px;
+}
+
+.proj-dash-schedule-progress {
+	margin-top: 12px;
+	padding-top: 0;
+}
+
+.proj-dash-schedule-progress .proj-dash-progress-label {
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.proj-dash-schedule-progress .proj-dash-progress-value {
+	font-size: 12px;
+	color: #475569;
+}
+
+.proj-dash-progress-fill.schedule {
+	background: linear-gradient(90deg, #f97316 0%, #fb923c 50%, #ef4444 100%);
+}
+
+.proj-dash-scene-episode-panel {
+	margin-top: 14px;
+	padding: 14px;
+	border-radius: 14px;
+	border: 1px solid #eceff6;
+	background: linear-gradient(180deg, #fafcff 0%, #f7f9fd 100%);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.proj-dash-scene-episode-panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 10px;
+	font-size: 12px;
+	font-weight: 700;
+	color: #475569;
+	text-transform: uppercase;
+	letter-spacing: 0.4px;
+}
+
+.proj-dash-scene-episode-panel-header span:last-child {
+	color: #94a3b8;
+	font-weight: 600;
+}
+
+.proj-dash-scene-episode-list {
+	display: grid;
+	gap: 8px;
+	max-height: 240px;
+	overflow-y: auto;
+	padding-right: 8px;
+}
+
+.proj-dash-scene-episode-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 12px;
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.82);
+	border: 1px solid #e7ebf3;
+}
+
+.proj-dash-scene-episode-label {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	font-size: 13px;
+	color: #0f1724;
+}
+
+.proj-dash-scene-episode-label strong {
+	font-size: 13px;
+	font-weight: 700;
+	color: #111827;
+}
+
+.proj-dash-scene-episode-label span {
+	font-size: 12px;
+	color: #94a3b8;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.proj-dash-scene-episode-count {
+	font-size: 13px;
+	font-weight: 700;
+	color: #f97316;
+	white-space: nowrap;
+}
+
+.proj-dash-scene-episode-more {
+	margin-top: 10px;
+	font-size: 12px;
+	font-weight: 600;
+	color: #64748b;
+	text-align: right;
+}
+
 .proj-dash-episode-item {
 	padding: 6px 0;
 	border-bottom: 1px solid #f0f0f0;
 }
 
 .proj-dash-episode-list {
-	overflow: hidden;
+	max-height: 240px;
+	overflow-y: auto;
+	padding-right: 8px;
 }
 
-.proj-dash-episode-list-expandable {
-	display: grid;
-	grid-template-rows: 0fr;
-	transition: grid-template-rows 0.3s ease-out;
+.proj-dash-scene-episode-list::-webkit-scrollbar,
+.proj-dash-episode-list::-webkit-scrollbar {
+	width: 6px;
 }
 
-.proj-dash-episode-list-expandable.expanded {
-	grid-template-rows: 1fr;
+.proj-dash-scene-episode-list::-webkit-scrollbar-thumb,
+.proj-dash-episode-list::-webkit-scrollbar-thumb {
+	background-color: #cbd5e1;
+	border-radius: 4px;
 }
 
-.proj-dash-episode-list-inner {
-	overflow: hidden;
-}
-
-.proj-dash-episode-toggle {
-	width: 100%;
-	margin-top: 10px;
-	padding: 8px 10px;
-	border: 1px solid #e6ecf8;
-	border-radius: 10px;
-	background: #fff;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	cursor: pointer;
-	color: #4b5563;
-	transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.proj-dash-episode-toggle:hover {
-	background: #f8fafc;
-	border-color: #dbe5f7;
-}
-
-.proj-dash-episode-toggle-text {
-	font-size: 12px;
-	font-weight: 600;
+.proj-dash-scene-episode-list::-webkit-scrollbar-track,
+.proj-dash-episode-list::-webkit-scrollbar-track {
+	background-color: transparent;
 }
 
 .proj-dash-episode-toggle-icon {

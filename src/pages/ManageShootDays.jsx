@@ -1968,54 +1968,54 @@ const ManageShootDays = () => {
                 {(formData.useful_contacts || []).map((contact, idx) => {
                     const previewKey = buildContactPreviewKey(contact, idx);
                     return (
-                    <div key={contact.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 30px', gap: '8px', alignItems: 'center' }}>
-                        <input
-                            type="text"
-                            className="msd-input"
-                            data-preview-target={`useful-contact:${previewKey}`}
-                            placeholder="Role (e.g. Producer)"
-                            value={contact.role}
-                            onChange={e => {
-                                const newContacts = [...formData.useful_contacts];
-                                newContacts[idx].role = e.target.value;
-                                setFormData({ ...formData, useful_contacts: newContacts });
-                            }}
-                        />
-                        <input
-                            type="text"
-                            className="msd-input"
-                            data-preview-target={`useful-contact:${previewKey}`}
-                            placeholder="Name"
-                            value={contact.name}
-                            onChange={e => {
-                                const newContacts = [...formData.useful_contacts];
-                                newContacts[idx].name = e.target.value;
-                                setFormData({ ...formData, useful_contacts: newContacts });
-                            }}
-                        />
-                        <input
-                            type="text"
-                            className="msd-input"
-                            data-preview-target={`useful-contact:${previewKey}`}
-                            placeholder="Phone"
-                            value={contact.phone}
-                            onChange={e => {
-                                const newContacts = [...formData.useful_contacts];
-                                newContacts[idx].phone = e.target.value;
-                                setFormData({ ...formData, useful_contacts: newContacts });
-                            }}
-                        />
-                        <button
-                            onClick={() => {
-                                const newContacts = formData.useful_contacts.filter((_, i) => i !== idx);
-                                setFormData({ ...formData, useful_contacts: newContacts });
-                            }}
-                            className="msd-card-delete-btn msd-contact-delete-btn"
-                            style={{ padding: '8px', height: '38px', opacity: 1 }}
-                        >
-                            <PiTrash />
-                        </button>
-                    </div>
+                        <div key={contact.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 30px', gap: '8px', alignItems: 'center' }}>
+                            <input
+                                type="text"
+                                className="msd-input"
+                                data-preview-target={`useful-contact:${previewKey}`}
+                                placeholder="Role (e.g. Producer)"
+                                value={contact.role}
+                                onChange={e => {
+                                    const newContacts = [...formData.useful_contacts];
+                                    newContacts[idx].role = e.target.value;
+                                    setFormData({ ...formData, useful_contacts: newContacts });
+                                }}
+                            />
+                            <input
+                                type="text"
+                                className="msd-input"
+                                data-preview-target={`useful-contact:${previewKey}`}
+                                placeholder="Name"
+                                value={contact.name}
+                                onChange={e => {
+                                    const newContacts = [...formData.useful_contacts];
+                                    newContacts[idx].name = e.target.value;
+                                    setFormData({ ...formData, useful_contacts: newContacts });
+                                }}
+                            />
+                            <input
+                                type="text"
+                                className="msd-input"
+                                data-preview-target={`useful-contact:${previewKey}`}
+                                placeholder="Phone"
+                                value={contact.phone}
+                                onChange={e => {
+                                    const newContacts = [...formData.useful_contacts];
+                                    newContacts[idx].phone = e.target.value;
+                                    setFormData({ ...formData, useful_contacts: newContacts });
+                                }}
+                            />
+                            <button
+                                onClick={() => {
+                                    const newContacts = formData.useful_contacts.filter((_, i) => i !== idx);
+                                    setFormData({ ...formData, useful_contacts: newContacts });
+                                }}
+                                className="msd-card-delete-btn msd-contact-delete-btn"
+                                style={{ padding: '8px', height: '38px', opacity: 1 }}
+                            >
+                                <PiTrash />
+                            </button>
+                        </div>
                     );
                 })}
             </div>
@@ -2039,147 +2039,147 @@ const ManageShootDays = () => {
                     const showEpisodeColumn = isEpisodicProject || hasEpisodeColumn(formData.scenes || []);
                     const episodeOptions = getEpisodeOptions();
                     return (
-                <table className="msd-table">
-                    <thead>
-                        <tr>
-                            <th style={{ width: '30px' }}></th>
-                            {showEpisodeColumn && <th style={{ width: '50px', textAlign: 'center' }}>EP</th>}
-                            <th style={{ width: '50px', textAlign: 'center' }}>Scene</th>
-                            <th style={{ width: '42%' }}>Sets and Description</th>
-                            <th style={{ width: '70px', textAlign: 'center' }}>Cast ID</th>
-                            <th style={{ width: '70px', textAlign: 'center' }}>Day/Night</th>
-                            <th style={{ width: '60px', textAlign: 'center' }}>Pages</th>
-                            <th style={{ width: '15%' }}>Remarks</th>
-                            <th style={{ width: '50px', textAlign: 'center' }}>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <SortableContext
-                            items={(formData.scenes || []).map(s => s._id)}
-                            strategy={verticalListSortingStrategy}
-                        >
-                            {formData.scenes.map((scene, idx) => {
-                                const previewKey = buildScenePreviewKey(scene, idx);
-                                const isSceneNumberEditable = scene._isSelectingSceneNumber || !scene.scene_number;
-                                const { summary, description } = formatSceneSetDescription(scene);
-                                const sceneOptions = getSceneOptionsForEpisode(scene.episode_number || '');
-                                return (
-                                <SortableRow key={scene._id} data-row-key={scene._id}>
-                                    <td key="drag-handle" style={{ textAlign: 'center', cursor: 'grab', verticalAlign: 'middle', padding: '0 4px' }}>
-                                        <span style={{
-                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                            width: '28px', height: '28px', borderRadius: '6px',
-                                            background: '#f0f1f3',
-                                            color: '#4b5563', fontSize: '18px',
-                                            border: '1.5px solid #d1d5db',
-                                            transition: 'background 0.15s'
-                                        }} title="Drag to reorder">
-                                            <PiDotsSixVertical />
-                                        </span>
-                                    </td>
-                                    {showEpisodeColumn && (
-                                        <td
-                                            style={{ textAlign: 'center', verticalAlign: 'middle' }}
-                                            data-preview-target={`scene-cell:main:${previewKey}:episode_number`}
-                                        >
-                                            {isSceneNumberEditable ? (
-                                                <select
-                                                    className="msd-td-input-center"
-                                                    value={scene.episode_number || ''}
-                                                    onChange={e => handleSceneEpisodeSelection('scenes', idx, e.target.value)}
+                        <table className="msd-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ width: '30px' }}></th>
+                                    {showEpisodeColumn && <th style={{ width: '50px', textAlign: 'center' }}>EP</th>}
+                                    <th style={{ width: '50px', textAlign: 'center' }}>Scene</th>
+                                    <th style={{ width: '42%' }}>Sets and Description</th>
+                                    <th style={{ width: '70px', textAlign: 'center' }}>Cast ID</th>
+                                    <th style={{ width: '70px', textAlign: 'center' }}>Day/Night</th>
+                                    <th style={{ width: '60px', textAlign: 'center' }}>Pages</th>
+                                    <th style={{ width: '15%' }}>Remarks</th>
+                                    <th style={{ width: '50px', textAlign: 'center' }}>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <SortableContext
+                                    items={(formData.scenes || []).map(s => s._id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    {formData.scenes.map((scene, idx) => {
+                                        const previewKey = buildScenePreviewKey(scene, idx);
+                                        const isSceneNumberEditable = scene._isSelectingSceneNumber || !scene.scene_number;
+                                        const { summary, description } = formatSceneSetDescription(scene);
+                                        const sceneOptions = getSceneOptionsForEpisode(scene.episode_number || '');
+                                        return (
+                                            <SortableRow key={scene._id} data-row-key={scene._id}>
+                                                <td key="drag-handle" style={{ textAlign: 'center', cursor: 'grab', verticalAlign: 'middle', padding: '0 4px' }}>
+                                                    <span style={{
+                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                        width: '28px', height: '28px', borderRadius: '6px',
+                                                        background: '#f0f1f3',
+                                                        color: '#4b5563', fontSize: '18px',
+                                                        border: '1.5px solid #d1d5db',
+                                                        transition: 'background 0.15s'
+                                                    }} title="Drag to reorder">
+                                                        <PiDotsSixVertical />
+                                                    </span>
+                                                </td>
+                                                {showEpisodeColumn && (
+                                                    <td
+                                                        style={{ textAlign: 'center', verticalAlign: 'middle' }}
+                                                        data-preview-target={`scene-cell:main:${previewKey}:episode_number`}
+                                                    >
+                                                        {isSceneNumberEditable ? (
+                                                            <select
+                                                                className="msd-td-input-center"
+                                                                value={scene.episode_number || ''}
+                                                                onChange={e => handleSceneEpisodeSelection('scenes', idx, e.target.value)}
+                                                            >
+                                                                <option value="">EP</option>
+                                                                {episodeOptions.map((episodeNumber) => (
+                                                                    <option key={episodeNumber} value={episodeNumber}>{episodeNumber}</option>
+                                                                ))}
+                                                            </select>
+                                                        ) : (
+                                                            <div className="msd-td-display msd-td-display-center">{scene.episode_number || '-'}</div>
+                                                        )}
+                                                    </td>
+                                                )}
+                                                <td
+                                                    data-preview-target={`scene-cell:main:${previewKey}:scene_number`}
+                                                    style={{ textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', whiteSpace: 'nowrap' }}
                                                 >
-                                                    <option value="">EP</option>
-                                                    {episodeOptions.map((episodeNumber) => (
-                                                        <option key={episodeNumber} value={episodeNumber}>{episodeNumber}</option>
-                                                    ))}
-                                                </select>
-                                            ) : (
-                                                <div className="msd-td-display msd-td-display-center">{scene.episode_number || '-'}</div>
-                                            )}
-                                        </td>
-                                    )}
-                                    <td
-                                        data-preview-target={`scene-cell:main:${previewKey}:scene_number`}
-                                        style={{ textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', whiteSpace: 'nowrap' }}
-                                    >
-                                        {isSceneNumberEditable && showEpisodeColumn ? (
-                                            <select
-                                                className="msd-td-input-center"
-                                                value={scene.scene_number || ''}
-                                                onChange={e => handleManualSceneSelection('scenes', idx, e.target.value, { finalize: true })}
-                                                disabled={!String(scene.episode_number || '').trim()}
-                                            >
-                                                <option value="">{String(scene.episode_number || '').trim() ? 'Select Scene' : 'Select EP first'}</option>
-                                                {sceneOptions.map((sceneNumber) => (
-                                                    <option key={`${scene.episode_number || 'ep'}-${sceneNumber}`} value={sceneNumber}>{sceneNumber}</option>
-                                                ))}
-                                            </select>
-                                        ) : isSceneNumberEditable ? (
-                                            <input
-                                                type="text"
-                                                list="available-scenes-list"
-                                                className="msd-td-input-center"
-                                                value={scene.scene_number || ''}
-                                                placeholder="Scene"
-                                                onChange={e => handleManualSceneSelection('scenes', idx, e.target.value)}
-                                                onBlur={e => handleManualSceneSelection('scenes', idx, e.target.value, { finalize: true })}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter') {
-                                                        e.preventDefault();
-                                                        e.currentTarget.blur();
-                                                    }
-                                                }}
-                                            />
-                                        ) : (
-                                            scene.scene_number || '-'
-                                        )}
-                                    </td>
-                                    <td className="msd-scene-setdesc-cell">
-                                        <div
-                                            className="msd-scene-setdesc-summary"
-                                            data-preview-target={`scene-cell:main:${previewKey}:location`}
-                                        >
-                                            {summary || '-'}
-                                        </div>
-                                        <div
-                                            className="msd-scene-setdesc-description"
-                                            data-preview-target={`scene-cell:main:${previewKey}:description`}
-                                        >
-                                            {description || '-'}
-                                        </div>
-                                    </td>
-                                    <td
-                                        className="msd-td-display msd-td-display-center"
-                                        data-preview-target={`scene-cell:main:${previewKey}:cast_ids`}
-                                    >
-                                        {scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : '-'}
-                                    </td>
-                                    <td
-                                        className="msd-td-display msd-td-display-center"
-                                        data-preview-target={`scene-cell:main:${previewKey}:day_night`}
-                                    >
-                                        {scene.day_night || '-'}
-                                    </td>
-                                    <td
-                                        className="msd-td-display msd-td-display-center"
-                                        data-preview-target={`scene-cell:main:${previewKey}:pages`}
-                                    >
-                                        {scene.pages || '-'}
-                                    </td>
-                                    <td data-preview-target={`scene-cell:main:${previewKey}:remarks`}><textarea className="msd-td-textarea" value={scene.remarks || ''} onChange={e => { const newScenes = [...formData.scenes]; newScenes[idx].remarks = e.target.value; setFormData({ ...formData, scenes: newScenes }); }} /></td>
-                                    <td style={{ textAlign: 'center' }}><button onClick={() => {
-                                        const removedScene = formData.scenes[idx];
-                                        const updatedScenes = formData.scenes.filter((_, i) => i !== idx);
-                                        const updatedAdvance = formData.advanced_schedule || [];
-                                        const updatedCharacters = pruneCharactersAfterRemoval(removedScene.cast_ids, updatedScenes, updatedAdvance, formData.characters);
-                                        setFormData(p => ({ ...p, scenes: updatedScenes, characters: updatedCharacters }));
-                                    }}><PiTrash /></button></td>
-                                </SortableRow>
-                                );
-                            })}
-                        </SortableContext>
-                    </tbody>
-                </table>
+                                                    {isSceneNumberEditable && showEpisodeColumn ? (
+                                                        <select
+                                                            className="msd-td-input-center"
+                                                            value={scene.scene_number || ''}
+                                                            onChange={e => handleManualSceneSelection('scenes', idx, e.target.value, { finalize: true })}
+                                                            disabled={!String(scene.episode_number || '').trim()}
+                                                        >
+                                                            <option value="">{String(scene.episode_number || '').trim() ? 'Select Scene' : 'Select EP first'}</option>
+                                                            {sceneOptions.map((sceneNumber) => (
+                                                                <option key={`${scene.episode_number || 'ep'}-${sceneNumber}`} value={sceneNumber}>{sceneNumber}</option>
+                                                            ))}
+                                                        </select>
+                                                    ) : isSceneNumberEditable ? (
+                                                        <input
+                                                            type="text"
+                                                            list="available-scenes-list"
+                                                            className="msd-td-input-center"
+                                                            value={scene.scene_number || ''}
+                                                            placeholder="Scene"
+                                                            onChange={e => handleManualSceneSelection('scenes', idx, e.target.value)}
+                                                            onBlur={e => handleManualSceneSelection('scenes', idx, e.target.value, { finalize: true })}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.preventDefault();
+                                                                    e.currentTarget.blur();
+                                                                }
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        scene.scene_number || '-'
+                                                    )}
+                                                </td>
+                                                <td className="msd-scene-setdesc-cell">
+                                                    <div
+                                                        className="msd-scene-setdesc-summary"
+                                                        data-preview-target={`scene-cell:main:${previewKey}:location`}
+                                                    >
+                                                        {summary || '-'}
+                                                    </div>
+                                                    <div
+                                                        className="msd-scene-setdesc-description"
+                                                        data-preview-target={`scene-cell:main:${previewKey}:description`}
+                                                    >
+                                                        {description || '-'}
+                                                    </div>
+                                                </td>
+                                                <td
+                                                    className="msd-td-display msd-td-display-center"
+                                                    data-preview-target={`scene-cell:main:${previewKey}:cast_ids`}
+                                                >
+                                                    {scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : '-'}
+                                                </td>
+                                                <td
+                                                    className="msd-td-display msd-td-display-center"
+                                                    data-preview-target={`scene-cell:main:${previewKey}:day_night`}
+                                                >
+                                                    {scene.day_night || '-'}
+                                                </td>
+                                                <td
+                                                    className="msd-td-display msd-td-display-center"
+                                                    data-preview-target={`scene-cell:main:${previewKey}:pages`}
+                                                >
+                                                    {scene.pages || '-'}
+                                                </td>
+                                                <td data-preview-target={`scene-cell:main:${previewKey}:remarks`}><textarea className="msd-td-textarea" value={scene.remarks || ''} onChange={e => { const newScenes = [...formData.scenes]; newScenes[idx].remarks = e.target.value; setFormData({ ...formData, scenes: newScenes }); }} /></td>
+                                                <td style={{ textAlign: 'center' }}><button onClick={() => {
+                                                    const removedScene = formData.scenes[idx];
+                                                    const updatedScenes = formData.scenes.filter((_, i) => i !== idx);
+                                                    const updatedAdvance = formData.advanced_schedule || [];
+                                                    const updatedCharacters = pruneCharactersAfterRemoval(removedScene.cast_ids, updatedScenes, updatedAdvance, formData.characters);
+                                                    setFormData(p => ({ ...p, scenes: updatedScenes, characters: updatedCharacters }));
+                                                }}><PiTrash /></button></td>
+                                            </SortableRow>
+                                        );
+                                    })}
+                                </SortableContext>
+                            </tbody>
+                        </table>
                     );
                 })()}
             </DndContext>
@@ -2427,147 +2427,147 @@ const ManageShootDays = () => {
                     const showEpisodeColumn = isEpisodicProject || hasEpisodeColumn(formData.advanced_schedule || []);
                     const episodeOptions = getEpisodeOptions();
                     return (
-                <table className="msd-table">
-                    <thead>
-                        <tr>
-                            <th style={{ width: '30px' }}></th>
-                            {showEpisodeColumn && <th style={{ width: '50px', textAlign: 'center' }}>EP</th>}
-                            <th style={{ width: '50px', textAlign: 'center' }}>Scene</th>
-                            <th style={{ width: '42%' }}>Sets and Description</th>
-                            <th style={{ width: '70px', textAlign: 'center' }}>Cast ID</th>
-                            <th style={{ width: '70px', textAlign: 'center' }}>Day/Night</th>
-                            <th style={{ width: '60px', textAlign: 'center' }}>Pages</th>
-                            <th style={{ width: '15%' }}>Remarks</th>
-                            <th style={{ width: '50px', textAlign: 'center' }}>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <SortableContext
-                            items={(formData.advanced_schedule || []).map(s => s._id)}
-                            strategy={verticalListSortingStrategy}
-                        >
-                            {(formData.advanced_schedule || []).map((scene, idx) => {
-                                const previewKey = buildScenePreviewKey(scene, idx);
-                                const isSceneNumberEditable = scene._isSelectingSceneNumber || !scene.scene_number;
-                                const { summary, description } = formatSceneSetDescription(scene);
-                                const sceneOptions = getSceneOptionsForEpisode(scene.episode_number || '');
-                                return (
-                                <SortableRow key={scene._id} data-row-key={scene._id}>
-                                    <td key="drag-handle" style={{ textAlign: 'center', cursor: 'grab', verticalAlign: 'middle', padding: '0 4px' }}>
-                                        <span style={{
-                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                            width: '28px', height: '28px', borderRadius: '6px',
-                                            background: '#f0f1f3',
-                                            color: '#4b5563', fontSize: '18px',
-                                            border: '1.5px solid #d1d5db',
-                                            transition: 'background 0.15s'
-                                        }} title="Drag to reorder">
-                                            <PiDotsSixVertical />
-                                        </span>
-                                    </td>
-                                    {showEpisodeColumn && (
-                                        <td
-                                            style={{ textAlign: 'center', verticalAlign: 'middle' }}
-                                            data-preview-target={`scene-cell:advance:${previewKey}:episode_number`}
-                                        >
-                                            {isSceneNumberEditable ? (
-                                                <select
-                                                    className="msd-td-input-center"
-                                                    value={scene.episode_number || ''}
-                                                    onChange={e => handleSceneEpisodeSelection('advanced_schedule', idx, e.target.value)}
+                        <table className="msd-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ width: '30px' }}></th>
+                                    {showEpisodeColumn && <th style={{ width: '50px', textAlign: 'center' }}>EP</th>}
+                                    <th style={{ width: '50px', textAlign: 'center' }}>Scene</th>
+                                    <th style={{ width: '42%' }}>Sets and Description</th>
+                                    <th style={{ width: '70px', textAlign: 'center' }}>Cast ID</th>
+                                    <th style={{ width: '70px', textAlign: 'center' }}>Day/Night</th>
+                                    <th style={{ width: '60px', textAlign: 'center' }}>Pages</th>
+                                    <th style={{ width: '15%' }}>Remarks</th>
+                                    <th style={{ width: '50px', textAlign: 'center' }}>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <SortableContext
+                                    items={(formData.advanced_schedule || []).map(s => s._id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    {(formData.advanced_schedule || []).map((scene, idx) => {
+                                        const previewKey = buildScenePreviewKey(scene, idx);
+                                        const isSceneNumberEditable = scene._isSelectingSceneNumber || !scene.scene_number;
+                                        const { summary, description } = formatSceneSetDescription(scene);
+                                        const sceneOptions = getSceneOptionsForEpisode(scene.episode_number || '');
+                                        return (
+                                            <SortableRow key={scene._id} data-row-key={scene._id}>
+                                                <td key="drag-handle" style={{ textAlign: 'center', cursor: 'grab', verticalAlign: 'middle', padding: '0 4px' }}>
+                                                    <span style={{
+                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                        width: '28px', height: '28px', borderRadius: '6px',
+                                                        background: '#f0f1f3',
+                                                        color: '#4b5563', fontSize: '18px',
+                                                        border: '1.5px solid #d1d5db',
+                                                        transition: 'background 0.15s'
+                                                    }} title="Drag to reorder">
+                                                        <PiDotsSixVertical />
+                                                    </span>
+                                                </td>
+                                                {showEpisodeColumn && (
+                                                    <td
+                                                        style={{ textAlign: 'center', verticalAlign: 'middle' }}
+                                                        data-preview-target={`scene-cell:advance:${previewKey}:episode_number`}
+                                                    >
+                                                        {isSceneNumberEditable ? (
+                                                            <select
+                                                                className="msd-td-input-center"
+                                                                value={scene.episode_number || ''}
+                                                                onChange={e => handleSceneEpisodeSelection('advanced_schedule', idx, e.target.value)}
+                                                            >
+                                                                <option value="">EP</option>
+                                                                {episodeOptions.map((episodeNumber) => (
+                                                                    <option key={episodeNumber} value={episodeNumber}>{episodeNumber}</option>
+                                                                ))}
+                                                            </select>
+                                                        ) : (
+                                                            <div className="msd-td-display msd-td-display-center">{scene.episode_number || '-'}</div>
+                                                        )}
+                                                    </td>
+                                                )}
+                                                <td
+                                                    data-preview-target={`scene-cell:advance:${previewKey}:scene_number`}
+                                                    style={{ textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', whiteSpace: 'nowrap' }}
                                                 >
-                                                    <option value="">EP</option>
-                                                    {episodeOptions.map((episodeNumber) => (
-                                                        <option key={episodeNumber} value={episodeNumber}>{episodeNumber}</option>
-                                                    ))}
-                                                </select>
-                                            ) : (
-                                                <div className="msd-td-display msd-td-display-center">{scene.episode_number || '-'}</div>
-                                            )}
-                                        </td>
-                                    )}
-                                    <td
-                                        data-preview-target={`scene-cell:advance:${previewKey}:scene_number`}
-                                        style={{ textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', whiteSpace: 'nowrap' }}
-                                    >
-                                        {isSceneNumberEditable && showEpisodeColumn ? (
-                                            <select
-                                                className="msd-td-input-center"
-                                                value={scene.scene_number || ''}
-                                                onChange={e => handleManualSceneSelection('advanced_schedule', idx, e.target.value, { finalize: true })}
-                                                disabled={!String(scene.episode_number || '').trim()}
-                                            >
-                                                <option value="">{String(scene.episode_number || '').trim() ? 'Select Scene' : 'Select EP first'}</option>
-                                                {sceneOptions.map((sceneNumber) => (
-                                                    <option key={`${scene.episode_number || 'ep'}-${sceneNumber}`} value={sceneNumber}>{sceneNumber}</option>
-                                                ))}
-                                            </select>
-                                        ) : isSceneNumberEditable ? (
-                                            <input
-                                                type="text"
-                                                list="available-scenes-list"
-                                                className="msd-td-input-center"
-                                                value={scene.scene_number || ''}
-                                                placeholder="Scene"
-                                                onChange={e => handleManualSceneSelection('advanced_schedule', idx, e.target.value)}
-                                                onBlur={e => handleManualSceneSelection('advanced_schedule', idx, e.target.value, { finalize: true })}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter') {
-                                                        e.preventDefault();
-                                                        e.currentTarget.blur();
-                                                    }
-                                                }}
-                                            />
-                                        ) : (
-                                            scene.scene_number || '-'
-                                        )}
-                                    </td>
-                                    <td className="msd-scene-setdesc-cell">
-                                        <div
-                                            className="msd-scene-setdesc-summary"
-                                            data-preview-target={`scene-cell:advance:${previewKey}:location`}
-                                        >
-                                            {summary || '-'}
-                                        </div>
-                                        <div
-                                            className="msd-scene-setdesc-description"
-                                            data-preview-target={`scene-cell:advance:${previewKey}:description`}
-                                        >
-                                            {description || '-'}
-                                        </div>
-                                    </td>
-                                    <td
-                                        className="msd-td-display msd-td-display-center"
-                                        data-preview-target={`scene-cell:advance:${previewKey}:cast_ids`}
-                                    >
-                                        {scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : '-'}
-                                    </td>
-                                    <td
-                                        className="msd-td-display msd-td-display-center"
-                                        data-preview-target={`scene-cell:advance:${previewKey}:day_night`}
-                                    >
-                                        {scene.day_night || '-'}
-                                    </td>
-                                    <td
-                                        className="msd-td-display msd-td-display-center"
-                                        data-preview-target={`scene-cell:advance:${previewKey}:pages`}
-                                    >
-                                        {scene.pages || '-'}
-                                    </td>
-                                    <td data-preview-target={`scene-cell:advance:${previewKey}:remarks`}><textarea className="msd-td-textarea" value={scene.remarks || ''} onChange={e => { const newAdv = [...(formData.advanced_schedule || [])]; newAdv[idx].remarks = e.target.value; setFormData({ ...formData, advanced_schedule: newAdv }); }} /></td>
-                                    <td style={{ textAlign: 'center' }}><button onClick={() => {
-                                        const removedScene = formData.advanced_schedule[idx];
-                                        const updatedAdvance = formData.advanced_schedule.filter((_, i) => i !== idx);
-                                        const updatedScenes = formData.scenes || [];
-                                        const updatedCharacters = pruneCharactersAfterRemoval(removedScene.cast_ids, updatedScenes, updatedAdvance, formData.characters);
-                                        setFormData(p => ({ ...p, advanced_schedule: updatedAdvance, characters: updatedCharacters }));
-                                    }}><PiTrash /></button></td>
-                                </SortableRow>
-                                );
-                            })}
-                        </SortableContext>
-                    </tbody>
-                </table>
+                                                    {isSceneNumberEditable && showEpisodeColumn ? (
+                                                        <select
+                                                            className="msd-td-input-center"
+                                                            value={scene.scene_number || ''}
+                                                            onChange={e => handleManualSceneSelection('advanced_schedule', idx, e.target.value, { finalize: true })}
+                                                            disabled={!String(scene.episode_number || '').trim()}
+                                                        >
+                                                            <option value="">{String(scene.episode_number || '').trim() ? 'Select Scene' : 'Select EP first'}</option>
+                                                            {sceneOptions.map((sceneNumber) => (
+                                                                <option key={`${scene.episode_number || 'ep'}-${sceneNumber}`} value={sceneNumber}>{sceneNumber}</option>
+                                                            ))}
+                                                        </select>
+                                                    ) : isSceneNumberEditable ? (
+                                                        <input
+                                                            type="text"
+                                                            list="available-scenes-list"
+                                                            className="msd-td-input-center"
+                                                            value={scene.scene_number || ''}
+                                                            placeholder="Scene"
+                                                            onChange={e => handleManualSceneSelection('advanced_schedule', idx, e.target.value)}
+                                                            onBlur={e => handleManualSceneSelection('advanced_schedule', idx, e.target.value, { finalize: true })}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.preventDefault();
+                                                                    e.currentTarget.blur();
+                                                                }
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        scene.scene_number || '-'
+                                                    )}
+                                                </td>
+                                                <td className="msd-scene-setdesc-cell">
+                                                    <div
+                                                        className="msd-scene-setdesc-summary"
+                                                        data-preview-target={`scene-cell:advance:${previewKey}:location`}
+                                                    >
+                                                        {summary || '-'}
+                                                    </div>
+                                                    <div
+                                                        className="msd-scene-setdesc-description"
+                                                        data-preview-target={`scene-cell:advance:${previewKey}:description`}
+                                                    >
+                                                        {description || '-'}
+                                                    </div>
+                                                </td>
+                                                <td
+                                                    className="msd-td-display msd-td-display-center"
+                                                    data-preview-target={`scene-cell:advance:${previewKey}:cast_ids`}
+                                                >
+                                                    {scene.cast_ids ? scene.cast_ids.split(',').map(s => s.trim()).filter(Boolean).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ') : '-'}
+                                                </td>
+                                                <td
+                                                    className="msd-td-display msd-td-display-center"
+                                                    data-preview-target={`scene-cell:advance:${previewKey}:day_night`}
+                                                >
+                                                    {scene.day_night || '-'}
+                                                </td>
+                                                <td
+                                                    className="msd-td-display msd-td-display-center"
+                                                    data-preview-target={`scene-cell:advance:${previewKey}:pages`}
+                                                >
+                                                    {scene.pages || '-'}
+                                                </td>
+                                                <td data-preview-target={`scene-cell:advance:${previewKey}:remarks`}><textarea className="msd-td-textarea" value={scene.remarks || ''} onChange={e => { const newAdv = [...(formData.advanced_schedule || [])]; newAdv[idx].remarks = e.target.value; setFormData({ ...formData, advanced_schedule: newAdv }); }} /></td>
+                                                <td style={{ textAlign: 'center' }}><button onClick={() => {
+                                                    const removedScene = formData.advanced_schedule[idx];
+                                                    const updatedAdvance = formData.advanced_schedule.filter((_, i) => i !== idx);
+                                                    const updatedScenes = formData.scenes || [];
+                                                    const updatedCharacters = pruneCharactersAfterRemoval(removedScene.cast_ids, updatedScenes, updatedAdvance, formData.characters);
+                                                    setFormData(p => ({ ...p, advanced_schedule: updatedAdvance, characters: updatedCharacters }));
+                                                }}><PiTrash /></button></td>
+                                            </SortableRow>
+                                        );
+                                    })}
+                                </SortableContext>
+                            </tbody>
+                        </table>
                     );
                 })()}
             </DndContext>

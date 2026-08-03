@@ -80,11 +80,23 @@ const ProjectDashboard = () => {
 	const totalScheduleScenes = (metrics?.schedules?.scheduled_scenes || 0) + (metrics?.schedules?.unscheduled_scenes || 0);
 	const scenesScheduledPercent = totalScheduleScenes > 0 ? Math.round((metrics.schedules.scheduled_scenes / totalScheduleScenes) * 100) : 0;
 	const isEpisodicProject = (metrics?.project_type || "") === "episodic";
+	const episodeSceneBreakdown = Array.isArray(metrics?.scenes?.by_episode) ? metrics.scenes.by_episode : [];
 	const hasMoreEpisodes = episodeDrafts.length > 5;
 	const visibleEpisodes = episodesExpanded ? episodeDrafts : episodeDrafts.slice(0, 5);
 
 	// Check if no scripts are available
 	const hasNoScripts = !metrics?.scripts?.total || metrics.scripts.total === 0;
+
+	const formatDateDDMMYYYY = (dateString) => {
+		if (!dateString) return "-";
+		const date = new Date(dateString);
+		if (isNaN(date)) return dateString;
+		const dd = String(date.getDate()).padStart(2, '0');
+		const mm = String(date.getMonth() + 1).padStart(2, '0');
+		const yyyy = date.getFullYear();
+		return `${dd}/${mm}/${yyyy}`;
+	};
+
 return (
 
 		<div className="proj-dash-page">
@@ -129,12 +141,14 @@ return (
 							</div>
 							<span className="proj-dash-stat-title">Episodes & Drafts</span>
 						</div>
+						<div className="proj-dash-stat-value">{metrics?.episodes?.total || episodeDrafts.length || 0}</div>
+						<div className="proj-dash-stat-subtitle" style={{ marginBottom: "16px" }}>Total active episodes</div>
 						<div className="proj-dash-episode-list">
 							{episodeDrafts.length === 0 ? (
 								<div style={{ color: '#888', fontSize: 15, padding: '8px 0' }}>No episodes found</div>
 							) : (
 								<>
-									{episodeDrafts.slice(0, 5).map(ep => (
+									{episodeDrafts.map(ep => (
 										<div key={ep.ep_number} className="proj-dash-episode-item">
 											<div className="proj-dash-episode-row">
 												<span className="proj-dash-episode-label">Ep{ep.ep_number}</span>
@@ -146,52 +160,9 @@ return (
 											</div>
 										</div>
 									))}
-									{hasMoreEpisodes && (
-										<div className={`proj-dash-episode-list-expandable ${episodesExpanded ? 'expanded' : ''}`}>
-											<div className="proj-dash-episode-list-inner">
-												{episodeDrafts.slice(5).map(ep => (
-													<div key={ep.ep_number} className="proj-dash-episode-item">
-														<div className="proj-dash-episode-row">
-															<span className="proj-dash-episode-label">Ep{ep.ep_number}</span>
-															<span className="proj-dash-episode-count">{ep.drafts} draft{ep.drafts === 1 ? '' : 's'}</span>
-														</div>
-														<div className="proj-dash-episode-meta">
-															<span>Latest:</span>
-															<strong>{ep.latest_draft_name || "No drafts yet"}</strong>
-														</div>
-													</div>
-												))}
-											</div>
-										</div>
-									)}
 								</>
 							)}
 						</div>
-						{hasMoreEpisodes && (
-							<button
-								type="button"
-								className="proj-dash-episode-toggle"
-								onClick={() => setEpisodesExpanded(v => !v)}
-								aria-label={episodesExpanded ? "Collapse episodes list" : "Expand episodes list"}
-							>
-								<span className="proj-dash-episode-toggle-text">
-									{episodesExpanded ? "Show less" : `Show all (${episodeDrafts.length})`}
-								</span>
-								<svg
-									className={`proj-dash-episode-toggle-icon ${episodesExpanded ? "expanded" : ""}`}
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								>
-									<polyline points="6 9 12 15 18 9" />
-								</svg>
-							</button>
-						)}
 						<div className="proj-dash-episode-latest">
 							<span className="proj-dash-episode-latest-label">Latest Draft</span>
 							<span className="proj-dash-episode-latest-value">
@@ -240,27 +211,29 @@ return (
 					</div>
 					<div className="proj-dash-stat-value">{metrics?.scenes?.total || 0}</div>
 					<div className="proj-dash-stat-subtitle">{isEpisodicProject ? "From master breakdown" : "From script breakdown"}</div>
-				</div>
-
-				{/* Shoot Days Card */}
-				<div className="proj-dash-stat-card">
-					<div className="proj-dash-stat-header">
-						<div className="proj-dash-stat-icon shoot-days">
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-								<rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-								<line x1="16" y1="2" x2="16" y2="6" />
-								<line x1="8" y1="2" x2="8" y2="6" />
-								<line x1="3" y1="10" x2="21" y2="10" />
-							</svg>
+					{isEpisodicProject && episodeSceneBreakdown.length > 0 && (
+						<div className="proj-dash-scene-episode-panel">
+							<div className="proj-dash-scene-episode-panel-header">
+								<span>Episode-wise total scenes</span>
+								<span>{episodeSceneBreakdown.length} episodes</span>
+							</div>
+							<div className="proj-dash-scene-episode-list">
+								{episodeSceneBreakdown.map((episode) => (
+									<div key={episode.ep_number ?? episode.ep_name} className="proj-dash-scene-episode-item">
+										<div className="proj-dash-scene-episode-label">
+											<strong>Ep{episode.ep_number ?? "-"}</strong>
+											<span>{episode.ep_name || "Episode"}</span>
+										</div>
+										<div className="proj-dash-scene-episode-count">{episode.total_scenes || 0} scenes</div>
+									</div>
+								))}
+							</div>
 						</div>
-						<span className="proj-dash-stat-title">Shoot Days</span>
-					</div>
-					<div className="proj-dash-stat-value">{metrics?.schedules?.shoot_days || 0}</div>
-					<div className="proj-dash-stat-subtitle">Total filming days</div>
+					)}
 				</div>
 
-				{/* Schedules Card */}
-				<div className="proj-dash-stat-card">
+				{/* Combined Shoot Days + Scene Scheduling Card */}
+				<div className="proj-dash-stat-card proj-dash-schedule-combined-card">
 					<div className="proj-dash-stat-header">
 						<div className="proj-dash-stat-icon schedule">
 							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -268,10 +241,40 @@ return (
 								<polyline points="12 6 12 12 16 14" />
 							</svg>
 						</div>
-						<span className="proj-dash-stat-title">Scene Scheduling</span>
+						<div>
+							<span className="proj-dash-stat-title">Production Scheduling</span>
+							<div className="proj-dash-stat-subtitle">Shoot days and scene scheduling at a glance</div>
+						</div>
 					</div>
-					<div className="proj-dash-stat-value">{scenesScheduledPercent}%</div>
-					<div className="proj-dash-stat-details">
+					<div className="proj-dash-schedule-grid">
+						<div className="proj-dash-schedule-metric proj-dash-schedule-metric-primary">
+							<span className="proj-dash-schedule-label">Shoot Days</span>
+							<div className="proj-dash-schedule-value-row">
+								<span className="proj-dash-schedule-value">{metrics?.schedules?.shoot_days || 0}</span>
+								<span className="proj-dash-schedule-unit">days</span>
+							</div>
+							{(metrics?.schedules?.start_date || metrics?.schedules?.end_date) && (
+								<div className="proj-dash-schedule-dates-container">
+									<div className="proj-dash-schedule-date-item">
+										<span className="proj-dash-schedule-date-label">START</span>
+										<span className="proj-dash-schedule-date-value">{formatDateDDMMYYYY(metrics.schedules.start_date)}</span>
+									</div>
+									<div className="proj-dash-schedule-date-item">
+										<span className="proj-dash-schedule-date-label">END</span>
+										<span className="proj-dash-schedule-date-value">{formatDateDDMMYYYY(metrics.schedules.end_date)}</span>
+									</div>
+								</div>
+							)}
+						</div>
+						<div className="proj-dash-schedule-metric proj-dash-schedule-metric-secondary">
+							<span className="proj-dash-schedule-label">Scene Scheduling</span>
+							<div className="proj-dash-schedule-value-row">
+								<span className="proj-dash-schedule-value">{scenesScheduledPercent}%</span>
+								<span className="proj-dash-schedule-unit">done</span>
+							</div>
+						</div>
+					</div>
+					<div className="proj-dash-stat-details proj-dash-schedule-details">
 						<div className="proj-dash-detail-item">
 							<span className="proj-dash-detail-label">Scheduled</span>
 							<span className="proj-dash-detail-value scheduled">{metrics?.schedules?.scheduled_scenes || 0}</span>
@@ -279,6 +282,15 @@ return (
 						<div className="proj-dash-detail-item">
 							<span className="proj-dash-detail-label">Unscheduled</span>
 							<span className="proj-dash-detail-value unscheduled">{metrics?.schedules?.unscheduled_scenes || 0}</span>
+						</div>
+					</div>
+					<div className="proj-dash-progress-container proj-dash-schedule-progress">
+						<div className="proj-dash-progress-header">
+							<span className="proj-dash-progress-label">Scheduling Progress</span>
+							<span className="proj-dash-progress-value">{metrics?.schedules?.scheduled_scenes || 0} / {totalScheduleScenes || 0}</span>
+						</div>
+						<div className="proj-dash-progress-bar">
+							<div className="proj-dash-progress-fill schedule" style={{ width: `${scenesScheduledPercent}%` }} />
 						</div>
 					</div>
 				</div>
